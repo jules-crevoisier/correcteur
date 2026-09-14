@@ -8,6 +8,7 @@ import subprocess
 import sys
 
 from . import config as config_mod
+from . import demarrage
 
 
 def _icone(actif: bool = True):
@@ -67,6 +68,18 @@ class InterfaceBarre:
         else:
             subprocess.Popen(["xdg-open", str(chemin)])
 
+    def _basculer_demarrage(self, _icone, _element) -> None:
+        try:
+            actif = self.app.basculer_demarrage_auto()
+        except Exception as e:
+            self.notifier("Demarrage automatique", f"Echec : {e}")
+            return
+        self.notifier(
+            "Demarrage automatique",
+            "Le correcteur se lancera avec Windows." if actif
+            else "Le correcteur ne se lancera plus avec Windows.",
+        )
+
     def _quitter(self, icone, _element) -> None:
         self.app.arreter()
         icone.stop()
@@ -86,6 +99,12 @@ class InterfaceBarre:
                 self._basculer,
             ),
             pystray.MenuItem("Ouvrir les reglages", self._ouvrir_config),
+            pystray.MenuItem(
+                "Lancer au demarrage de Windows",
+                self._basculer_demarrage,
+                checked=lambda _: self.app.demarrage_auto,
+                visible=demarrage.disponible(),
+            ),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("Quitter", self._quitter),
         )

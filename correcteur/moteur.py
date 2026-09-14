@@ -16,12 +16,14 @@ Deux principes :
 
 from __future__ import annotations
 
+import os
 import re
 import unicodedata
 from dataclasses import dataclass
 from typing import Iterable
 
 from . import regles
+from .chemins import dossier_moteur
 
 # Trois lettres identiques d'affilee : « ouiiii », « mdrrrr », « nooon ».
 # C'est de l'emphase volontaire, jamais une faute de frappe.
@@ -272,6 +274,12 @@ class Correcteur:
 
 def construire(langue: str = "fr", regles_optionnelles: dict[str, bool] | None = None):
     """Demarre LanguageTool en local et renvoie un Correcteur pret a l'emploi."""
+    # Un dossier « moteur » a cote de l'application rend l'installation
+    # portable : sans lui, LanguageTool s'installe dans le profil utilisateur.
+    local = dossier_moteur()
+    if local is not None:
+        os.environ.setdefault("LTP_PATH", str(local))
+
     import language_tool_python
 
     outil = language_tool_python.LanguageTool(langue)

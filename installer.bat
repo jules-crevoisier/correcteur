@@ -17,27 +17,32 @@ if errorlevel 1 (
     exit /b 1
 )
 
-where java >nul 2>&1
-if errorlevel 1 (
-    echo [X] Java est introuvable.
-    echo     Le moteur de correction en a besoin pour fonctionner hors ligne.
-    echo     Installez-le depuis https://adoptium.net/ ^(bouton "Latest LTS"^),
-    echo     puis relancez ce fichier.
-    pause
-    exit /b 1
-)
-
-echo [1/3] Creation de l'environnement Python...
+echo [1/4] Creation de l'environnement Python...
 if not exist ".venv" python -m venv .venv
 if errorlevel 1 ( echo [X] Echec. & pause & exit /b 1 )
 
-echo [2/3] Installation des dependances...
+echo [2/4] Installation des dependances...
 call .venv\Scripts\python.exe -m pip install --upgrade pip --quiet
 call .venv\Scripts\python.exe -m pip install -r requirements.txt --quiet
 if errorlevel 1 ( echo [X] Echec. & pause & exit /b 1 )
 
-echo [3/3] Telechargement du dictionnaire francais ^(~250 Mo, une seule fois^)...
-call .venv\Scripts\python.exe -m correcteur --texte "sa va bien" >nul
+echo [3/4] Verification de Java...
+where java >nul 2>&1
+if errorlevel 1 (
+    echo       Java absent : installation d'une version portable...
+    powershell -NoProfile -ExecutionPolicy Bypass -File "outils\installer_java.ps1"
+    if errorlevel 1 (
+        echo [X] Le telechargement de Java a echoue.
+        echo     Installez-le manuellement depuis https://adoptium.net/
+        pause
+        exit /b 1
+    )
+) else (
+    echo       Java deja installe.
+)
+
+echo [4/4] Telechargement du dictionnaire francais ^(~250 Mo, une seule fois^)...
+call .venv\Scripts\python.exe -m correcteur --verifier
 if errorlevel 1 ( echo [X] Echec. & pause & exit /b 1 )
 
 echo.
@@ -46,5 +51,8 @@ echo   Installation terminee.
 echo.
 echo   Lancez "Correcteur.vbs" pour demarrer.
 echo   Raccourci par defaut : Ctrl+Alt+C
+echo.
+echo   Pour qu'il demarre avec Windows : clic droit sur
+echo   l'icone puis "Lancer au demarrage de Windows".
 echo ================================================
 pause

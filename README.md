@@ -37,18 +37,46 @@ Internet, aucun compte, aucune clé d'API.
 
 1. Installez **Python** depuis [python.org](https://www.python.org/downloads/)
    en cochant *Add Python to PATH*.
-2. Installez **Java** depuis [adoptium.net](https://adoptium.net/) (bouton
-   *Latest LTS*). C'est le moteur linguistique qui en a besoin.
-3. Double-cliquez sur **`installer.bat`** et patientez (~250 Mo de
-   dictionnaire français, une seule fois).
-4. Double-cliquez sur **`Correcteur.vbs`**.
+2. Double-cliquez sur **`installer.bat`** et patientez.
+3. Double-cliquez sur **`Correcteur.vbs`**.
 
 Une icône bleue apparaît près de l'horloge : l'outil est actif.
 
-### Démarrer automatiquement avec Windows
+L'installateur télécharge Java automatiquement s'il est absent — vous n'avez
+rien à installer vous-même. Comptez ~300 Mo au total (Java + dictionnaire
+français), une seule fois.
 
-Appuyez sur `Win+R`, tapez `shell:startup`, validez, puis glissez un raccourci
-vers `Correcteur.vbs` dans le dossier qui s'ouvre.
+### Démarrage automatique avec Windows
+
+Clic droit sur l'icône → **Lancer au démarrage de Windows**. C'est tout.
+
+L'entrée est inscrite dans votre propre session (`HKCU\...\Run`), sans droits
+administrateur, et se retire par le même menu. Si vous déplacez ensuite le
+dossier de l'application, elle corrige le chemin toute seule au lancement
+suivant.
+
+En ligne de commande : `python -m correcteur --demarrage on` (ou `off`, ou
+`etat`).
+
+## Exécutable autonome
+
+Pour obtenir une version qui ne demande **ni Python ni Java** sur la machine
+de destination :
+
+```
+installer.bat          (une fois, pour préparer l'environnement)
+construire_exe.bat
+```
+
+Le résultat est dans `dist\Correcteur\` : un dossier déplaçable contenant
+`Correcteur.exe`, le moteur Java et le dictionnaire français. Copiez-le où
+vous voulez — y compris sur une clé USB — lancez `Correcteur.exe`, puis
+activez le démarrage automatique depuis l'icône.
+
+Le format est un dossier plutôt qu'un fichier unique parce que l'ensemble
+pèse ~300 Mo : un exécutable unique devrait tout ré-extraire à chaque
+démarrage. Le dossier ne contient qu'un seul fichier cliquable et démarre
+instantanément.
 
 ## Utilisation
 
@@ -104,9 +132,15 @@ Passez-les à `true` pour les activer.
 
 ```
 python -m correcteur --texte "je sais pas si sa va marcher"
-python -m correcteur --console      # sans icône, journal en console
-python -m correcteur --config       # chemin du fichier de réglages
+python -m correcteur --verifier      # contrôle Java, moteur et réglages
+python -m correcteur --demarrage on  # se lance avec Windows (on/off/etat)
+python -m correcteur --console       # sans icône, journal en console
+python -m correcteur --config        # chemin du fichier de réglages
 ```
+
+`--verifier` est le premier réflexe si quelque chose ne fonctionne pas : il
+affiche la version de Java détectée, teste une correction réelle et indique
+l'état du démarrage automatique.
 
 ## Comment il évite de dégrader vos messages
 
@@ -136,8 +170,9 @@ python -m pytest tests/ -q
 (instantané). `tests/test_integration.py` valide le comportement réel contre
 le vrai moteur (~50 s).
 
-Pour construire un exécutable autonome : `construire_exe.bat` → `dist\Correcteur.exe`
-(Java reste nécessaire sur la machine cible).
+`tests/test_demarrage.py` et `tests/test_java.py` simulent respectivement le
+registre Windows et l'environnement Java : toute la suite tourne sur
+n'importe quel système.
 
 ## Structure
 
@@ -150,3 +185,8 @@ Pour construire un exécutable autonome : `construire_exe.bat` → `dist\Correct
 | `correcteur/raccourci.py` | Raccourci clavier global |
 | `correcteur/interface.py` | Icône dans la zone de notification |
 | `correcteur/config.py` | Lecture et écriture des réglages |
+| `correcteur/java.py` | Localisation de Java (portable, `JAVA_HOME`, `PATH`) |
+| `correcteur/demarrage.py` | Lancement automatique via le registre Windows |
+| `correcteur/chemins.py` | Emplacements selon le mode (sources, `.exe`, portable) |
+| `outils/installer_java.ps1` | Téléchargement d'un Java portable |
+| `outils/assembler.py` | Assemblage de la distribution autonome |

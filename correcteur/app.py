@@ -8,7 +8,7 @@ import traceback
 from typing import Callable
 
 from . import config as config_mod
-from . import moteur, presse_papier, regles
+from . import demarrage, java, moteur, presse_papier, regles
 from .raccourci import Raccourci
 
 
@@ -43,6 +43,9 @@ class Application:
             with self._verrou:
                 if self._correcteur is None:
                     self.journal("Demarrage du moteur de correction...")
+                    # Rendre Java visible avant tout : le moteur le cherche
+                    # dans le PATH, ou un JRE portable n'apparait pas.
+                    java.preparer()
                     self._correcteur = moteur.construire(
                         regles_optionnelles=self.config.get("regles_optionnelles"),
                     )
@@ -50,8 +53,24 @@ class Application:
         return self._correcteur
 
     def prechauffer(self) -> None:
-        """Demarre le moteur en arriere-plan pour que la 1re correction soit rapide."""
-        threading.Thread(target=lambda: self.correcteur, daemon=True).start()
+        """Demarre le moteur en arriere-plan pour que la 1re correction soit rapide.
+
+        Un echec ici — Java manquant, par exemple — doit se voir tout de
+        suite. Lancee au demarrage de Windows, l'application serait sinon
+        presente dans la barre des taches sans jamais rien corriger.
+        """
+        def _demarrer():
+            try:
+                self.correcteur  # noqa: B018 — declenche la construction
+            except java.JavaIntrouvable as e:
+                self.journal(str(e))
+                self.notifier("Moteur indisponible", str(e).split("\n")[0])
+            except Exception:
+                self.journal(traceback.format_exc())
+                self.notifier("Moteur indisponible",
+                              "Le moteur n'a pas pu demarrer. Voir la console.")
+
+        threading.Thread(target=_demarrer, daemon=True).start()
 
     # -- correction ---------------------------------------------------------
 
@@ -100,6 +119,9 @@ class Application:
                 f"{'s' if len(corrections) > 1 else ''}",
                 resume,
             )
+        except java.JavaIntrouvable as e:
+            self.journal(str(e))
+            self.notifier("Moteur indisponible", str(e).split("\n")[0])
         except Exception:
             self.journal(traceback.format_exc())
             self.notifier("Erreur", "La correction a echoue. Voir la console.")
@@ -114,6 +136,12 @@ class Application:
     # -- cycle de vie -------------------------------------------------------
 
     def demarrer(self) -> None:
+        # Si l'application a ete deplacee ou recompilee, la commande inscrite
+        # au registre pointe dans le vide : on la remet a jour.
+        try:
+            demarrage.synchroniser()
+        except OSError:
+            pass
         self.raccourci.activer()
         self.journal(
             f"Correcteur actif. Raccourci : {self.config['raccourci']}"
@@ -126,3 +154,13 @@ class Application:
         """Active ou met en pause la correction. Renvoie le nouvel etat."""
         self.actif = not self.actif
         return self.actif
+
+    # -- demarrage automatique ----------------------------------------------
+
+    @property
+    def demarrage_auto(self) -> bool:
+        return demarrage.actif()
+
+    def basculer_demarrage_auto(self) -> bool:
+        """Inscrit ou retire l'application du demarrage de Windows."""
+        return demarrage.basculer()
