@@ -1,0 +1,10 @@
+# Moteur linguistique (telecharge LanguageTool au premier lancement)
+language-tool-python>=2.8
+
+# Presse-papiers et raccourci clavier global
+pyperclip>=1.8
+keyboard>=0.13.5
+
+# Icone dans la zone de notification
+pystray>=0.19
+Pillow>=10.0
