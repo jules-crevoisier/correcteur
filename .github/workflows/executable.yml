@@ -36,15 +36,20 @@ jobs:
 
       # L'executable est compile en mode fenetre : sans redirection, il n'a
       # aucune sortie a offrir. « Start-Process -RedirectStandardOutput » lui
-      # en fournit une, et attend qu'il ait fini.
+      # en fournit une, et attend qu'il ait fini. Attention, Start-Process
+      # recolle ArgumentList avec des espaces : la phrase doit porter ses
+      # propres guillemets pour rester un seul argument.
       - name: Verifier que l'executable corrige vraiment
         shell: pwsh
         run: |
           Start-Process -FilePath dist\Correcteur.exe `
-            -ArgumentList '--texte', 'je sais pas si sa va marcher' `
-            -NoNewWindow -Wait -RedirectStandardOutput sortie.txt
-          $sortie = (Get-Content sortie.txt -Raw -Encoding utf8).Trim()
+            -ArgumentList '--texte', '"je sais pas si sa va marcher"' `
+            -NoNewWindow -Wait `
+            -RedirectStandardOutput sortie.txt -RedirectStandardError erreur.txt
+          $sortie = "$(Get-Content sortie.txt -Raw -Encoding utf8)".Trim()
           if ($sortie -ne "je sais pas si ça va marcher") {
+            Write-Host "--- sortie d'erreur ---"
+            Get-Content erreur.txt -Raw -Encoding utf8
             throw "sortie inattendue : « $sortie »"
           }
           Write-Host "sortie conforme : $sortie"
