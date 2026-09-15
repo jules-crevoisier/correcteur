@@ -177,6 +177,11 @@ Correcteur.exe --config         # chemin du fichier de réglages
 
 `--verifier` est le premier réflexe si quelque chose ne fonctionne pas.
 
+Ces commandes écrivent dans le terminal qui les a lancées. Lancé d'un
+double-clic, `Correcteur.exe` n'affiche rien et se contente d'apparaître près
+de l'horloge : c'est une application de zone de notification, pas un
+programme en ligne de commande.
+
 Depuis les sources, remplacez `Correcteur.exe` par `python -m correcteur`.
 
 ## Développement

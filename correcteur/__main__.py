@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 
 from . import __version__, config as config_mod
@@ -18,7 +19,76 @@ from . import demarrage
 from .app import Application
 
 
+def brancher_sortie() -> None:
+    """Rend la sortie de l'application exploitable, compilee comme interpretee.
+
+    Deux corrections, dont une seule concerne l'executable :
+
+    1. **Retrouver une sortie.** Correcteur.exe est compile en mode fenetre :
+       il vit dans la zone de notification, Windows ne lui donne donc aucune
+       console et PyInstaller met sys.stdout a None. On rouvre le descripteur
+       1 quand l'appelant a redirige la sortie, et a defaut on se rattache a
+       la console du terminal qui nous a lances. Lance d'un double-clic, rien
+       de tout cela ne marche, et c'est tres bien : personne ne lit.
+
+    2. **Ne pas perdre les accents.** Rediriger la sortie vers un fichier ou
+       un tube lui fait prendre l'encodage local — cp1252 sous Windows — ou
+       « ça » ne survit pas. Un correcteur francais doit ecrire en UTF-8 des
+       qu'il n'ecrit plus a l'ecran ; devant un vrai terminal, on laisse au
+       contraire l'encodage de la console, seul capable de l'afficher.
+    """
+    if sys.stdout is None or sys.stderr is None:
+        _rattacher_sortie()
+
+    for nom in ("stdout", "stderr"):
+        flux = getattr(sys, nom)
+        if flux is None:
+            continue
+        try:
+            if not flux.isatty():
+                flux.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, OSError, ValueError):
+            pass
+
+
+def _rattacher_sortie() -> None:
+    """Redonne un sys.stdout a une application compilee en mode fenetre."""
+    def rouvrir(descripteur: int):
+        try:
+            return os.fdopen(descripteur, "w", encoding="utf-8",
+                             errors="replace", buffering=1)
+        except OSError:
+            return None
+
+    sortie, erreur = rouvrir(1), rouvrir(2)
+
+    if sortie is None and os.name == "nt":
+        import ctypes
+
+        ATTACHER_AU_PARENT = -1
+        try:
+            rattache = ctypes.windll.kernel32.AttachConsole(ATTACHER_AU_PARENT)
+        except (AttributeError, OSError):
+            rattache = False
+        if rattache:
+            try:
+                # Pas d'encodage impose ici : ce qui s'affiche dans une console
+                # doit parler la langue de cette console.
+                sortie = open("CONOUT$", "w", errors="replace", buffering=1)
+                erreur = open("CONOUT$", "w", errors="replace", buffering=1)
+            except OSError:
+                pass
+
+    if sys.stdout is None and sortie is not None:
+        sys.stdout = sortie
+    if sys.stderr is None and erreur is not None:
+        sys.stderr = erreur
+
+
 def main(argv: list[str] | None = None) -> int:
+    brancher_sortie()
+
+
     analyseur = argparse.ArgumentParser(
         prog="correcteur",
         description="Correcteur d'orthographe francais qui respecte le francais parle.",
