@@ -20,24 +20,39 @@ from .app import Application
 
 
 def brancher_sortie() -> None:
-    """Rend « print » a nouveau utile quand l'application est compilee.
+    """Rend la sortie de l'application exploitable, compilee comme interpretee.
 
-    Correcteur.exe est compile en mode fenetre : il vit dans la zone de
-    notification, et Windows ne lui donne donc aucune console. PyInstaller met
-    alors sys.stdout a None, et « --texte » n'afficherait rien du tout.
+    Deux corrections, dont une seule concerne l'executable :
 
-    On recupere la sortie de deux facons, dans cet ordre :
+    1. **Retrouver une sortie.** Correcteur.exe est compile en mode fenetre :
+       il vit dans la zone de notification, Windows ne lui donne donc aucune
+       console et PyInstaller met sys.stdout a None. On rouvre le descripteur
+       1 quand l'appelant a redirige la sortie, et a defaut on se rattache a
+       la console du terminal qui nous a lances. Lance d'un double-clic, rien
+       de tout cela ne marche, et c'est tres bien : personne ne lit.
 
-    1. si l'appelant a redirige la sortie — « > fichier », un tube — le
-       descripteur 1 est valide et il suffit de le rouvrir ;
-    2. sinon on se rattache a la console du terminal qui nous a lances.
-
-    Lance d'un double-clic, ni l'une ni l'autre ne marche, et c'est tres bien :
-    il n'y a personne pour lire.
+    2. **Ne pas perdre les accents.** Rediriger la sortie vers un fichier ou
+       un tube lui fait prendre l'encodage local — cp1252 sous Windows — ou
+       « ça » ne survit pas. Un correcteur francais doit ecrire en UTF-8 des
+       qu'il n'ecrit plus a l'ecran ; devant un vrai terminal, on laisse au
+       contraire l'encodage de la console, seul capable de l'afficher.
     """
-    if sys.stdout is not None and sys.stderr is not None:
-        return
+    if sys.stdout is None or sys.stderr is None:
+        _rattacher_sortie()
 
+    for nom in ("stdout", "stderr"):
+        flux = getattr(sys, nom)
+        if flux is None:
+            continue
+        try:
+            if not flux.isatty():
+                flux.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, OSError, ValueError):
+            pass
+
+
+def _rattacher_sortie() -> None:
+    """Redonne un sys.stdout a une application compilee en mode fenetre."""
     def rouvrir(descripteur: int):
         try:
             return os.fdopen(descripteur, "w", encoding="utf-8",
@@ -57,10 +72,10 @@ def brancher_sortie() -> None:
             rattache = False
         if rattache:
             try:
-                sortie = open("CONOUT$", "w", encoding="utf-8",
-                              errors="replace", buffering=1)
-                erreur = open("CONOUT$", "w", encoding="utf-8",
-                              errors="replace", buffering=1)
+                # Pas d'encodage impose ici : ce qui s'affiche dans une console
+                # doit parler la langue de cette console.
+                sortie = open("CONOUT$", "w", errors="replace", buffering=1)
+                erreur = open("CONOUT$", "w", errors="replace", buffering=1)
             except OSError:
                 pass
 
