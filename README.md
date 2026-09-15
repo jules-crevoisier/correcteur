@@ -136,11 +136,45 @@ soit à la main.
 | Notifications | activé | Le résumé des corrections près de l'horloge |
 | Majuscule en début de phrase | désactivé | Beaucoup tiennent au tout-minuscules |
 | Point final manquant | désactivé | Même raison |
-| Raccourcis | `ctrl+alt+c`, `ctrl+alt+z` | Corriger, annuler |
 | Lancer au démarrage de Windows | — | Sans droits administrateur |
+| Mises à jour automatiques | activé | Voir plus bas |
+
+### Les raccourcis
+
+Trois raccourcis, tous personnalisables. Cliquez sur le bouton, **appuyez sur
+la combinaison voulue** : pas besoin de deviner comment elle s'écrit. Échap
+annule la saisie, Retour arrière supprime le raccourci.
+
+| Raccourci | Par défaut | Rôle |
+|---|---|---|
+| Corriger la sélection | `Ctrl+Alt+C` | Corrige le texte sélectionné |
+| Annuler la dernière correction | `Ctrl+Alt+Z` | Remet ce que vous aviez écrit |
+| Ouvrir la fenêtre | `Ctrl+Alt+F` | — |
+
+Une touche seule est refusée : elle partirait chaque fois que vous l'écrivez.
+Les touches de fonction (`F1` à `F12`) font exception, elles ne servent à rien
+d'autre.
 
 Le fichier reste lisible dans `%APPDATA%\Correcteur\config.json` si vous y
 tenez ; l'application le relit toute seule dans les deux secondes.
+
+## Mises à jour
+
+L'outil va chercher tout seul les nouvelles versions : au lancement, puis une
+fois par jour. Quand il en trouve une, il la télécharge en arrière-plan et
+**elle prend la place de l'ancienne au démarrage suivant** — jamais pendant
+que vous écrivez. Remplacer un exécutable sous les doigts de quelqu'un est le
+plus sûr moyen de lui faire perdre sa phrase.
+
+Pour ne pas attendre : clic droit sur l'icône → *Redémarrer pour installer*,
+ou le bouton *Vérifier maintenant* dans les réglages.
+
+Le téléchargement ne vient que des [Releases de ce
+dépôt](../../releases), en HTTPS, et l'empreinte SHA-256 publiée par GitHub
+est vérifiée quand elle est présente. Rien d'autre n'est envoyé ni reçu : la
+requête ne contient que le numéro de version installée.
+
+Pour tout couper : décochez *Chercher les nouvelles versions automatiquement*.
 
 ## Ce que l'outil ne touche jamais
 
@@ -228,6 +262,7 @@ qui garde une faute reste lisible ; un message mal corrigé ne l'est plus.
 Correcteur.exe --texte "je sais pas si sa va marcher"
 Correcteur.exe --fenetre        # ouvre la fenêtre de correction
 Correcteur.exe --verifier       # contrôle dictionnaire, correction et réglages
+Correcteur.exe --maj            # cherche une nouvelle version et la télécharge
 Correcteur.exe --demarrage on   # se lance avec Windows (on/off/etat)
 Correcteur.exe --console        # sans icône, journal en console
 Correcteur.exe --config         # chemin du fichier de réglages
@@ -246,7 +281,7 @@ Depuis les sources, remplacez `Correcteur.exe` par `python -m correcteur`.
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest tests/ -q          # ~180 tests, moins d'une seconde
+python -m pytest tests/ -q          # ~220 tests, moins d'une seconde
 python -m correcteur --texte "sa va ?"
 ```
 
@@ -268,11 +303,14 @@ l'exécutable est construit sur une machine Windows, testé, puis déposé dans
 l'onglet *Actions*.
 
 Sur `main`, il est en plus publié dans les *Releases*, sous un numéro calculé
-tout seul : `majeur.mineur` vient de `__version__` dans
-`correcteur/__init__.py`, le dernier nombre est le nombre de commits. Chaque
-envoi donne donc une version de plus, sans jamais retomber sur la même, et il
-n'y a aucun tag à poser à la main. Pour ouvrir une nouvelle série — `v1.1.x` —
-il suffit de changer `__version__`.
+tout seul : `majeur.mineur` vient de `SERIE` dans `correcteur/__init__.py`, le
+dernier nombre est le nombre de commits. Chaque envoi donne donc une version
+de plus, sans jamais retomber sur la même, et il n'y a aucun tag à poser à la
+main. Pour ouvrir une nouvelle série — `v1.1.x` — il suffit de changer `SERIE`.
+
+Le numéro est inscrit dans le code avant la compilation
+(`correcteur/version_compilee.py`, ignoré par git) : c'est ainsi que
+l'exécutable sait, plus tard, qu'une version plus récente est parue.
 
 ### Régénérer le dictionnaire
 
@@ -298,10 +336,11 @@ Le dictionnaire français vient de [Dicollecte](https://grammalecte.net/)
 | `correcteur/moteur.py` | Assemblage des trois couches |
 | `correcteur/app.py` | Enchaînement sélection → correction → collage |
 | `correcteur/presse_papier.py` | Capture de la sélection via le presse-papiers |
-| `correcteur/raccourci.py` | Raccourci clavier global |
 | `correcteur/interface.py` | Icône dans la zone de notification |
 | `correcteur/fenetre.py` | Fenêtre : corriger, dictionnaire, réglages (tkinter) |
 | `correcteur/frappe.py` | Correction au fil de la frappe et annulation |
+| `correcteur/maj.py` | Recherche, téléchargement et mise en place des versions |
+| `correcteur/raccourci.py` | Raccourcis globaux et lecture des combinaisons |
 | `correcteur/config.py` | Lecture, migration et écriture des réglages |
 | `correcteur/demarrage.py` | Lancement automatique via le registre Windows |
 | `correcteur/chemins.py` | Emplacements selon le mode (sources, `.exe`) |

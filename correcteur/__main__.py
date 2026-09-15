@@ -15,7 +15,7 @@ import os
 import sys
 
 from . import __version__, config as config_mod
-from . import demarrage
+from . import demarrage, maj
 from .app import Application
 
 
@@ -88,6 +88,17 @@ def _rattacher_sortie() -> None:
 def main(argv: list[str] | None = None) -> int:
     brancher_sortie()
 
+    # Une version telechargee attend peut-etre d'etre mise en place. C'est la
+    # premiere chose a faire : le processus courant cede alors la place au
+    # nouveau, avant d'avoir rien installe.
+    try:
+        if maj.appliquer():
+            return 0
+        maj.nettoyer()
+    except Exception:
+        # Une mise a jour ratee ne doit jamais empecher de demarrer.
+        pass
+
 
     analyseur = argparse.ArgumentParser(
         prog="correcteur",
@@ -104,6 +115,8 @@ def main(argv: list[str] | None = None) -> int:
                            help="lancement automatique a l'ouverture de session Windows")
     analyseur.add_argument("--verifier", action="store_true",
                            help="controle l'installation et quitte")
+    analyseur.add_argument("--maj", action="store_true",
+                           help="cherche une nouvelle version et la telecharge")
     analyseur.add_argument("--version", action="version", version=f"correcteur {__version__}")
     args = analyseur.parse_args(argv)
 
@@ -116,6 +129,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.verifier:
         return _verifier()
+
+    if args.maj:
+        return _mettre_a_jour()
 
     app = Application()
 
@@ -166,6 +182,36 @@ def _gerer_demarrage(action: str) -> int:
     return 0
 
 
+def _mettre_a_jour() -> int:
+    """Cherche une version plus recente et la telecharge."""
+    print(f"Version installee : {__version__}")
+
+    if not maj.compilee():
+        print("Lance depuis les sources : « git pull » fait le travail.")
+        return 0
+
+    try:
+        version = maj.derniere_version()
+    except maj.MiseAJourImpossible as e:
+        print(f"[X]  Verification impossible ({e}).", file=sys.stderr)
+        return 1
+
+    print(f"Derniere version publiee : {version}")
+    if not maj.plus_recente(version.numero, __version__):
+        print("Vous etes a jour.")
+        return 0
+
+    try:
+        maj.installer_maintenant(version)
+    except maj.MiseAJourImpossible as e:
+        print(f"[X]  Telechargement impossible ({e}).", file=sys.stderr)
+        return 1
+
+    print(f"Version {version} telechargee. Elle prendra la place de "
+          f"l'actuelle au prochain demarrage.")
+    return 0
+
+
 def _verifier() -> int:
     """Controle que tout est en place, avec un diagnostic lisible."""
     from .chemins import dossier_donnees
@@ -197,7 +243,14 @@ def _verifier() -> int:
     etat = "activee" if config.get("correction_auto", True) else "desactivee"
     print(f"[ok] Correction au fil de la frappe : {etat}")
     print(f"[ok] Raccourcis : {config['raccourci']} (corriger), "
-          f"{config['raccourci_annuler']} (annuler)")
+          f"{config['raccourci_annuler']} (annuler), "
+          f"{config['raccourci_fenetre'] or 'aucun'} (fenetre)")
+
+    if maj.compilee():
+        etat = "activee" if config.get("verifier_maj", True) else "desactivee"
+        print(f"[ok] Recherche de mises a jour : {etat}")
+        if maj.en_attente() is not None:
+            print("[ok] Une mise a jour attend le prochain demarrage.")
 
     mots = len(config.get("mots_perso", []))
     remplacements = len(config.get("remplacements_perso", {}))

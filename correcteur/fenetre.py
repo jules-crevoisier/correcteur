@@ -19,8 +19,9 @@ from __future__ import annotations
 import threading
 import tkinter as tk
 
-from . import config as config_mod
-from . import demarrage, regles
+from . import __version__, config as config_mod
+from . import demarrage, maj, regles
+from .raccourci import MODIFICATEURS, nom_de_touche
 from .lexique import LexiqueIntrouvable
 from .moteur import _normaliser_mot
 
@@ -71,6 +72,97 @@ def _titre(parent, texte):
 def _note(parent, texte, **kw):
     return tk.Label(parent, text=texte, bg=FOND, fg=TEXTE_DOUX, anchor="w",
                     justify="left", font=(POLICE, 9), **kw)
+
+
+class ChampRaccourci:
+    """Un bouton qui attend qu'on appuie sur la combinaison voulue.
+
+    Saisir « ctrl+alt+c » a la main suppose de connaitre l'orthographe exacte
+    attendue par la bibliotheque de raccourcis. Appuyer sur les touches, non.
+    """
+
+    INVITE = "Appuyez sur la combinaison…"
+
+    def __init__(self, parent, valeur: str, sur_erreur=None):
+        self.valeur = valeur or ""
+        self.sur_erreur = sur_erreur or (lambda _message: None)
+        self.enfonces: list[str] = []
+        self.capture = False
+
+        self.bouton = _bouton(parent, self._libelle(), self._capturer)
+        self.bouton.configure(width=18)
+
+    # -- affichage ----------------------------------------------------------
+
+    def _libelle(self) -> str:
+        return self.valeur.upper() if self.valeur else "aucun"
+
+    def pack(self, **options):
+        self.bouton.pack(**options)
+        return self
+
+    def get(self) -> str:
+        return self.valeur
+
+    # -- capture ------------------------------------------------------------
+
+    def _capturer(self) -> None:
+        if self.capture:
+            return
+        self.capture = True
+        self.enfonces = []
+        self.bouton.configure(text=self.INVITE, bg=ACCENT, fg="white")
+        self.bouton.focus_set()
+        self.bouton.grab_set()
+        self.bouton.bind("<KeyPress>", self._enfoncee)
+        self.bouton.bind("<KeyRelease>", self._relachee)
+
+    def _terminer(self) -> None:
+        self.capture = False
+        self.bouton.grab_release()
+        self.bouton.unbind("<KeyPress>")
+        self.bouton.unbind("<KeyRelease>")
+        self.bouton.configure(text=self._libelle(), bg=FOND_CHAMP, fg=TEXTE)
+
+    def _enfoncee(self, evenement):
+        touche = nom_de_touche(evenement.keysym)
+
+        if evenement.keysym == "Escape":
+            self._terminer()
+            return "break"
+
+        if evenement.keysym in ("BackSpace", "Delete"):
+            self.valeur = ""
+            self._terminer()
+            return "break"
+
+        if touche is None:
+            return "break"
+
+        if touche in MODIFICATEURS:
+            if touche not in self.enfonces:
+                self.enfonces.append(touche)
+            self.bouton.configure(text=("+".join(self.enfonces) + "+…").upper())
+            return "break"
+
+        # Une touche seule ferait un raccourci global insupportable : elle
+        # partirait a chaque fois qu'on l'ecrit. Les touches de fonction, si.
+        touche_de_fonction = touche.startswith("f") and touche[1:].isdigit()
+        if not self.enfonces and not touche_de_fonction:
+            self.sur_erreur("Ajoutez Ctrl, Alt ou Maj — sans quoi le raccourci "
+                            "partirait chaque fois que vous tapez cette touche.")
+            self.bouton.configure(text=self.INVITE)
+            return "break"
+
+        self.valeur = "+".join(self.enfonces + [touche])
+        self._terminer()
+        return "break"
+
+    def _relachee(self, evenement):
+        touche = nom_de_touche(evenement.keysym)
+        if touche in self.enfonces:
+            self.enfonces.remove(touche)
+        return "break"
 
 
 class Fenetre:
@@ -429,22 +521,27 @@ class Fenetre:
              "Désactivé d'origine, pour la même raison.",
              regles_actives.get("PONCTUATION_POINT", False))
 
-        raccourcis = tk.Frame(page, bg=FOND, pady=10)
+        raccourcis = tk.Frame(page, bg=FOND, pady=12)
         raccourcis.pack(fill="x")
 
-        tk.Label(raccourcis, text="Raccourci :", bg=FOND, fg=TEXTE,
-                 font=(POLICE, 10)).pack(side="left")
-        self.saisie_raccourci = _champ(raccourcis, largeur=14)
-        self.saisie_raccourci.insert(0, self.config.get("raccourci", "ctrl+alt+c"))
-        self.saisie_raccourci.pack(side="left", padx=(6, 16), ipady=4)
+        _titre(raccourcis, "Raccourcis").pack(fill="x")
+        _note(raccourcis, "Cliquez, puis appuyez sur la combinaison voulue. "
+                          "Échap annule, Retour arrière supprime le raccourci."
+              ).pack(fill="x", pady=(0, 6))
 
-        tk.Label(raccourcis, text="Annuler :", bg=FOND, fg=TEXTE,
-                 font=(POLICE, 10)).pack(side="left")
-        self.saisie_annuler = _champ(raccourcis, largeur=14)
-        self.saisie_annuler.insert(0, self.config.get("raccourci_annuler", "ctrl+alt+z"))
-        self.saisie_annuler.pack(side="left", padx=(6, 0), ipady=4)
-
-        _note(page, "Exemples : ctrl+alt+c, ctrl+shift+f, f9.").pack(fill="x")
+        self.champs_raccourcis = {}
+        for cle, libelle in (
+            ("raccourci", "Corriger la sélection"),
+            ("raccourci_annuler", "Annuler la dernière correction"),
+            ("raccourci_fenetre", "Ouvrir la fenêtre"),
+        ):
+            ligne = tk.Frame(raccourcis, bg=FOND)
+            ligne.pack(fill="x", pady=2)
+            tk.Label(ligne, text=libelle, bg=FOND, fg=TEXTE, width=28,
+                     anchor="w", font=(POLICE, 10)).pack(side="left")
+            self.champs_raccourcis[cle] = ChampRaccourci(
+                ligne, self.config.get(cle, ""), sur_erreur=self._dire
+            ).pack(side="left")
 
         if demarrage.disponible():
             self.case_demarrage = tk.BooleanVar(value=demarrage.actif())
@@ -456,12 +553,65 @@ class Fenetre:
                 highlightthickness=0, borderwidth=0, cursor="hand2",
             ).pack(fill="x", pady=(10, 0))
 
+        self._section_maj(page)
+
         barre = tk.Frame(page, bg=FOND, pady=12)
         barre.pack(fill="x")
         _bouton(barre, "Enregistrer", self._enregistrer_reglages,
                 principal=True).pack(side="left")
         _note(page, f"Fichier de réglages : {config_mod.chemin_config()}"
               ).pack(fill="x")
+
+    def _section_maj(self, page: tk.Frame) -> None:
+        cadre = tk.Frame(page, bg=FOND, pady=8)
+        cadre.pack(fill="x")
+
+        _titre(cadre, f"Mises à jour — version {__version__}").pack(fill="x")
+
+        if not maj.compilee():
+            _note(cadre, "Lancé depuis les sources : « git pull » fait le travail."
+                  ).pack(fill="x")
+            return
+
+        self.case_maj = tk.BooleanVar(value=self.config.get("verifier_maj", True))
+        tk.Checkbutton(
+            cadre, text="Chercher les nouvelles versions automatiquement",
+            variable=self.case_maj, bg=FOND, fg=TEXTE, selectcolor=FOND_CHAMP,
+            activebackground=FOND, activeforeground=TEXTE, anchor="w",
+            font=(POLICE, 10), highlightthickness=0, borderwidth=0,
+            cursor="hand2",
+        ).pack(fill="x")
+        _note(cadre, "    La nouvelle version est téléchargée en arrière-plan "
+                     "et prend la place de l'ancienne au démarrage suivant."
+              ).pack(fill="x")
+
+        _bouton(cadre, "Vérifier maintenant", self._verifier_maj,
+                petit=True).pack(anchor="w", pady=(6, 0))
+
+    def _verifier_maj(self) -> None:
+        self._dire("Recherche d'une nouvelle version…")
+
+        def travailler():
+            try:
+                version = maj.disponible()
+            except maj.MiseAJourImpossible as e:
+                self.racine.after(0, self._dire, f"Vérification impossible : {e}")
+                return
+            if version is None:
+                self.racine.after(0, self._dire, "Vous êtes déjà à jour.")
+                return
+            try:
+                maj.installer_maintenant(version)
+            except maj.MiseAJourImpossible as e:
+                self.racine.after(0, self._dire, f"Téléchargement impossible : {e}")
+                return
+            self.racine.after(
+                0, self._dire,
+                f"Version {version} téléchargée : elle s'installera au "
+                f"prochain démarrage du correcteur.",
+            )
+
+        threading.Thread(target=travailler, daemon=True).start()
 
     def _basculer_demarrage(self) -> None:
         try:
@@ -480,16 +630,18 @@ class Fenetre:
             nom: self.cases[nom].get() for nom in regles.REGLES_OPTIONNELLES
         }
 
-        raccourci = self.saisie_raccourci.get().strip().lower()
-        annuler = self.saisie_annuler.get().strip().lower()
-        if not raccourci or not annuler:
-            self._dire("Un raccourci ne peut pas être vide.")
+        choisis = {cle: champ.get() for cle, champ in self.champs_raccourcis.items()}
+        occupes = [valeur for valeur in choisis.values() if valeur]
+        if len(set(occupes)) != len(occupes):
+            self._dire("Deux raccourcis ne peuvent pas être identiques.")
             return
-        if raccourci == annuler:
-            self._dire("Les deux raccourcis doivent être différents.")
+        if not choisis["raccourci"]:
+            self._dire("Le raccourci de correction ne peut pas être supprimé.")
             return
-        self.config["raccourci"] = raccourci
-        self.config["raccourci_annuler"] = annuler
+        self.config.update(choisis)
+
+        if hasattr(self, "case_maj"):
+            self.config["verifier_maj"] = self.case_maj.get()
 
         self._enregistrer("Réglages enregistrés.")
 
