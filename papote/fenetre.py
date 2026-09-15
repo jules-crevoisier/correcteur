@@ -172,7 +172,7 @@ class Fenetre:
         self.app = app
         self.config = dict(app.config)
         self.racine = tk.Tk()
-        self.racine.title("Correcteur")
+        self.racine.title("Papote")
         self.racine.geometry("680x520")
         self.racine.minsize(520, 420)
         self.racine.configure(bg=FOND)

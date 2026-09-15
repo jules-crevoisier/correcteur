@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Correcteur d'orthographe francais qui respecte le francais parle."""
+"""Papote — le correcteur d'orthographe qui respecte le francais parle."""
 
 # Serie de versions. Le dernier nombre est ajoute a la compilation, a partir
 # du nombre de commits : c'est GitHub qui ecrit « version_compilee.py ».

@@ -12,7 +12,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from correcteur import grammaire  # noqa: E402
+from papote import grammaire  # noqa: E402
 
 
 # (texte fautif, texte attendu, nom de la regle)

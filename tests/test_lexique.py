@@ -8,7 +8,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from correcteur.lexique import (  # noqa: E402
+from papote.lexique import (  # noqa: E402
     CLASSE_ACCENT,
     CLASSE_EDITION,
     Lexique,

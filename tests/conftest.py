@@ -13,8 +13,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from correcteur.lexique import Lexique, LexiqueIntrouvable  # noqa: E402
-from correcteur.moteur import Correcteur  # noqa: E402
+from papote.lexique import Lexique, LexiqueIntrouvable  # noqa: E402
+from papote.moteur import Correcteur  # noqa: E402
 
 
 @pytest.fixture(scope="session")

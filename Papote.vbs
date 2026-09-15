@@ -2,4 +2,4 @@
 Set shell = CreateObject("WScript.Shell")
 dossier = CreateObject("Scripting.FileSystemObject").GetParentFolderName(WScript.ScriptFullName)
 shell.CurrentDirectory = dossier
-shell.Run """" & dossier & "\.venv\Scripts\pythonw.exe"" -m correcteur", 0, False
+shell.Run """" & dossier & "\.venv\Scripts\pythonw.exe"" -m papote", 0, False

@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 """Point d'entree.
 
-    python -m correcteur                  lance l'application (icone + raccourci)
-    python -m correcteur --fenetre        ouvre la fenetre de correction
-    python -m correcteur --texte "..."    corrige un texte et l'affiche
-    python -m correcteur --console        lance sans icone, journal en console
-    python -m correcteur --demarrage on   se lance avec Windows
+    python -m papote                  lance l'application (icone + raccourci)
+    python -m papote --fenetre        ouvre la fenetre de correction
+    python -m papote --texte "..."    corrige un texte et l'affiche
+    python -m papote --console        lance sans icone, journal en console
+    python -m papote --demarrage on   se lance avec Windows
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ def brancher_sortie() -> None:
 
     Deux corrections, dont une seule concerne l'executable :
 
-    1. **Retrouver une sortie.** Correcteur.exe est compile en mode fenetre :
+    1. **Retrouver une sortie.** Papote.exe est compile en mode fenetre :
        il vit dans la zone de notification, Windows ne lui donne donc aucune
        console et PyInstaller met sys.stdout a None. On rouvre le descripteur
        1 quand l'appelant a redirige la sortie, et a defaut on se rattache a
@@ -101,8 +101,8 @@ def main(argv: list[str] | None = None) -> int:
 
 
     analyseur = argparse.ArgumentParser(
-        prog="correcteur",
-        description="Correcteur d'orthographe francais qui respecte le francais parle.",
+        prog="papote",
+        description="Papote, le correcteur qui respecte le francais parle.",
     )
     analyseur.add_argument("--texte", help="corrige ce texte, affiche le resultat et quitte")
     analyseur.add_argument("--fenetre", action="store_true",
@@ -117,7 +117,7 @@ def main(argv: list[str] | None = None) -> int:
                            help="controle l'installation et quitte")
     analyseur.add_argument("--maj", action="store_true",
                            help="cherche une nouvelle version et la telecharge")
-    analyseur.add_argument("--version", action="version", version=f"correcteur {__version__}")
+    analyseur.add_argument("--version", action="version", version=f"Papote {__version__}")
     args = analyseur.parse_args(argv)
 
     if args.config:

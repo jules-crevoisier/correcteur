@@ -1,9 +1,9 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""Recette PyInstaller : un seul fichier Correcteur.exe, dictionnaire compris.
+"""Recette PyInstaller : un seul fichier Papote.exe, dictionnaire compris.
 
-    pyinstaller --noconfirm --clean correcteur.spec
+    pyinstaller --noconfirm --clean papote.spec
 
-Le resultat tient dans « dist/Correcteur.exe » et ne demande ni Python ni
+Le resultat tient dans « dist/Papote.exe » et ne demande ni Python ni
 quoi que ce soit d'autre sur la machine de destination.
 """
 
@@ -39,7 +39,7 @@ exe = EXE(
     analyse.binaries,
     analyse.datas,
     [],
-    name="Correcteur",
+    name="Papote",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

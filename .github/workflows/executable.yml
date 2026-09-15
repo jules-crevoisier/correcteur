@@ -1,4 +1,4 @@
-# Fabrique Correcteur.exe sur une machine Windows fournie par GitHub.
+# Fabrique Papote.exe sur une machine Windows fournie par GitHub.
 #
 # A chaque envoi, sur n'importe quelle branche, l'executable est construit,
 # teste, et depose dans l'onglet « Actions ».
@@ -6,7 +6,7 @@
 # Sur « main », il est en plus publie dans les « Releases » sous un numero de
 # version calcule tout seul : pas de tag a poser a la main, chaque envoi donne
 # une version de plus.
-name: Correcteur.exe
+name: Papote.exe
 
 on:
   push:
@@ -53,7 +53,7 @@ jobs:
           if ("${{ github.ref }}".StartsWith("refs/tags/v")) {
             $tag = "${{ github.ref_name }}"
           } else {
-            $init = Get-Content correcteur/__init__.py -Raw
+            $init = Get-Content papote/__init__.py -Raw
             $serie = [regex]::Match($init, 'SERIE = "(\d+\.\d+)"')
             if (-not $serie.Success) { throw "SERIE introuvable dans __init__.py" }
             $commits = (git rev-list --count HEAD).Trim()
@@ -64,14 +64,14 @@ jobs:
           # L'executable doit connaitre son propre numero : c'est ainsi qu'il
           # sait, plus tard, qu'une version plus recente est parue.
           $numero = $tag.TrimStart('v')
-          Set-Content -Path correcteur/version_compilee.py -Encoding utf8 -Value @(
+          Set-Content -Path papote/version_compilee.py -Encoding utf8 -Value @(
             '# -*- coding: utf-8 -*-',
             '# Ecrit a la compilation par .github/workflows/executable.yml.',
             "VERSION = `"$numero`""
           )
 
       - name: Compiler l'executable
-        run: python -m PyInstaller --noconfirm --clean correcteur.spec
+        run: python -m PyInstaller --noconfirm --clean papote.spec
 
       # L'executable est compile en mode fenetre : sans redirection, il n'a
       # aucune sortie a offrir. « Start-Process -RedirectStandardOutput » lui
@@ -81,7 +81,7 @@ jobs:
       - name: Verifier que l'executable corrige vraiment
         shell: pwsh
         run: |
-          Start-Process -FilePath dist\Correcteur.exe `
+          Start-Process -FilePath dist\Papote.exe `
             -ArgumentList '--texte', '"je sais pas si sa va marcher"' `
             -NoNewWindow -Wait `
             -RedirectStandardOutput sortie.txt -RedirectStandardError erreur.txt
@@ -95,17 +95,17 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Correcteur-exe
-          path: dist/Correcteur.exe
+          name: Papote-exe
+          path: dist/Papote.exe
 
       - name: Publier la version
         if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
-          name: Correcteur ${{ steps.version.outputs.tag }}
+          name: Papote ${{ steps.version.outputs.tag }}
           body: |
-            Téléchargez **Correcteur.exe** ci-dessous, double-cliquez : une
+            Téléchargez **Papote.exe** ci-dessous, double-cliquez : une
             icône bleue apparaît près de l'horloge. Sélectionnez du texte
             n'importe où, puis `Ctrl+Alt+C`.
 
@@ -113,4 +113,4 @@ jobs:
             n'est pas signé. *Informations complémentaires* → *Exécuter
             quand même*.
           generate_release_notes: true
-          files: dist/Correcteur.exe
+          files: dist/Papote.exe

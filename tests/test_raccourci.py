@@ -9,7 +9,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from correcteur.raccourci import (  # noqa: E402
+from papote.raccourci import (  # noqa: E402
     MODIFICATEURS,
     Raccourci,
     RaccourciInvalide,

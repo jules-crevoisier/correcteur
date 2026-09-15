@@ -106,7 +106,7 @@ def grouper(formes: set[str]) -> list[str]:
     elles en different. « bonjour » s'ecrit sans accent et occupe donc une
     ligne a lui seul.
     """
-    from correcteur.lexique import squelette
+    from papote.lexique import squelette
 
     groupes: dict[str, list[str]] = {}
     for forme in formes:

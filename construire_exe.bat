@@ -4,7 +4,7 @@ setlocal
 cd /d "%~dp0"
 
 echo ================================================
-echo   Construction de Correcteur.exe
+echo   Construction de Papote.exe
 echo ================================================
 echo.
 
@@ -19,12 +19,12 @@ call .venv\Scripts\python.exe -m pip install pyinstaller --quiet
 if errorlevel 1 ( echo [X] Echec. & pause & exit /b 1 )
 
 echo [2/2] Compilation...
-call .venv\Scripts\python.exe -m PyInstaller --noconfirm --clean correcteur.spec
+call .venv\Scripts\python.exe -m PyInstaller --noconfirm --clean papote.spec
 if errorlevel 1 ( echo [X] Echec. & pause & exit /b 1 )
 
 echo.
 echo ================================================
-echo   Termine : dist\Correcteur.exe
+echo   Termine : dist\Papote.exe
 echo.
 echo   Un seul fichier, dictionnaire compris. Ni Python
 echo   ni quoi que ce soit d'autre n'est requis sur la
