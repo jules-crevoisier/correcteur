@@ -3,8 +3,9 @@
 Correcteur d'orthographe français pour Windows qui **respecte votre façon
 d'écrire**.
 
-Sélectionnez du texte, appuyez sur `Ctrl+Alt+C`, le texte corrigé remplace la
-sélection. Aucune fenêtre, aucun clic, aucun copier-coller manuel.
+Il corrige **pendant que vous tapez**, dans n'importe quelle application. Rien
+à sélectionner, aucun raccourci à retenir : vous écrivez `sa va`, il écrit
+`ça va`. Une correction vous déplaît ? `Ctrl+Alt+Z` la défait.
 
 **Un seul fichier**, `Correcteur.exe` : ni Python, ni Java, ni compte, ni clé
 d'API. Tout fonctionne hors ligne — aucun texte n'est envoyé sur Internet.
@@ -55,7 +56,8 @@ il n'y a rien d'autre à installer.
 
 ### Démarrage automatique avec Windows
 
-Clic droit sur l'icône → **Lancer au démarrage de Windows**.
+Clic droit sur l'icône → **Lancer au démarrage de Windows**, ou la case du
+même nom dans les réglages.
 
 L'entrée est inscrite dans votre propre session (`HKCU\...\Run`), sans droits
 administrateur, et se retire par le même menu. Si vous déplacez ensuite
@@ -65,55 +67,86 @@ En ligne de commande : `Correcteur.exe --demarrage on` (ou `off`, ou `etat`).
 
 ## Utilisation
 
-**Partout**, c'est le raccourci :
+### Il corrige tout seul
 
-1. Écrivez votre message, dans n'importe quelle application.
-2. Sélectionnez-le (`Ctrl+A` suffit dans un champ de saisie).
-3. `Ctrl+Alt+C`.
+Écrivez, n'importe où. Le mot se corrige dès que vous tapez l'espace ou la
+ponctuation qui le termine :
 
-Le texte corrigé remplace la sélection et une notification résume ce qui a
-changé.
+```
+vous tapez      je sais pas si sa va marcher
+vous obtenez    je sais pas si ça va marcher
+```
 
-**Pour relire un texte avant de l'envoyer**, clic droit sur l'icône →
-*Ouvrir la fenêtre*. Collez, `Ctrl+Entrée`, le texte corrigé s'affiche avec la
-liste des corrections.
+La correction attend le mot suivant quand elle en a besoin : `sa` reste `sa`
+tant que rien ne prouve que c'est un `ça`. C'est la phrase qui tranche, pas le
+mot isolé.
 
-Le clic droit permet aussi de mettre l'outil en pause ou d'ouvrir les réglages.
+**`Ctrl+Alt+Z` annule la dernière correction** et remet ce que vous aviez
+écrit. Le mot rétabli vous est ensuite proposé dans *Mon dictionnaire* : un
+clic, et il n'y touchera plus jamais.
+
+### Il corrige aussi à la demande
+
+Pour un texte déjà écrit — un message collé, un vieux brouillon :
+sélectionnez-le et appuyez sur **`Ctrl+Alt+C`**. Le texte corrigé remplace la
+sélection.
+
+### Il a une fenêtre
+
+Clic droit sur l'icône → *Ouvrir la fenêtre*, ou double-clic sur l'icône. Trois
+onglets :
+
+| Onglet | À quoi il sert |
+|---|---|
+| **Corriger** | Coller un texte, `Ctrl+Entrée`, relire avant d'envoyer. Les mots inconnus s'affichent en dessous : un clic les ajoute à votre dictionnaire. |
+| **Mon dictionnaire** | Les mots à ne jamais corriger, et vos remplacements. |
+| **Réglages** | Tout ce qui se réglait dans un fichier JSON. |
+
+## Lui apprendre vos mots
+
+Deux listes, dans l'onglet *Mon dictionnaire* :
+
+**Les mots à ne pas corriger** — pseudos, jargon, noms de jeux. `Kayn`,
+`Valorant`, votre pseudo. Trois façons de les ajouter : le bouton sous le texte
+corrigé, la proposition qui suit un `Ctrl+Alt+Z`, ou le champ de saisie.
+
+**Vos remplacements** — ce que vous écrivez, et ce qu'il faut écrire à la
+place :
+
+| Vous tapez | Il écrit |
+|---|---|
+| `ptetre` | `peut-être` |
+| `jsui` | `je suis` |
+| `cdlt` | `cordialement` |
+| `adr` | `12 rue des Lilas, 75011 Paris` |
+
+Ils passent avant tout le reste — avant le dictionnaire, avant les protections.
+C'est donc aussi un outil d'abréviations : rien n'oblige le remplacement à
+corriger une faute.
 
 ## Réglages
 
-Clic droit sur l'icône → *Ouvrir les réglages*. Le fichier se trouve dans
-`%APPDATA%\Correcteur\config.json`. Redémarrez l'application après modification.
+Onglet *Réglages* de la fenêtre. Tout y est, plus besoin d'éditer quoi que ce
+soit à la main.
 
 | Réglage | Par défaut | Rôle |
 |---|---|---|
-| `raccourci` | `ctrl+alt+c` | Combinaison de touches. Ex. : `ctrl+shift+f`, `f9` |
-| `collage_auto` | `true` | `false` : le texte corrigé est mis dans le presse-papiers sans être collé |
-| `notifications` | `true` | Affiche le résumé des corrections |
-| `lexique_perso` | `[]` | Mots à ne jamais corriger : pseudos, jargon, noms de jeux |
-| `delai_copie` | `0.35` | À augmenter si une application lente rate la capture |
-| `regles_optionnelles` | voir ci-dessous | Corrections désactivées par défaut |
+| Corriger pendant que j'écris | activé | La correction au fil de la frappe |
+| Recoller le texte corrigé | activé | Sinon `Ctrl+Alt+C` se contente du presse-papiers |
+| Notifications | activé | Le résumé des corrections près de l'horloge |
+| Majuscule en début de phrase | désactivé | Beaucoup tiennent au tout-minuscules |
+| Point final manquant | désactivé | Même raison |
+| Raccourcis | `ctrl+alt+c`, `ctrl+alt+z` | Corriger, annuler |
+| Lancer au démarrage de Windows | — | Sans droits administrateur |
 
-Deux règles sont désactivées d'origine car elles relèvent du goût :
-
-```json
-"regles_optionnelles": {
-  "MAJUSCULE_PHRASE": false,     // majuscule en début de phrase
-  "PONCTUATION_POINT": false     // point final manquant
-}
-```
-
-Passez-les à `true` pour les activer.
-
-### Ajouter vos propres mots
-
-```json
-"lexique_perso": ["Valorant", "Kayn", "monpseudo", "gg"]
-```
+Le fichier reste lisible dans `%APPDATA%\Correcteur\config.json` si vous y
+tenez ; l'application le relit toute seule dans les deux secondes.
 
 ## Ce que l'outil ne touche jamais
 
 - Le registre parlé : négations sans « ne », `y a`, `faut que`, `ça`, `c'est quoi`
+- Ce que vous tapez dans un raccourci clavier : dès qu'une touche de commande
+  est enfoncée, la phrase en cours est oubliée
 - Les liens, adresses e-mail, mentions `@pseudo`, salons `#general`
 - Les blocs de code entre backticks et les spoilers `||...||`
 - Les emojis `:joy:` et les emojis Discord personnalisés
@@ -124,14 +157,34 @@ Passez-les à `true` pour les activer.
 
 ## Comment ça marche
 
-Aucune bibliothèque de correction, aucun serveur : le moteur tient dans trois
-fichiers Python et un dictionnaire.
+Aucune bibliothèque de correction, aucun serveur : le moteur tient dans
+quelques fichiers Python et un dictionnaire.
 
 | Couche | Fichier | Rôle |
 |---|---|---|
+| Vos remplacements | `correcteur/config.py` | Ce que vous lui avez appris passe avant tout |
 | Protection | `correcteur/regles.py` | Ce qui sort du circuit avant examen |
 | Grammaire | `correcteur/grammaire.py` | 24 règles de contexte : homonymes, accords, conjugaison |
 | Orthographe | `correcteur/lexique.py` | 450 000 formes françaises, accents et fautes de frappe |
+| Frappe | `correcteur/frappe.py` | Suit ce que vous tapez et décide quand intervenir |
+
+### La correction au fil de la frappe
+
+Tout repose sur une chose : savoir exactement ce qui est à l'écran. L'outil
+retient la phrase en cours, et chaque fois qu'un mot se termine, il soumet la
+phrase entière au correcteur. S'il faut changer quelque chose, il efface
+exactement ce qu'il a écrit et le retape.
+
+La règle qui gouverne le reste : **au moindre doute, il oublie la phrase**. Une
+touche qu'il ne sait pas interpréter, un accent circonflexe composé en deux
+touches, une flèche, un clic ailleurs, cinq secondes de silence — et le tampon
+repart de zéro. Une correction manquée ne se voit pas ; une correction
+appliquée au mauvais endroit détruit le texte.
+
+Rien de ce qui est tapé n'est conservé : le tampon vit en mémoire, quelques
+centaines de caractères, et rien n'en sort — ni fichier, ni réseau. Dès qu'une
+touche de commande est enfoncée, il s'efface.
+
 
 ### L'orthographe
 
@@ -193,7 +246,7 @@ Depuis les sources, remplacez `Correcteur.exe` par `python -m correcteur`.
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest tests/ -q          # ~130 tests, moins d'une seconde
+python -m pytest tests/ -q          # ~180 tests, moins d'une seconde
 python -m correcteur --texte "sa va ?"
 ```
 
@@ -247,8 +300,9 @@ Le dictionnaire français vient de [Dicollecte](https://grammalecte.net/)
 | `correcteur/presse_papier.py` | Capture de la sélection via le presse-papiers |
 | `correcteur/raccourci.py` | Raccourci clavier global |
 | `correcteur/interface.py` | Icône dans la zone de notification |
-| `correcteur/fenetre.py` | Fenêtre de correction (tkinter) |
-| `correcteur/config.py` | Lecture et écriture des réglages |
+| `correcteur/fenetre.py` | Fenêtre : corriger, dictionnaire, réglages (tkinter) |
+| `correcteur/frappe.py` | Correction au fil de la frappe et annulation |
+| `correcteur/config.py` | Lecture, migration et écriture des réglages |
 | `correcteur/demarrage.py` | Lancement automatique via le registre Windows |
 | `correcteur/chemins.py` | Emplacements selon le mode (sources, `.exe`) |
 | `outils/construire_lexique.py` | Fabrication des fichiers de `donnees/` |

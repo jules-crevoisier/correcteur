@@ -58,7 +58,7 @@ def test_les_noms_propres_ne_sont_pas_remplaces(correcteur):
 
 def test_le_lexique_personnel_protege_un_mot(lexique):
     sans = Correcteur(lexique)
-    avec = Correcteur(lexique, lexique_perso=["Tekken"])
+    avec = Correcteur(lexique, mots_perso=["Tekken"])
     texte = "on lance un Tekken"
     assert avec.corriger(texte)[0] == texte
     # Sans protection, le mot reste inconnu : le moteur a le droit d'essayer.
@@ -103,3 +103,37 @@ def test_le_point_final_peut_etre_active(lexique):
     c = Correcteur(lexique, regles_optionnelles={"PONCTUATION_POINT": True})
     assert c.corriger("salut ça va")[0] == "salut ça va."
     assert c.corriger("salut ça va ?")[0] == "salut ça va ?"
+
+
+# -- remplacements personnels ------------------------------------------------
+
+def test_un_remplacement_perso_est_applique(lexique):
+    c = Correcteur(lexique, remplacements_perso={"ptetre": "peut-être"})
+    assert c.corriger("ptetre que oui")[0] == "peut-être que oui"
+
+
+def test_un_remplacement_perso_garde_la_majuscule(lexique):
+    c = Correcteur(lexique, remplacements_perso={"ptetre": "peut-être"})
+    assert c.corriger("Ptetre")[0] == "Peut-être"
+
+
+def test_un_remplacement_perso_passe_avant_l_argot_protege(lexique):
+    """« dsl » est protégé d'origine ; l'utilisateur reste maître chez lui."""
+    c = Correcteur(lexique, remplacements_perso={"dsl": "désolé"})
+    assert c.corriger("dsl")[0] == "désolé"
+
+
+def test_un_remplacement_perso_ne_touche_pas_a_un_lien(lexique):
+    c = Correcteur(lexique, remplacements_perso={"ptetre": "peut-être"})
+    texte = "regarde https://exemple.fr/ptetre"
+    assert c.corriger(texte)[0] == texte
+
+
+def test_un_remplacement_perso_sert_aussi_d_abreviation(lexique):
+    c = Correcteur(lexique, remplacements_perso={"cdlt": "cordialement"})
+    assert c.corriger("cdlt")[0] == "cordialement"
+
+
+def test_les_remplacements_vides_sont_ignores(lexique):
+    c = Correcteur(lexique, remplacements_perso={"": "x", "y": "  "})
+    assert c.corriger("y")[0] == "y"

@@ -193,6 +193,17 @@ def _verifier() -> int:
 
     print(f"[ok] Reglages : {config_mod.chemin_config()}")
 
+    config = config_mod.charger()
+    etat = "activee" if config.get("correction_auto", True) else "desactivee"
+    print(f"[ok] Correction au fil de la frappe : {etat}")
+    print(f"[ok] Raccourcis : {config['raccourci']} (corriger), "
+          f"{config['raccourci_annuler']} (annuler)")
+
+    mots = len(config.get("mots_perso", []))
+    remplacements = len(config.get("remplacements_perso", {}))
+    print(f"[ok] Votre dictionnaire : {mots} mot(s) protege(s), "
+          f"{remplacements} remplacement(s)")
+
     if demarrage.disponible():
         etat = "active" if demarrage.actif() else "desactive"
         print(f"[ok] Demarrage automatique : {etat}")

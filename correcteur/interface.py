@@ -3,9 +3,10 @@
 
 from __future__ import annotations
 
-import os
 import subprocess
 import sys
+import threading
+import time
 
 from . import config as config_mod
 from . import demarrage
@@ -31,9 +32,14 @@ def _icone(actif: bool = True):
 class InterfaceBarre:
     """Enveloppe l'application dans une icone de zone de notification."""
 
+    # Intervalle de relecture du fichier de reglages, en secondes. La fenetre
+    # tourne dans un autre processus : c'est par le fichier qu'elle nous parle.
+    SURVEILLANCE = 2.0
+
     def __init__(self, app):
         self.app = app
         self.icone = None
+        self._empreinte = self._empreinte_config()
         # L'application delegue ses messages a la vraie notification systeme.
         app.notifier = self.notifier
 
@@ -46,17 +52,9 @@ class InterfaceBarre:
         except Exception:
             # Toutes les plateformes ne savent pas afficher de bulle ;
             # ce n'est jamais une raison d'interrompre une correction.
-            print(f"[{titre}] {message}")
+            print(f"[{titre}] {message}", file=sys.stderr)
 
     # -- entrees du menu ----------------------------------------------------
-
-    def _basculer(self, icone, _element) -> None:
-        actif = self.app.basculer()
-        icone.icon = _icone(actif)
-        icone.title = self._titre()
-        self.notifier(
-            "Correcteur", "Correction activee" if actif else "Correction en pause"
-        )
 
     def _ouvrir_fenetre(self, _icone=None, _element=None) -> None:
         """Ouvre la fenetre de correction dans un processus a part.
@@ -70,26 +68,36 @@ class InterfaceBarre:
         try:
             subprocess.Popen(commande)
         except OSError as e:
-            self.notifier("Fenetre", f"Ouverture impossible : {e}")
+            self.notifier("Fenêtre", f"Ouverture impossible : {e}")
 
-    def _ouvrir_config(self, _icone=None, _element=None) -> None:
-        chemin = config_mod.chemin_config()
-        config_mod.charger()  # cree le fichier s'il manque
-        if os.name == "nt":
-            os.startfile(chemin)  # noqa: S606
-        elif sys.platform == "darwin":
-            subprocess.Popen(["open", str(chemin)])
-        else:
-            subprocess.Popen(["xdg-open", str(chemin)])
+    def _basculer_correction_auto(self, icone, _element) -> None:
+        actif = self.app.basculer_correction_auto()
+        icone.title = self._titre()
+        self.notifier(
+            "Correcteur",
+            "Le texte se corrige pendant que vous écrivez." if actif
+            else "La correction automatique est coupée ; le raccourci reste actif.",
+        )
+
+    def _annuler(self, _icone, _element) -> None:
+        self.app.annuler()
+
+    def _basculer(self, icone, _element) -> None:
+        actif = self.app.basculer()
+        icone.icon = _icone(actif)
+        icone.title = self._titre()
+        self.notifier(
+            "Correcteur", "Correction activée" if actif else "Correction en pause"
+        )
 
     def _basculer_demarrage(self, _icone, _element) -> None:
         try:
             actif = self.app.basculer_demarrage_auto()
         except Exception as e:
-            self.notifier("Demarrage automatique", f"Echec : {e}")
+            self.notifier("Démarrage automatique", f"Échec : {e}")
             return
         self.notifier(
-            "Demarrage automatique",
+            "Démarrage automatique",
             "Le correcteur se lancera avec Windows." if actif
             else "Le correcteur ne se lancera plus avec Windows.",
         )
@@ -99,8 +107,39 @@ class InterfaceBarre:
         icone.stop()
 
     def _titre(self) -> str:
-        etat = "actif" if self.app.actif else "en pause"
-        return f"Correcteur ({etat}) — {self.app.config['raccourci']}"
+        if not self.app.actif:
+            return "Correcteur (en pause)"
+        if self.app.correction_auto:
+            return "Correcteur — corrige pendant que vous écrivez"
+        return f"Correcteur — {self.app.config['raccourci']}"
+
+    # -- reglages modifies depuis la fenetre --------------------------------
+
+    def _empreinte_config(self):
+        try:
+            return config_mod.chemin_config().stat().st_mtime_ns
+        except OSError:
+            return None
+
+    def _surveiller_config(self) -> None:
+        """Relit les reglages quand la fenetre les a changes.
+
+        La fenetre vit dans un autre processus : elle ecrit le fichier, on le
+        relit. Deux secondes de retard valent mieux qu'un canal de
+        communication a maintenir.
+        """
+        while True:
+            time.sleep(self.SURVEILLANCE)
+            empreinte = self._empreinte_config()
+            if empreinte is None or empreinte == self._empreinte:
+                continue
+            self._empreinte = empreinte
+            try:
+                self.app.recharger(config_mod.charger())
+            except Exception:
+                continue
+            if self.icone is not None:
+                self.icone.title = self._titre()
 
     # -- boucle principale --------------------------------------------------
 
@@ -108,15 +147,21 @@ class InterfaceBarre:
         import pystray
 
         menu = pystray.Menu(
+            pystray.MenuItem("Ouvrir la fenêtre", self._ouvrir_fenetre,
+                             default=True),
+            pystray.MenuItem(
+                "Corriger pendant que j'écris",
+                self._basculer_correction_auto,
+                checked=lambda _: self.app.correction_auto,
+            ),
+            pystray.MenuItem("Annuler la dernière correction", self._annuler),
+            pystray.Menu.SEPARATOR,
             pystray.MenuItem(
                 lambda _: "Mettre en pause" if self.app.actif else "Reprendre",
                 self._basculer,
             ),
-            pystray.MenuItem("Ouvrir la fenêtre", self._ouvrir_fenetre,
-                             default=True),
-            pystray.MenuItem("Ouvrir les reglages", self._ouvrir_config),
             pystray.MenuItem(
-                "Lancer au demarrage de Windows",
+                "Lancer au démarrage de Windows",
                 self._basculer_demarrage,
                 checked=lambda _: self.app.demarrage_auto,
                 visible=demarrage.disponible(),
@@ -129,4 +174,5 @@ class InterfaceBarre:
         )
         self.app.demarrer()
         self.app.prechauffer()
+        threading.Thread(target=self._surveiller_config, daemon=True).start()
         self.icone.run()

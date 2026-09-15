@@ -9,7 +9,7 @@ import traceback
 from typing import Callable
 
 from . import config as config_mod
-from . import demarrage, lexique, moteur, presse_papier
+from . import demarrage, frappe as frappe_mod, lexique, moteur, presse_papier
 from .raccourci import Raccourci
 
 
@@ -25,7 +25,17 @@ class Application:
         self.actif = True
         self._correcteur: moteur.Correcteur | None = None
         self._verrou = threading.Lock()
+        self._ecoute: frappe_mod.EcouteClavier | None = None
+
+        # Les mots que l'utilisateur a retablis a la main : ce sont ceux qu'il
+        # veut voir entrer dans son dictionnaire, et la fenetre les lui
+        # proposera.
+        self.mots_retablis: list[str] = []
+
         self.raccourci = Raccourci(self.config["raccourci"], self.sur_raccourci)
+        self.raccourci_annuler = Raccourci(
+            self.config["raccourci_annuler"], self.annuler
+        )
 
     # -- preparation --------------------------------------------------------
 
@@ -40,14 +50,22 @@ class Application:
             with self._verrou:
                 if self._correcteur is None:
                     self.journal("Chargement du dictionnaire...")
-                    correcteur = moteur.construire(
-                        regles_optionnelles=self.config.get("regles_optionnelles"),
-                        lexique_perso=self.config.get("lexique_perso"),
-                    )
+                    correcteur = moteur.depuis_config(self.config)
                     correcteur.prechauffer()
                     self._correcteur = correcteur
                     self.journal("Correcteur pret.")
         return self._correcteur
+
+    @property
+    def ecoute(self) -> frappe_mod.EcouteClavier:
+        """La correction au fil de la frappe, construite au premier besoin."""
+        if self._ecoute is None:
+            self._ecoute = frappe_mod.EcouteClavier(
+                frappe_mod.Frappe(self.correcteur),
+                delai_oubli=self.config.get("delai_oubli", 5.0),
+                sur_correction=self._signaler_correction,
+            )
+        return self._ecoute
 
     def prechauffer(self) -> None:
         """Charge le dictionnaire en arriere-plan, pour que la 1re correction soit rapide.
@@ -59,6 +77,12 @@ class Application:
         def _demarrer():
             try:
                 self.correcteur  # noqa: B018 — declenche le chargement
+                # La frappe ne s'ecoute qu'une fois le dictionnaire en place :
+                # un crochet clavier qui met un dixieme de seconde a repondre
+                # se sent tout de suite.
+                if self.config.get("correction_auto", True):
+                    self.ecoute.activer()
+                    self.journal("Correction au fil de la frappe active.")
             except lexique.LexiqueIntrouvable as e:
                 self.journal(str(e))
                 self.notifier("Dictionnaire introuvable", str(e).split("\n")[0])
@@ -123,6 +147,77 @@ class Application:
             self.journal(traceback.format_exc())
             self.notifier("Erreur", "La correction a echoue. Voir la console.")
 
+    # -- correction au fil de la frappe -------------------------------------
+
+    def _signaler_correction(self, remplacement) -> None:
+        """Appelee a chaque correction automatique."""
+        self.journal(f"[auto] {remplacement}")
+
+    def annuler(self) -> None:
+        """Remet ce qui etait ecrit avant la derniere correction automatique."""
+        if self._ecoute is None:
+            return
+        remplacement = self._ecoute.annuler()
+        if remplacement is None:
+            self.notifier("Rien a annuler",
+                          "Aucune correction automatique recente.")
+            return
+
+        mot = remplacement.avant.strip(" \t\n.,;:!?…")
+        if mot and mot not in self.mots_retablis:
+            self.mots_retablis.append(mot)
+            del self.mots_retablis[:-20]
+
+        self.notifier(
+            "Correction annulee",
+            f"« {mot} » est retabli. Ouvrez la fenetre pour l'ajouter a "
+            f"votre dictionnaire.",
+        )
+
+    @property
+    def correction_auto(self) -> bool:
+        return bool(self.config.get("correction_auto", True))
+
+    def basculer_correction_auto(self) -> bool:
+        """Active ou coupe la correction au fil de la frappe, et s'en souvient."""
+        actif = not self.correction_auto
+        self.config["correction_auto"] = actif
+        try:
+            config_mod.sauvegarder(self.config)
+        except OSError:
+            pass
+
+        if actif:
+            self.ecoute.activer()
+        elif self._ecoute is not None:
+            self._ecoute.desactiver()
+        return actif
+
+    def recharger(self, config: dict) -> None:
+        """Reprend les reglages a zero, sans redemarrer l'application."""
+        raccourcis_changes = (
+            config.get("raccourci") != self.config.get("raccourci")
+            or config.get("raccourci_annuler") != self.config.get("raccourci_annuler")
+        )
+        self.config = config
+        self._correcteur = None
+
+        if self._ecoute is not None:
+            self._ecoute.desactiver()
+            self._ecoute = None
+
+        if raccourcis_changes:
+            self.raccourci.desactiver()
+            self.raccourci_annuler.desactiver()
+            self.raccourci = Raccourci(config["raccourci"], self.sur_raccourci)
+            self.raccourci_annuler = Raccourci(
+                config["raccourci_annuler"], self.annuler
+            )
+            self.raccourci.activer()
+            self.raccourci_annuler.activer()
+
+        self.prechauffer()
+
     # -- retours a l'utilisateur --------------------------------------------
 
     def notifier(self, titre: str, message: str) -> None:
@@ -140,16 +235,23 @@ class Application:
         except OSError:
             pass
         self.raccourci.activer()
+        self.raccourci_annuler.activer()
         self.journal(
-            f"Correcteur actif. Raccourci : {self.config['raccourci']}"
+            f"Correcteur actif. Raccourci : {self.config['raccourci']} · "
+            f"annuler : {self.config['raccourci_annuler']}"
         )
 
     def arreter(self) -> None:
         self.raccourci.desactiver()
+        self.raccourci_annuler.desactiver()
+        if self._ecoute is not None:
+            self._ecoute.desactiver()
 
     def basculer(self) -> bool:
-        """Active ou met en pause la correction. Renvoie le nouvel etat."""
+        """Met tout en pause, ou repart. Renvoie le nouvel etat."""
         self.actif = not self.actif
+        if self._ecoute is not None:
+            self._ecoute.actif = self.actif and self.correction_auto
         return self.actif
 
     # -- demarrage automatique ----------------------------------------------
