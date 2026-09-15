@@ -246,11 +246,20 @@ def test_les_relachements_de_touche_sont_ignores(correcteur, clavier):
 
 
 def test_un_silence_trop_long_fait_oublier_la_phrase(correcteur, clavier):
-    surveillant = EcouteClavier(Frappe(correcteur), delai_oubli=0)
+    """Apres une pause, le curseur a pu aller ailleurs : on repart de zero.
+
+    L'horloge est reculee a la main plutot qu'attendue : sous Windows,
+    `time.monotonic` avance par paliers de quinze millisecondes, et un test
+    qui compte sur une pause reelle y devient une loterie.
+    """
+    surveillant = EcouteClavier(Frappe(correcteur), delai_oubli=5.0)
     surveillant.actif = True
+
     surveillant._sur_evenement(FauxEvenement("a"))
+    assert surveillant.frappe.texte == "a"
+
+    surveillant._derniere_touche -= 60
     surveillant._sur_evenement(FauxEvenement("b"))
-    # Chaque touche arrive « trop tard » : le tampon est vide avant chaque ajout.
     assert surveillant.frappe.texte == "b"
 
 
