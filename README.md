@@ -6,7 +6,11 @@ pas pour la dissertation.
 
 Il corrige **pendant que vous tapez**, dans n'importe quelle application. Rien
 à sélectionner, aucun raccourci à retenir : vous écrivez `sa va`, il écrit
-`ça va`. Une correction vous déplaît ? `Ctrl+Alt+Z` la défait.
+`ça va`. Une correction vous déplaît ? **Retour arrière** la défait, comme sur
+un téléphone.
+
+Il se tait là où il gênerait — terminal, éditeur de code — et il apprend de ce
+que vous refusez.
 
 **Un seul fichier**, `Papote.exe` : ni Python, ni Java, ni compte, ni clé
 d'API. Tout fonctionne hors ligne — aucun texte n'est envoyé sur Internet.
@@ -87,9 +91,24 @@ La correction attend le mot suivant quand elle en a besoin : `sa` reste `sa`
 tant que rien ne prouve que c'est un `ça`. C'est la phrase qui tranche, pas le
 mot isolé.
 
-**`Ctrl+Alt+Z` annule la dernière correction** et remet ce que vous aviez
-écrit. Le mot rétabli vous est ensuite proposé dans *Mon dictionnaire* : un
-clic, et il n'y touchera plus jamais.
+**Retour arrière annule la dernière correction.** Appuyez dessus juste après
+qu'elle soit arrivée, et le mot d'origine revient — exactement comme sur un
+clavier de téléphone. Rien à apprendre. `Ctrl+Alt+Z` fait la même chose plus
+tard, quand vous avez continué à écrire.
+
+Le mot rétabli vous est ensuite proposé dans *Mon dictionnaire*. Et si vous
+refusez trois fois la même correction sur le même mot, **il l'apprend tout
+seul** : il n'y touchera plus jamais.
+
+### Il ne corrige pas partout
+
+Une correction automatique dans un terminal ou un éditeur de code ne rend
+service à personne. Papote connaît une vingtaine de programmes où il se tait
+d'office — `cmd.exe`, `powershell.exe`, `code.exe`, les IDE JetBrains — et
+l'onglet *Applications* laisse compléter la liste.
+
+Le plus rapide : clic droit sur l'icône → **Ne plus corriger dans…**, qui
+propose le programme où vous veniez d'écrire.
 
 ### Il corrige aussi à la demande
 
@@ -97,15 +116,23 @@ Pour un texte déjà écrit — un message collé, un vieux brouillon :
 sélectionnez-le et appuyez sur **`Ctrl+Alt+C`**. Le texte corrigé remplace la
 sélection.
 
+### Il relit avant d'appliquer, si vous le demandez
+
+Pour un message qui compte, `Ctrl+Alt+R` sur la sélection ouvre la relecture :
+chaque correction proposée s'affiche avec sa case, l'aperçu suit vos choix, et
+le résultat part dans le presse-papiers — à vous de le coller.
+
 ### Il a une fenêtre
 
-Clic droit sur l'icône → *Ouvrir la fenêtre*, ou double-clic sur l'icône. Trois
-onglets :
+Clic droit sur l'icône → *Ouvrir la fenêtre*, `Ctrl+Alt+F`, ou double-clic sur
+l'icône. Cinq onglets :
 
 | Onglet | À quoi il sert |
 |---|---|
 | **Corriger** | Coller un texte, `Ctrl+Entrée`, relire avant d'envoyer. Les mots inconnus s'affichent en dessous : un clic les ajoute à votre dictionnaire. |
 | **Mon dictionnaire** | Les mots à ne jamais corriger, et vos remplacements. |
+| **Vos fautes** | Ce que vous corrigez le plus, compté sur votre machine. |
+| **Applications** | Où se taire, et où hausser le ton. |
 | **Réglages** | Tout ce qui se réglait dans un fichier JSON. |
 
 ## Lui apprendre vos mots
@@ -130,6 +157,46 @@ Ils passent avant tout le reste — avant le dictionnaire, avant les protections
 C'est donc aussi un outil d'abréviations : rien n'oblige le remplacement à
 corriger une faute.
 
+## Deux registres
+
+Par défaut Papote écrit comme vous parlez. Mais une lettre de motivation n'est
+pas un message Discord, alors il sait aussi hausser le ton :
+
+| Vous écrivez | Parlé *(défaut)* | Soutenu |
+|---|---|---|
+| `j'ai pas compris` | `j'ai pas compris` | `Je n'ai pas compris.` |
+| `y a personne` | `y a personne` | `Il n'y a personne.` |
+| `faut pas exagérer` | `faut pas exagérer` | `Il ne faut pas exagérer.` |
+| `on a pas le temps` | `on a pas le temps` | `On n'a pas le temps.` |
+| `dsl bcp de travail` | `dsl bcp de travail` | `Désolé beaucoup de travail.` |
+| `ça marche` | `ça marche` | `Cela marche.` |
+
+Le registre soutenu remet les `ne` de négation, rétablit les sujets
+impersonnels, déplie les abréviations, et impose la majuscule et le point
+final.
+
+Il se règle globalement, ou **application par application** : soutenu dans
+Outlook, parlé sur Discord. Onglet *Applications*.
+
+## Vos fautes
+
+L'onglet *Vos fautes* montre ce que vous corrigez le plus :
+
+```
+  47 fois   sa → ça
+  23 fois   malgres → malgré
+  12 fois   jai → j'ai
+```
+
+Tout est compté **sur votre machine et nulle part ailleurs**, dans
+`%APPDATA%\Papote\apprentissage.json`. Un bouton efface l'historique. Ce
+fichier contient des mots que vous avez écrits : c'est le prix de
+l'apprentissage, et c'est pourquoi il s'efface aussi facilement.
+
+C'est aussi ce qui permet à Papote d'apprendre : trois annulations sur le même
+mot et il ne le corrige plus, trois annulations sur la même règle et il propose
+de l'éteindre.
+
 ## Réglages
 
 Onglet *Réglages* de la fenêtre. Tout y est, plus besoin d'éditer quoi que ce
@@ -140,8 +207,11 @@ soit à la main.
 | Corriger pendant que j'écris | activé | La correction au fil de la frappe |
 | Recoller le texte corrigé | activé | Sinon `Ctrl+Alt+C` se contente du presse-papiers |
 | Notifications | activé | Le résumé des corrections près de l'horloge |
+| Apprendre de mes annulations | activé | Trois refus et il cède |
+| Typographie française | désactivé | `…`, guillemets `« »`, espaces insécables |
 | Majuscule en début de phrase | désactivé | Beaucoup tiennent au tout-minuscules |
 | Point final manquant | désactivé | Même raison |
+| Registre par défaut | parlé | Voir plus haut |
 | Lancer au démarrage de Windows | — | Sans droits administrateur |
 | Mises à jour automatiques | activé | Voir plus bas |
 
@@ -155,6 +225,7 @@ annule la saisie, Retour arrière supprime le raccourci.
 |---|---|---|
 | Corriger la sélection | `Ctrl+Alt+C` | Corrige le texte sélectionné |
 | Annuler la dernière correction | `Ctrl+Alt+Z` | Remet ce que vous aviez écrit |
+| Relire avant de corriger | `Ctrl+Alt+R` | Montre les corrections, une par une |
 | Ouvrir la fenêtre | `Ctrl+Alt+F` | — |
 
 Une touche seule est refusée : elle partirait chaque fois que vous l'écrivez.
@@ -202,6 +273,7 @@ quelques fichiers Python et un dictionnaire.
 
 | Couche | Fichier | Rôle |
 |---|---|---|
+| Où et comment | `papote/politique.py` | Se taire ici, hausser le ton là |
 | Vos remplacements | `papote/config.py` | Ce que vous lui avez appris passe avant tout |
 | Protection | `papote/regles.py` | Ce qui sort du circuit avant examen |
 | Grammaire | `papote/grammaire.py` | 24 règles de contexte : homonymes, accords, conjugaison |
@@ -287,7 +359,7 @@ Depuis les sources, remplacez `Papote.exe` par `python -m papote`.
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest tests/ -q          # ~220 tests, moins d'une seconde
+python -m pytest tests/ -q          # ~300 tests, moins d'une seconde
 python -m papote --texte "sa va ?"
 ```
 
@@ -345,6 +417,9 @@ Le dictionnaire français vient de [Dicollecte](https://grammalecte.net/)
 | `papote/interface.py` | Icône dans la zone de notification |
 | `papote/fenetre.py` | Fenêtre : corriger, dictionnaire, réglages (tkinter) |
 | `papote/frappe.py` | Correction au fil de la frappe et annulation |
+| `papote/politique.py` | Où corriger, et sur quel ton |
+| `papote/apprentissage.py` | Ce qu'il retient de vos habitudes |
+| `papote/relecture.py` | Comparaison des deux textes, correction par correction |
 | `papote/maj.py` | Recherche, téléchargement et mise en place des versions |
 | `papote/raccourci.py` | Raccourcis globaux et lecture des combinaisons |
 | `papote/config.py` | Lecture, migration et écriture des réglages |

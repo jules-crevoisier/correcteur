@@ -107,6 +107,8 @@ def main(argv: list[str] | None = None) -> int:
     analyseur.add_argument("--texte", help="corrige ce texte, affiche le resultat et quitte")
     analyseur.add_argument("--fenetre", action="store_true",
                            help="ouvre la fenetre de correction")
+    analyseur.add_argument("--relecture", metavar="FICHIER",
+                           help="relit ce fichier et montre les corrections")
     analyseur.add_argument("--console", action="store_true",
                            help="lance sans icone de barre des taches")
     analyseur.add_argument("--config", action="store_true",
@@ -141,6 +143,9 @@ def main(argv: list[str] | None = None) -> int:
         for c in corrections:
             print(f"  {c}   [{c.regle}] {c.message}", file=sys.stderr)
         return 0
+
+    if args.relecture:
+        return _relire(app, args.relecture)
 
     if args.fenetre:
         from .fenetre import Fenetre
@@ -179,6 +184,25 @@ def _gerer_demarrage(action: str) -> int:
     else:
         demarrage.desactiver()
         print("Retire du demarrage de Windows.")
+    return 0
+
+
+def _relire(app, chemin: str) -> int:
+    """Ouvre la fenetre de relecture sur le texte capture."""
+    from pathlib import Path
+
+    from .fenetre import FenetreRelecture
+
+    fichier = Path(chemin)
+    try:
+        texte = fichier.read_text(encoding="utf-8")
+    except OSError as e:
+        print(f"[X]  {chemin} est illisible ({e}).", file=sys.stderr)
+        return 1
+    # Le texte capture ne traine pas : il a servi.
+    fichier.unlink(missing_ok=True)
+
+    FenetreRelecture(app, texte).lancer()
     return 0
 
 
@@ -244,7 +268,11 @@ def _verifier() -> int:
     print(f"[ok] Correction au fil de la frappe : {etat}")
     print(f"[ok] Raccourcis : {config['raccourci']} (corriger), "
           f"{config['raccourci_annuler']} (annuler), "
+          f"{config['raccourci_relecture'] or 'aucun'} (relire), "
           f"{config['raccourci_fenetre'] or 'aucun'} (fenetre)")
+    print(f"[ok] Registre par defaut : {config['registre']} ; "
+          f"{len(config.get('applications_exclues', []))} application(s) "
+          f"laissee(s) tranquille(s)")
 
     if maj.compilee():
         etat = "activee" if config.get("verifier_maj", True) else "desactivee"

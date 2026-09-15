@@ -7,6 +7,8 @@ import json
 import os
 from pathlib import Path
 
+from . import politique
+
 DEFAUTS = {
     # -- correction au fil de la frappe -------------------------------------
     # Corrige pendant que vous ecrivez, sans rien demander. C'est la facon
@@ -24,8 +26,21 @@ DEFAUTS = {
     "raccourci": "ctrl+alt+c",
     # Ouvre la fenetre. Vide pour s'en passer.
     "raccourci_fenetre": "ctrl+alt+f",
+    # Relit la selection et montre les corrections avant de les appliquer.
+    "raccourci_relecture": "ctrl+alt+r",
     # Recolle automatiquement le texte corrige a la place de la selection.
     "collage_auto": True,
+
+    # -- ou corriger, et sur quel ton ---------------------------------------
+    # « parle » respecte le francais parle ; « soutenu » remet les « ne » de
+    # negation et deplie les abreviations.
+    "registre": "parle",
+    # Applications ou la correction automatique ne doit pas intervenir.
+    # La liste par defaut couvre les terminaux et les editeurs de code.
+    "applications_exclues": list(politique.EXCLUES_PAR_DEFAUT),
+    # Registre particulier a certaines applications :
+    # {"outlook.exe": "soutenu"}.
+    "registre_par_application": {},
 
     # -- ce que vous lui apprenez -------------------------------------------
     # Mots a ne jamais corriger : pseudos, jargon, noms de jeux.
@@ -33,6 +48,8 @@ DEFAUTS = {
     # Remplacements maison : {"ptetre": "peut-être", "cdlt": "cordialement"}.
     # Ils passent avant tout le reste, y compris avant le dictionnaire.
     "remplacements_perso": {},
+    # Retient les corrections que vous annulez, et finit par s'y plier.
+    "apprentissage": True,
 
     # -- mises a jour -------------------------------------------------------
     # Cherche une nouvelle version au demarrage puis une fois par jour, et la

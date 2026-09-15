@@ -137,3 +137,37 @@ def test_un_remplacement_perso_sert_aussi_d_abreviation(lexique):
 def test_les_remplacements_vides_sont_ignores(lexique):
     c = Correcteur(lexique, remplacements_perso={"": "x", "y": "  "})
     assert c.corriger("y")[0] == "y"
+
+
+# -- typographie française ---------------------------------------------------
+
+def typographe(lexique):
+    return Correcteur(lexique, regles_optionnelles={"TYPOGRAPHIE": True})
+
+
+def test_la_typographie_est_desactivee_par_defaut(correcteur):
+    assert correcteur.corriger("vraiment ? oui...")[0] == "vraiment ? oui..."
+
+
+def test_les_points_de_suspension_deviennent_un_caractere(lexique):
+    assert typographe(lexique).corriger("bon... voilà")[0] == "bon… voilà"
+
+
+def test_les_guillemets_deviennent_francais(lexique):
+    corrige = typographe(lexique).corriger('il a dit "bonjour" hier')[0]
+    assert "« bonjour »" in corrige
+
+
+def test_l_espace_avant_la_ponctuation_est_insecable(lexique):
+    assert typographe(lexique).corriger("vraiment ?")[0] == "vraiment ?"
+    assert typographe(lexique).corriger("vraiment?")[0] == "vraiment ?"
+
+
+def test_la_typographie_epargne_les_liens(lexique):
+    texte = "regarde https://exemple.fr/a?b=1 et dis-moi"
+    assert typographe(lexique).corriger(texte)[0] == texte
+
+
+def test_la_typographie_epargne_le_code(lexique):
+    texte = "tape `ls -l | grep x?` pour voir"
+    assert typographe(lexique).corriger(texte)[0] == texte

@@ -108,3 +108,55 @@ def test_le_decoupage_separe_les_traits_d_union():
 ])
 def test_separation_des_elisions(mot, elision, noyau):
     assert grammaire.separer_clitique(mot) == (elision, noyau)
+
+
+# -- le registre soutenu -----------------------------------------------------
+
+SOUTENUS = [
+    ("j'ai pas compris", "Je n'ai pas compris."),
+    ("il peut pas venir", "Il ne peut pas venir."),
+    ("on a pas le temps", "On n'a pas le temps."),
+    ("t'as pas vu", "Tu n'as pas vu."),
+    ("c'est pas grave", "Ce n'est pas grave."),
+    ("y a personne", "Il n'y a personne."),
+    ("faut pas exagérer", "Il ne faut pas exagérer."),
+    ("il me l'a pas dit", "Il ne me l'a pas dit."),
+    ("ça marche", "Cela marche."),
+    ("dsl bcp de travail", "Désolé beaucoup de travail."),
+]
+
+
+@pytest.fixture(scope="module")
+def correcteur_soutenu(request):
+    from papote.moteur import Correcteur
+    from papote.politique import SOUTENU
+
+    return Correcteur(request.getfixturevalue("lexique"), registre=SOUTENU)
+
+
+@pytest.mark.parametrize("texte,attendu", SOUTENUS)
+def test_le_registre_soutenu_releve_le_ton(correcteur_soutenu, texte, attendu):
+    assert correcteur_soutenu.corriger(texte)[0] == attendu
+
+
+@pytest.mark.parametrize("texte,_attendu", SOUTENUS)
+def test_le_registre_parle_ne_touche_a_rien(correcteur, texte, _attendu):
+    """Par defaut, aucune de ces phrases ne doit bouger d'un iota."""
+    corrige, corrections = correcteur.corriger(texte)
+    assert corrige == texte, f"corrections indues : {[str(c) for c in corrections]}"
+
+
+def test_le_soutenu_ne_nie_pas_deux_fois(correcteur_soutenu):
+    texte = "il n'a pas compris."
+    assert correcteur_soutenu.corriger(texte)[0] == "Il n'a pas compris."
+
+
+def test_le_soutenu_ne_confond_pas_ne_que_et_que(correcteur_soutenu):
+    """« faut que j'y aille » n'est pas une negation."""
+    assert correcteur_soutenu.corriger("faut que j'y aille")[0] \
+        == "Il faut que j'y aille."
+
+
+def test_ca_va_reste_ca_va(correcteur_soutenu):
+    """Personne n'ecrit « cela va ? »."""
+    assert correcteur_soutenu.corriger("ça va ?")[0] == "Ça va ?"
