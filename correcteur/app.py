@@ -3,14 +3,16 @@
 
 from __future__ import annotations
 
+import subprocess
 import sys
 import threading
+import time
 import traceback
 from typing import Callable
 
 from . import config as config_mod
-from . import demarrage, frappe as frappe_mod, lexique, moteur, presse_papier
-from .raccourci import Raccourci
+from . import demarrage, frappe as frappe_mod, lexique, maj, moteur, presse_papier
+from .raccourci import Raccourci, RaccourciInvalide
 
 
 class Application:
@@ -32,10 +34,47 @@ class Application:
         # proposera.
         self.mots_retablis: list[str] = []
 
-        self.raccourci = Raccourci(self.config["raccourci"], self.sur_raccourci)
-        self.raccourci_annuler = Raccourci(
-            self.config["raccourci_annuler"], self.annuler
-        )
+        # La version telechargee qui attend le prochain demarrage, s'il y en a.
+        self.maj_prete: maj.Version | None = None
+
+        self.raccourcis: list[Raccourci] = []
+        self._installer_raccourcis()
+
+    # -- raccourcis ---------------------------------------------------------
+
+    def _installer_raccourcis(self) -> None:
+        """Relit les combinaisons choisies par l'utilisateur."""
+        self.raccourcis = [
+            Raccourci(self.config.get("raccourci", ""), self.sur_raccourci),
+            Raccourci(self.config.get("raccourci_annuler", ""), self.annuler),
+            Raccourci(self.config.get("raccourci_fenetre", ""), self.ouvrir_fenetre),
+        ]
+
+    def _activer_raccourcis(self) -> None:
+        for raccourci in self.raccourcis:
+            try:
+                raccourci.activer()
+            except RaccourciInvalide as e:
+                self.journal(str(e))
+                self.notifier("Raccourci refusé", str(e))
+
+    def _desactiver_raccourcis(self) -> None:
+        for raccourci in self.raccourcis:
+            raccourci.desactiver()
+
+    def ouvrir_fenetre(self) -> None:
+        """Ouvre la fenetre dans un processus a part.
+
+        pystray occupe deja la boucle d'evenements du processus et tkinter
+        exige la sienne ; les faire cohabiter est une source de blocages, un
+        second processus n'en est pas une.
+        """
+        commande = ([sys.executable, "--fenetre"] if getattr(sys, "frozen", False)
+                    else [sys.executable, "-m", "correcteur", "--fenetre"])
+        try:
+            subprocess.Popen(commande)
+        except OSError as e:
+            self.notifier("Fenêtre", f"Ouverture impossible : {e}")
 
     # -- preparation --------------------------------------------------------
 
@@ -195,9 +234,9 @@ class Application:
 
     def recharger(self, config: dict) -> None:
         """Reprend les reglages a zero, sans redemarrer l'application."""
-        raccourcis_changes = (
-            config.get("raccourci") != self.config.get("raccourci")
-            or config.get("raccourci_annuler") != self.config.get("raccourci_annuler")
+        raccourcis_changes = any(
+            config.get(cle) != self.config.get(cle)
+            for cle in ("raccourci", "raccourci_annuler", "raccourci_fenetre")
         )
         self.config = config
         self._correcteur = None
@@ -207,16 +246,64 @@ class Application:
             self._ecoute = None
 
         if raccourcis_changes:
-            self.raccourci.desactiver()
-            self.raccourci_annuler.desactiver()
-            self.raccourci = Raccourci(config["raccourci"], self.sur_raccourci)
-            self.raccourci_annuler = Raccourci(
-                config["raccourci_annuler"], self.annuler
-            )
-            self.raccourci.activer()
-            self.raccourci_annuler.activer()
+            self._desactiver_raccourcis()
+            self._installer_raccourcis()
+            self._activer_raccourcis()
 
         self.prechauffer()
+
+    # -- mises a jour -------------------------------------------------------
+
+    # Une fois par jour : une application de bureau n'a pas a interroger un
+    # serveur plus souvent que cela.
+    INTERVALLE_MAJ = 24 * 3600
+
+    def surveiller_versions(self) -> None:
+        """Cherche une nouvelle version, puis recommence une fois par jour."""
+        if not maj.compilee():
+            return
+
+        def boucler():
+            # Laisser l'application demarrer avant d'aller sur le reseau.
+            time.sleep(20)
+            while True:
+                self.chercher_mise_a_jour()
+                time.sleep(self.INTERVALLE_MAJ)
+
+        threading.Thread(target=boucler, daemon=True).start()
+
+    def chercher_mise_a_jour(self, prevenir_si_a_jour: bool = False) -> maj.Version | None:
+        """Telecharge la derniere version si elle est plus recente.
+
+        Elle n'est pas mise en place tout de suite : elle attend le prochain
+        demarrage. Remplacer l'executable sous les pieds de quelqu'un qui
+        ecrit serait le plus sur moyen de lui faire perdre sa phrase.
+        """
+        try:
+            version = maj.disponible()
+        except maj.MiseAJourImpossible as e:
+            self.journal(f"Verification des mises a jour impossible : {e}")
+            if prevenir_si_a_jour:
+                self.notifier("Mise à jour", f"Vérification impossible : {e}")
+            return None
+
+        if version is None:
+            if prevenir_si_a_jour:
+                self.notifier("Mise à jour", "Vous êtes déjà à jour.")
+            return None
+
+        try:
+            maj.installer_maintenant(version)
+        except maj.MiseAJourImpossible as e:
+            self.journal(f"Telechargement de {version} impossible : {e}")
+            return None
+
+        self.maj_prete = version
+        self.notifier(
+            f"Version {version} téléchargée",
+            "Elle prendra la place de l'actuelle au prochain démarrage.",
+        )
+        return version
 
     # -- retours a l'utilisateur --------------------------------------------
 
@@ -234,16 +321,16 @@ class Application:
             demarrage.synchroniser()
         except OSError:
             pass
-        self.raccourci.activer()
-        self.raccourci_annuler.activer()
+        self._activer_raccourcis()
         self.journal(
             f"Correcteur actif. Raccourci : {self.config['raccourci']} · "
             f"annuler : {self.config['raccourci_annuler']}"
         )
+        if self.config.get("verifier_maj", True):
+            self.surveiller_versions()
 
     def arreter(self) -> None:
-        self.raccourci.desactiver()
-        self.raccourci_annuler.desactiver()
+        self._desactiver_raccourcis()
         if self._ecoute is not None:
             self._ecoute.desactiver()
 

@@ -22,6 +22,8 @@ DEFAUTS = {
     # -- correction a la demande --------------------------------------------
     # Raccourci global. Syntaxe de la bibliotheque `keyboard`.
     "raccourci": "ctrl+alt+c",
+    # Ouvre la fenetre. Vide pour s'en passer.
+    "raccourci_fenetre": "ctrl+alt+f",
     # Recolle automatiquement le texte corrige a la place de la selection.
     "collage_auto": True,
 
@@ -31,6 +33,12 @@ DEFAUTS = {
     # Remplacements maison : {"ptetre": "peut-être", "cdlt": "cordialement"}.
     # Ils passent avant tout le reste, y compris avant le dictionnaire.
     "remplacements_perso": {},
+
+    # -- mises a jour -------------------------------------------------------
+    # Cherche une nouvelle version au demarrage puis une fois par jour, et la
+    # telecharge. Elle prend la place de l'ancienne au demarrage suivant :
+    # jamais pendant que vous ecrivez.
+    "verifier_maj": True,
 
     # -- le reste -----------------------------------------------------------
     # Affiche une notification resumant les corrections appliquees.

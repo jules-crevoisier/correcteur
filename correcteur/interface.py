@@ -8,8 +8,8 @@ import sys
 import threading
 import time
 
-from . import config as config_mod
-from . import demarrage
+from . import __version__, config as config_mod
+from . import demarrage, maj
 
 
 def _icone(actif: bool = True):
@@ -57,18 +57,31 @@ class InterfaceBarre:
     # -- entrees du menu ----------------------------------------------------
 
     def _ouvrir_fenetre(self, _icone=None, _element=None) -> None:
-        """Ouvre la fenetre de correction dans un processus a part.
+        self.app.ouvrir_fenetre()
 
-        pystray occupe deja la boucle d'evenements du processus ; tkinter
-        exige la sienne. Les faire cohabiter est une source de blocages, un
-        second processus n'en est pas une.
-        """
-        commande = ([sys.executable, "--fenetre"] if getattr(sys, "frozen", False)
-                    else [sys.executable, "-m", "correcteur", "--fenetre"])
+    def _chercher_maj(self, _icone=None, _element=None) -> None:
+        threading.Thread(
+            target=self.app.chercher_mise_a_jour,
+            kwargs={"prevenir_si_a_jour": True},
+            daemon=True,
+        ).start()
+
+    def _redemarrer(self, icone, _element) -> None:
+        """Relance l'application : la version telechargee prend alors la place."""
+        self.app.arreter()
+        commande = ([sys.executable] if getattr(sys, "frozen", False)
+                    else [sys.executable, "-m", "correcteur"])
         try:
             subprocess.Popen(commande)
         except OSError as e:
-            self.notifier("Fenêtre", f"Ouverture impossible : {e}")
+            self.notifier("Redémarrage", f"Impossible : {e}")
+            return
+        icone.stop()
+
+    def _libelle_maj(self) -> str:
+        if self.app.maj_prete is not None:
+            return f"Redémarrer pour installer la version {self.app.maj_prete}"
+        return f"Rechercher une mise à jour (version {__version__})"
 
     def _basculer_correction_auto(self, icone, _element) -> None:
         actif = self.app.basculer_correction_auto()
@@ -156,6 +169,15 @@ class InterfaceBarre:
             ),
             pystray.MenuItem("Annuler la dernière correction", self._annuler),
             pystray.Menu.SEPARATOR,
+            pystray.MenuItem(
+                lambda _: self._libelle_maj(),
+                lambda icone, element: (
+                    self._redemarrer(icone, element)
+                    if self.app.maj_prete is not None
+                    else self._chercher_maj(icone, element)
+                ),
+                visible=maj.compilee(),
+            ),
             pystray.MenuItem(
                 lambda _: "Mettre en pause" if self.app.actif else "Reprendre",
                 self._basculer,
