@@ -1,15 +1,16 @@
 # Fabrique Correcteur.exe sur une machine Windows fournie par GitHub.
 #
-# A chaque envoi sur la branche principale, l'executable est construit et
-# depose dans l'onglet « Actions » du depot. Sur un tag « v1.2.3 », il est
-# en plus publie dans les « Releases », pret a telecharger.
+# A chaque envoi, sur n'importe quelle branche, l'executable est construit et
+# depose dans l'onglet « Actions » du depot. Sur un tag « v1.2.3 », il est en
+# plus publie dans les « Releases », pret a telecharger.
+#
+# Le declencheur ne filtre volontairement aucune branche : le depot n'a pas
+# de branche « main », et une compilation manquee parce que le nom ne
+# correspondait pas est exactement ce qu'on veut eviter.
 name: Correcteur.exe
 
 on:
   push:
-    branches: [main, master]
-    tags: ["v*"]
-  pull_request:
   workflow_dispatch:
 
 jobs:

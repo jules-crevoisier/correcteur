@@ -199,7 +199,7 @@ construire_exe.bat
 Le résultat est `dist\Correcteur.exe` : un fichier unique d'une vingtaine de
 mégaoctets, dictionnaire compris.
 
-C'est aussi ce que fait GitHub à chaque envoi
+C'est aussi ce que fait GitHub à chaque envoi, sur n'importe quelle branche
 ([`.github/workflows/executable.yml`](.github/workflows/executable.yml)) :
 l'exécutable est construit sur une machine Windows, testé, puis déposé dans
 l'onglet *Actions* — et publié dans les *Releases* sur un tag `v*`.
