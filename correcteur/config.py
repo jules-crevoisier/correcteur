@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Chargement et sauvegarde des reglages."""
+"""Chargement, migration et sauvegarde des reglages."""
 
 from __future__ import annotations
 
@@ -8,22 +8,51 @@ import os
 from pathlib import Path
 
 DEFAUTS = {
+    # -- correction au fil de la frappe -------------------------------------
+    # Corrige pendant que vous ecrivez, sans rien demander. C'est la facon
+    # normale de se servir de l'outil ; le raccourci reste la pour le reste.
+    "correction_auto": True,
+    # Annule la derniere correction automatique et remet ce qui etait ecrit.
+    "raccourci_annuler": "ctrl+alt+z",
+    # Au-dela de ce silence (en secondes), on oublie la phrase en cours : le
+    # curseur a pu bouger entre-temps, et corriger a l'aveugle abimerait le
+    # texte.
+    "delai_oubli": 5.0,
+
+    # -- correction a la demande --------------------------------------------
     # Raccourci global. Syntaxe de la bibliotheque `keyboard`.
     "raccourci": "ctrl+alt+c",
     # Recolle automatiquement le texte corrige a la place de la selection.
     "collage_auto": True,
+
+    # -- ce que vous lui apprenez -------------------------------------------
+    # Mots a ne jamais corriger : pseudos, jargon, noms de jeux.
+    "mots_perso": [],
+    # Remplacements maison : {"ptetre": "peut-être", "cdlt": "cordialement"}.
+    # Ils passent avant tout le reste, y compris avant le dictionnaire.
+    "remplacements_perso": {},
+
+    # -- le reste -----------------------------------------------------------
     # Affiche une notification resumant les corrections appliquees.
     "notifications": True,
     # Regles desactivees par defaut que l'on peut reactiver ici.
     "regles_optionnelles": {
-        "UPPERCASE_SENTENCE_START": False,
+        "MAJUSCULE_PHRASE": False,
         "PONCTUATION_POINT": False,
     },
-    # Mots supplementaires a ne jamais corriger (pseudos, jargon, jeux...).
-    "lexique_perso": [],
     # Delais en secondes. A augmenter si une application est lente a repondre.
     "delai_copie": 0.35,
     "delai_collage": 0.08,
+}
+
+# Anciens noms encore acceptes, pour ne pas perdre les reglages de ceux qui
+# ont installe une version precedente.
+RENOMMAGES = {
+    "lexique_perso": "mots_perso",
+}
+
+RENOMMAGES_REGLES = {
+    "UPPERCASE_SENTENCE_START": "MAJUSCULE_PHRASE",
 }
 
 
@@ -51,6 +80,28 @@ def _fusionner(defauts: dict, charges: dict) -> dict:
     return resultat
 
 
+def _migrer(charges: dict) -> dict:
+    """Traduit les reglages ecrits par une version precedente."""
+    migre = dict(charges)
+
+    for ancien, nouveau in RENOMMAGES.items():
+        if ancien in migre:
+            migre.setdefault(nouveau, migre.pop(ancien))
+        migre.pop(ancien, None)
+
+    regles = migre.get("regles_optionnelles")
+    if isinstance(regles, dict):
+        migre["regles_optionnelles"] = {
+            RENOMMAGES_REGLES.get(nom, nom): actif
+            for nom, actif in regles.items()
+            # Les regles de l'ancien moteur qui n'ont plus d'equivalent sont
+            # simplement oubliees.
+            if RENOMMAGES_REGLES.get(nom, nom) in DEFAUTS["regles_optionnelles"]
+        }
+
+    return migre
+
+
 def charger() -> dict:
     """Lit la configuration, en creant le fichier au premier lancement."""
     chemin = chemin_config()
@@ -59,8 +110,8 @@ def charger() -> dict:
         return dict(DEFAUTS)
     try:
         with chemin.open(encoding="utf-8") as f:
-            return _fusionner(DEFAUTS, json.load(f))
-    except (json.JSONDecodeError, OSError):
+            return _fusionner(DEFAUTS, _migrer(json.load(f)))
+    except (json.JSONDecodeError, OSError, AttributeError):
         # Fichier corrompu ou illisible : on repart des defauts plutot que
         # d'empecher l'application de demarrer.
         return dict(DEFAUTS)
@@ -69,6 +120,10 @@ def charger() -> dict:
 def sauvegarder(config: dict) -> Path:
     chemin = chemin_config()
     chemin.parent.mkdir(parents=True, exist_ok=True)
-    with chemin.open("w", encoding="utf-8") as f:
+    # Ecriture en deux temps : une coupure de courant au mauvais moment ne
+    # doit pas laisser un fichier de reglages a moitie ecrit.
+    provisoire = chemin.with_suffix(".json.tmp")
+    with provisoire.open("w", encoding="utf-8") as f:
         json.dump(config, f, ensure_ascii=False, indent=2)
+    provisoire.replace(chemin)
     return chemin

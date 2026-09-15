@@ -3,6 +3,8 @@
 
 Le texte traverse trois couches, dans cet ordre :
 
+0. **Vos remplacements.** Ce que vous avez appris au correcteur passe avant
+   tout le reste : « ptetre » -> « peut-être », « cdlt » -> « cordialement ».
 1. **Les zones intouchables.** Liens, blocs de code, mentions, emojis, argot,
    emphase volontaire : tout cela sort du circuit avant meme d'etre examine.
 2. **La grammaire** (`grammaire.py`), qui regarde les mots voisins et tranche
@@ -73,7 +75,8 @@ class Correcteur:
 
     def __init__(self, lexique: Lexique | None = None,
                  regles_optionnelles: dict[str, bool] | None = None,
-                 lexique_perso: list[str] | None = None):
+                 mots_perso: list[str] | None = None,
+                 remplacements_perso: dict[str, str] | None = None):
         self.lexique = lexique if lexique is not None else Lexique()
 
         actives = dict(regles.REGLES_OPTIONNELLES)
@@ -81,8 +84,16 @@ class Correcteur:
         self.regles_ignorees = {nom for nom, active in actives.items() if not active}
 
         self.mots_proteges = set(regles.LEXIQUE_PROTEGE) | set(regles.LEXIQUE_ANGLAIS)
-        for mot in lexique_perso or []:
+        for mot in mots_perso or []:
             self.mots_proteges.add(_normaliser_mot(mot))
+
+        # Les cles sont comparees en minuscules et sans apostrophe typographique,
+        # pour que « Ptetre » et « ptetre » trouvent la meme entree.
+        self.remplacements = {
+            cle.lower().replace("\u2019", "'"): valeur
+            for cle, valeur in (remplacements_perso or {}).items()
+            if cle.strip() and valeur.strip()
+        }
 
     def prechauffer(self) -> None:
         """Lit les fichiers de donnees maintenant plutot qu'a la 1re correction."""
@@ -180,11 +191,32 @@ class Correcteur:
                 return False
             return not any(self._protege(jetons[i].texte) for i in indices)
 
+        # -- vos remplacements : ils passent avant tout, y compris avant les
+        #    protections, puisque c'est vous qui les avez demandes.
+        if self.remplacements:
+            for i, jeton in enumerate(jetons):
+                if _chevauche(jeton.debut, jeton.fin, zones):
+                    continue
+                remplacement = self.remplacements.get(
+                    jeton.texte.lower().replace("\u2019", "'")
+                )
+                if remplacement is None or remplacement == jeton.texte:
+                    continue
+                propositions.append(
+                    Correction(jeton.debut, jeton.fin, jeton.texte,
+                               grammaire.appliquer_casse(jeton.texte, remplacement),
+                               "REMPLACEMENT_PERSO",
+                               "remplacement enregistre dans votre dictionnaire")
+                )
+                traites.add(i)
+
         # -- grammaire : elle voit le contexte, elle passe en premier.
         for suggestion in grammaire.analyser(
             texte, jetons, self.lexique, self.regles_ignorees
         ):
             indices = range(suggestion.index, suggestion.index + suggestion.portee)
+            if traites.intersection(indices):
+                continue
             debut = jetons[suggestion.index].debut
             fin = jetons[indices[-1]].fin
             if not utilisable(indices, debut, fin):
@@ -262,12 +294,18 @@ class Correcteur:
 
     # -- entree publique ----------------------------------------------------
 
-    def corriger(self, texte: str, passes: int = 2) -> tuple[str, list[Correction]]:
+    def corriger(self, texte: str, passes: int = 2,
+                 mise_en_forme: bool = True) -> tuple[str, list[Correction]]:
         """Corrige `texte` et renvoie (texte_corrige, corrections_appliquees).
 
         Deux passes par defaut : corriger « ils on manger » en « ils ont
         manger » debloque la regle du participe, que la premiere passe ne
         pouvait pas voir.
+
+        `mise_en_forme` couvre la majuscule de debut de phrase et le point
+        final. La correction au fil de la frappe la desactive : une phrase en
+        cours d'ecriture n'est pas encore finie, et lui coller un point a
+        chaque espace serait insupportable.
         """
         if not texte or not texte.strip():
             return texte, []
@@ -285,13 +323,25 @@ class Correcteur:
                 break
             toutes.extend(corrections)
 
-        corps, corrections = self._mise_en_forme(corps)
-        toutes.extend(corrections)
+        if mise_en_forme:
+            corps, corrections = self._mise_en_forme(corps)
+            toutes.extend(corrections)
 
         return marge_gauche + corps + marge_droite, toutes
 
 
 def construire(regles_optionnelles: dict[str, bool] | None = None,
-               lexique_perso: list[str] | None = None) -> Correcteur:
+               mots_perso: list[str] | None = None,
+               remplacements_perso: dict[str, str] | None = None) -> Correcteur:
     """Le correcteur pret a l'emploi, dictionnaire compris."""
-    return Correcteur(Lexique(), regles_optionnelles, lexique_perso)
+    return Correcteur(Lexique(), regles_optionnelles, mots_perso, remplacements_perso)
+
+
+def depuis_config(config: dict, lexique: Lexique | None = None) -> Correcteur:
+    """Le correcteur decrit par un fichier de reglages."""
+    return Correcteur(
+        lexique if lexique is not None else Lexique(),
+        regles_optionnelles=config.get("regles_optionnelles"),
+        mots_perso=config.get("mots_perso"),
+        remplacements_perso=config.get("remplacements_perso"),
+    )
