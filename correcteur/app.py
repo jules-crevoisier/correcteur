@@ -3,12 +3,13 @@
 
 from __future__ import annotations
 
+import sys
 import threading
 import traceback
 from typing import Callable
 
 from . import config as config_mod
-from . import demarrage, java, moteur, presse_papier, regles
+from . import demarrage, lexique, moteur, presse_papier
 from .raccourci import Raccourci
 
 
@@ -16,59 +17,55 @@ class Application:
     """Le correcteur, pret a etre pilote par une interface ou en ligne de commande."""
 
     def __init__(self, config: dict | None = None,
-                 journal: Callable[[str], None] = print):
+                 journal: Callable[[str], None] | None = None):
         self.config = config or config_mod.charger()
-        self.journal = journal
+        # Le journal part sur la sortie d'erreur : « --texte » doit pouvoir
+        # etre redirige sans ramasser les messages de chargement.
+        self.journal = journal or (lambda message: print(message, file=sys.stderr))
         self.actif = True
-        self._correcteur = None
+        self._correcteur: moteur.Correcteur | None = None
         self._verrou = threading.Lock()
         self.raccourci = Raccourci(self.config["raccourci"], self.sur_raccourci)
-        self._appliquer_lexique_perso()
 
     # -- preparation --------------------------------------------------------
 
-    def _appliquer_lexique_perso(self) -> None:
-        """Ajoute les mots de l'utilisateur a la liste des mots intouchables."""
-        for mot in self.config.get("lexique_perso", []):
-            regles.LEXIQUE_PROTEGE.add(mot.strip().lower())
-
     @property
-    def correcteur(self):
+    def correcteur(self) -> moteur.Correcteur:
         """Construit le moteur au premier usage.
 
-        LanguageTool met quelques secondes a demarrer : le faire a la demande
-        permet a l'icone d'apparaitre immediatement au lancement.
+        Lire le dictionnaire prend une fraction de seconde : le faire a la
+        demande permet a l'icone d'apparaitre immediatement au lancement.
         """
         if self._correcteur is None:
             with self._verrou:
                 if self._correcteur is None:
-                    self.journal("Demarrage du moteur de correction...")
-                    # Rendre Java visible avant tout : le moteur le cherche
-                    # dans le PATH, ou un JRE portable n'apparait pas.
-                    java.preparer()
-                    self._correcteur = moteur.construire(
+                    self.journal("Chargement du dictionnaire...")
+                    correcteur = moteur.construire(
                         regles_optionnelles=self.config.get("regles_optionnelles"),
+                        lexique_perso=self.config.get("lexique_perso"),
                     )
-                    self.journal("Moteur pret.")
+                    correcteur.prechauffer()
+                    self._correcteur = correcteur
+                    self.journal("Correcteur pret.")
         return self._correcteur
 
     def prechauffer(self) -> None:
-        """Demarre le moteur en arriere-plan pour que la 1re correction soit rapide.
+        """Charge le dictionnaire en arriere-plan, pour que la 1re correction soit rapide.
 
-        Un echec ici — Java manquant, par exemple — doit se voir tout de
-        suite. Lancee au demarrage de Windows, l'application serait sinon
+        Un echec ici — des donnees manquantes, par exemple — doit se voir tout
+        de suite. Lancee au demarrage de Windows, l'application serait sinon
         presente dans la barre des taches sans jamais rien corriger.
         """
         def _demarrer():
             try:
-                self.correcteur  # noqa: B018 — declenche la construction
-            except java.JavaIntrouvable as e:
+                self.correcteur  # noqa: B018 — declenche le chargement
+            except lexique.LexiqueIntrouvable as e:
                 self.journal(str(e))
-                self.notifier("Moteur indisponible", str(e).split("\n")[0])
+                self.notifier("Dictionnaire introuvable", str(e).split("\n")[0])
             except Exception:
                 self.journal(traceback.format_exc())
-                self.notifier("Moteur indisponible",
-                              "Le moteur n'a pas pu demarrer. Voir la console.")
+                self.notifier("Correcteur indisponible",
+                              "Le dictionnaire n'a pas pu etre charge.")
 
         threading.Thread(target=_demarrer, daemon=True).start()
 
@@ -119,9 +116,9 @@ class Application:
                 f"{'s' if len(corrections) > 1 else ''}",
                 resume,
             )
-        except java.JavaIntrouvable as e:
+        except lexique.LexiqueIntrouvable as e:
             self.journal(str(e))
-            self.notifier("Moteur indisponible", str(e).split("\n")[0])
+            self.notifier("Dictionnaire introuvable", str(e).split("\n")[0])
         except Exception:
             self.journal(traceback.format_exc())
             self.notifier("Erreur", "La correction a echoue. Voir la console.")

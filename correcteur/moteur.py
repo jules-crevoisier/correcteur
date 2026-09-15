@@ -1,29 +1,30 @@
 # -*- coding: utf-8 -*-
-"""Moteur de correction : LanguageTool + garde-fous maison.
+"""Moteur de correction : orthographe, grammaire et garde-fous.
 
-LanguageTool fait le travail linguistique lourd (accords, conjugaison,
-homonymes, orthographe). Ce module decide ensuite lesquelles de ses
-suggestions meritent d'etre appliquees.
+Le texte traverse trois couches, dans cet ordre :
 
-Deux principes :
+1. **Les zones intouchables.** Liens, blocs de code, mentions, emojis, argot,
+   emphase volontaire : tout cela sort du circuit avant meme d'etre examine.
+2. **La grammaire** (`grammaire.py`), qui regarde les mots voisins et tranche
+   les homonymes : « sa va » -> « ça va », « ils on » -> « ils ont ».
+3. **L'orthographe** (`lexique.py`), qui ne s'occupe que des mots absents du
+   dictionnaire : « gateaux » -> « gâteaux ».
 
-1. On corrige les fautes, jamais le registre. « j'ai pas » est du francais
-   parle correct ; c'est le module `regles` qui neutralise cette couche.
-2. Mieux vaut sous-corriger que degrader. Une suggestion douteuse est
-   ecartee : un message un peu fautif reste lisible, un message corrompu
-   par une mauvaise correction ne l'est plus.
+Deux principes gouvernent l'ensemble :
+
+- On corrige les fautes, jamais le registre. « j'ai pas » est du francais
+  parle correct, et aucune regle d'ici n'y touche.
+- Mieux vaut sous-corriger que degrader. Une correction douteuse est ecartee :
+  un message un peu fautif reste lisible, un message corrompu ne l'est plus.
 """
 
 from __future__ import annotations
 
-import os
 import re
-import unicodedata
 from dataclasses import dataclass
-from typing import Iterable
 
-from . import regles
-from .chemins import dossier_moteur
+from . import grammaire, regles
+from .lexique import CLASSE_ACCENT, Lexique, sans_accents
 
 # Trois lettres identiques d'affilee : « ouiiii », « mdrrrr », « nooon ».
 # C'est de l'emphase volontaire, jamais une faute de frappe.
@@ -33,9 +34,9 @@ _MOTIFS_PROTEGES = re.compile(
     "|".join(regles.MOTIFS_PROTEGES), re.IGNORECASE | re.DOTALL
 )
 
-# Longueur maximale d'un suffixe ajoute par une correction d'accord
-# (« somme » -> « sommes », « chelou » -> « chelous », « venu » -> « venues »).
-_SUFFIXE_MAX = 3
+_DEBUT_DE_PHRASE = re.compile(r"(?:^|[.!?…]\s+|\n\s*)$")
+
+_PONCTUATION_FINALE = ".!?…:;,"
 
 
 @dataclass(frozen=True)
@@ -53,28 +54,9 @@ class Correction:
         return f"{self.avant} → {self.apres}"
 
 
-def _sans_accents(texte: str) -> str:
-    texte = unicodedata.normalize("NFD", texte.lower())
-    return "".join(c for c in texte if unicodedata.category(c) != "Mn")
-
-
 def _normaliser_mot(mot: str) -> str:
     """Pour comparer un mot au lexique protege."""
-    return _sans_accents(mot.strip(".,;:!?…\"'«»()[]{}-–—*_~"))
-
-
-def _formes_comparables(texte: str) -> set[str]:
-    """Formes normalisees d'un fragment, pour juger si un changement est cosmetique.
-
-    Les accents et les apostrophes disparaissent ; le trait d'union est teste
-    a la fois comme une soudure et comme une espace. Les espaces, eux, sont
-    conserves : c'est precisement le decoupage en mots qu'on veut surveiller.
-    """
-    base = _sans_accents(texte).replace("'", "").replace("’", "")
-    return {
-        re.sub(r"\s+", " ", base.replace("-", "")).strip(),
-        re.sub(r"\s+", " ", base.replace("-", " ")).strip(),
-    }
+    return sans_accents(mot.strip(".,;:!?…\"'«»()[]{}-–—*_~")).lower()
 
 
 def _zones_protegees(texte: str) -> list[tuple[int, int]]:
@@ -82,176 +64,210 @@ def _zones_protegees(texte: str) -> list[tuple[int, int]]:
     return [(m.start(), m.end()) for m in _MOTIFS_PROTEGES.finditer(texte)]
 
 
-def _chevauche(debut: int, fin: int, zones: Iterable[tuple[int, int]]) -> bool:
+def _chevauche(debut: int, fin: int, zones: list[tuple[int, int]]) -> bool:
     return any(debut < z_fin and fin > z_debut for z_debut, z_fin in zones)
-
-
-def _changement_cosmetique(fragment: str, remplacement: str) -> bool:
-    """Vrai si le remplacement ne fait qu'accentuer, apostropher ou accorder.
-
-    Ce test est le garde-fou central. LanguageTool degrade surtout les
-    fragments de plusieurs mots, qu'il re-decoupe : « ta fini » -> « te finir »,
-    « les enfant » -> « l'enfant », « ceter » -> « ce ter ». Ces re-decoupages
-    changent le squelette du fragment ; les vraies corrections ne le changent
-    pas (« ma dit » -> « m'a dit », « Est ce » -> « Est-ce ») ou se contentent
-    d'ajouter une terminaison (« nous somme » -> « nous sommes »).
-    """
-    formes_frag = _formes_comparables(fragment)
-    formes_rempl = _formes_comparables(remplacement)
-
-    # Purement typographique : accents, apostrophes, traits d'union.
-    if formes_frag & formes_rempl:
-        return True
-
-    # Ajout d'une terminaison d'accord, a la fin du dernier mot.
-    for f in formes_frag:
-        for r in formes_rempl:
-            if r.startswith(f) and 0 < len(r) - len(f) <= _SUFFIXE_MAX:
-                return True
-    return False
 
 
 class Correcteur:
     """Corrige du francais en respectant le registre de l'auteur."""
 
-    def __init__(self, outil, regles_optionnelles: dict[str, bool] | None = None):
-        """
-        `outil` expose `.check(texte)` a la maniere de language_tool_python.
-        L'injecter plutot que le construire ici rend le moteur testable sans
-        demarrer un serveur Java.
-        """
-        self.outil = outil
+    def __init__(self, lexique: Lexique | None = None,
+                 regles_optionnelles: dict[str, bool] | None = None,
+                 lexique_perso: list[str] | None = None):
+        self.lexique = lexique if lexique is not None else Lexique()
+
         actives = dict(regles.REGLES_OPTIONNELLES)
         actives.update(regles_optionnelles or {})
-        # Une regle optionnelle laissee a False rejoint la liste noire.
-        self.regles_ignorees = set(regles.REGLES_IGNOREES) | {
-            nom for nom, active in actives.items() if not active
-        }
-        self._cache_lexique: dict[str, bool] = {}
+        self.regles_ignorees = {nom for nom, active in actives.items() if not active}
 
-    # -- validation lexicale ------------------------------------------------
+        self.mots_proteges = set(regles.LEXIQUE_PROTEGE) | set(regles.LEXIQUE_ANGLAIS)
+        for mot in lexique_perso or []:
+            self.mots_proteges.add(_normaliser_mot(mot))
 
-    def _mot_existe(self, mot: str) -> bool:
-        """Le mot figure-t-il au dictionnaire ?
+    def prechauffer(self) -> None:
+        """Lit les fichiers de donnees maintenant plutot qu'a la 1re correction."""
+        self.lexique.charger()
 
-        LanguageTool propose parfois des formes qui n'existent pas
-        (« mangé » -> « mangait », « garé » -> « garees »). On lui soumet le
-        mot isole pour trancher. Le resultat est mis en cache : la meme
-        poignee de mots revient sans cesse.
+    # -- protection ---------------------------------------------------------
+
+    def _protege(self, mot: str) -> bool:
+        """Ce mot doit-il rester tel quel, quoi qu'il arrive ?"""
+        if _EMPHASE.search(mot):
+            return True
+        if _normaliser_mot(mot) in self.mots_proteges:
+            return True
+        # Sigles et emphase en capitales : « SNCF », « NON ».
+        return len(mot) > 1 and mot.isupper()
+
+    # -- orthographe --------------------------------------------------------
+
+    def _connu(self, mot: str) -> bool:
+        if self.lexique.connait(mot):
+            return True
+        # « j'ai », « qu'il » : l'elision se verifie a part.
+        elision, noyau = grammaire.separer_clitique(mot)
+        if elision:
+            return not noyau or self.lexique.connait(noyau)
+        return False
+
+    def _apostrophe_manquante(self, mot: str) -> str | None:
+        """« jai » -> « j'ai », « cest » -> « c'est », « daccord » -> « d'accord ».
+
+        L'apostrophe est la touche la plus souvent sautee en tapant vite. Le
+        mot colle n'existe jamais dans le dictionnaire, ce qui rend la
+        correction sure : il suffit que la coupure donne deux morceaux
+        connus.
         """
-        cle = mot.lower()
-        if cle in self._cache_lexique:
-            return self._cache_lexique[cle]
+        for elision in grammaire.CLITIQUES:
+            tete = elision.rstrip("'")
+            if not mot.lower().startswith(tete) or len(mot) <= len(tete):
+                continue
+            reste = mot[len(tete):]
+            # « ca » ne doit pas devenir « c'a » : il faut un vrai mot derriere.
+            if len(reste) < 2:
+                continue
+            if self.lexique.connait(reste):
+                return mot[: len(tete)] + "'" + reste
+            # « cetait » -> « c'était » : le morceau de droite a le droit
+            # d'avoir perdu ses accents, mais pas d'etre une faute de frappe,
+            # sans quoi « subject » deviendrait « s'abject ».
+            accentue = self.lexique.suggestion(reste, classe_max=CLASSE_ACCENT)
+            if accentue is not None:
+                return mot[: len(tete)] + "'" + accentue
+        return None
 
-        # Un mot sans lettre (ponctuation, chiffres) n'a rien a valider.
-        if not any(c.isalpha() for c in mot):
-            self._cache_lexique[cle] = True
-            return True
+    def _orthographe(self, mot: str) -> str | None:
+        """Le mot correctement orthographie, s'il ne fait aucun doute."""
+        if len(mot) < 2:
+            # Une lettre isolee est une abreviation (« c pas grave »), pas un
+            # mot a corriger.
+            return None
 
-        try:
-            fautes = [
-                m for m in self.outil.check(mot)
-                if (getattr(m, "category", "") or "") == "TYPOS"
-            ]
-            existe = not fautes
-        except Exception:
-            # En cas de souci serveur, on accorde le benefice du doute.
-            existe = True
+        elision, noyau = grammaire.separer_clitique(mot)
 
-        self._cache_lexique[cle] = existe
-        return existe
+        # Un mot capitalise au milieu d'une phrase est un nom propre : on veut
+        # bien lui rendre ses accents, pas le remplacer par un autre mot.
+        prudent = mot[:1].isupper()
 
-    def _remplacement_valide(self, fragment: str, remplacement: str) -> bool:
-        """Le remplacement est-il assez sur pour etre applique sans demander ?"""
-        if _changement_cosmetique(fragment, remplacement):
-            return True
+        # Ordre de confiance : les accents oublies d'abord, l'apostrophe
+        # oubliee ensuite, la faute de frappe en dernier. « cest » deviendrait
+        # « est » si on laissait la distance d'edition passer la premiere.
+        accents = self.lexique.suggestion(noyau, classe_max=CLASSE_ACCENT)
+        if accents is not None:
+            return elision + accents
 
-        # Au-dela du cosmetique, on n'accepte qu'un mot unique remplace par un
-        # mot unique. Tout changement du nombre de mots est un re-decoupage.
-        if len(fragment.split()) != 1 or len(remplacement.split()) != 1:
-            return False
+        if not elision:
+            apostrophe = self._apostrophe_manquante(mot)
+            if apostrophe is not None:
+                return apostrophe
 
-        return self._mot_existe(remplacement)
+        if prudent:
+            return None
 
-    # -- filtrage -----------------------------------------------------------
+        frappe = self.lexique.suggestion(noyau)
+        return elision + frappe if frappe is not None else None
 
-    def _retenir(self, match, texte: str, zones: list[tuple[int, int]]) -> bool:
-        """Decide si une suggestion de LanguageTool merite d'etre appliquee."""
-        regle = getattr(match, "rule_id", "") or ""
-        categorie = getattr(match, "category", "") or ""
-
-        remplacements = getattr(match, "replacements", None) or []
-        if not remplacements:
-            return False
-
-        # -- couche 1 : le registre n'est pas une faute
-        if regle in self.regles_ignorees:
-            return False
-        if categorie in regles.CATEGORIES_IGNOREES:
-            return False
-
-        debut = match.offset
-        fin = debut + match.error_length
-        if _chevauche(debut, fin, zones):
-            return False
-
-        fragment = texte[debut:fin]
-        remplacement = remplacements[0]
-
-        # -- couche 2 : ce que l'auteur a ecrit exprès
-        if _EMPHASE.search(fragment):
-            return False
-        if _normaliser_mot(fragment) in regles.LEXIQUE_PROTEGE:
-            return False
-
-        # -- couche 3 : ne pas degrader
-        if not remplacement.strip():
-            return False
-        if not self._remplacement_valide(fragment, remplacement):
-            return False
-
-        return True
-
-    # -- application --------------------------------------------------------
+    # -- une passe ----------------------------------------------------------
 
     def _passe(self, texte: str) -> tuple[str, list[Correction]]:
-        """Une passe de correction. Renvoie le texte corrige et le journal."""
+        jetons = grammaire.decouper(texte)
         zones = _zones_protegees(texte)
-        retenus = [m for m in self.outil.check(texte) if self._retenir(m, texte, zones)]
+        propositions: list[Correction] = []
+        traites: set[int] = set()
 
-        # De la fin vers le debut : les offsets des corrections restantes
-        # ne bougent pas au fur et a mesure qu'on modifie le texte.
-        retenus.sort(key=lambda m: m.offset, reverse=True)
+        def utilisable(indices: range, debut: int, fin: int) -> bool:
+            if _chevauche(debut, fin, zones):
+                return False
+            return not any(self._protege(jetons[i].texte) for i in indices)
 
-        corrections: list[Correction] = []
-        derniere_position = len(texte) + 1
-        for m in retenus:
-            debut, fin = m.offset, m.offset + m.error_length
-            # Deux regles peuvent viser la meme zone ; la premiere gagne.
-            if fin > derniere_position:
+        # -- grammaire : elle voit le contexte, elle passe en premier.
+        for suggestion in grammaire.analyser(
+            texte, jetons, self.lexique, self.regles_ignorees
+        ):
+            indices = range(suggestion.index, suggestion.index + suggestion.portee)
+            debut = jetons[suggestion.index].debut
+            fin = jetons[indices[-1]].fin
+            if not utilisable(indices, debut, fin):
                 continue
-            remplacement = m.replacements[0]
-            corrections.append(
-                Correction(
-                    debut=debut,
-                    fin=fin,
-                    avant=texte[debut:fin],
-                    apres=remplacement,
-                    regle=getattr(m, "rule_id", ""),
-                    message=getattr(m, "message", ""),
-                )
+            propositions.append(
+                Correction(debut, fin, texte[debut:fin], suggestion.texte,
+                           suggestion.regle, suggestion.message)
             )
-            texte = texte[:debut] + remplacement + texte[fin:]
-            derniere_position = debut
+            traites.update(indices)
+
+        # -- orthographe : uniquement les mots qu'aucun dictionnaire ne connait.
+        for i, jeton in enumerate(jetons):
+            if i in traites or not utilisable(range(i, i + 1), jeton.debut, jeton.fin):
+                continue
+            if self._connu(jeton.texte):
+                continue
+            remplacement = self._orthographe(jeton.texte)
+            if remplacement is None or remplacement == jeton.texte:
+                continue
+            propositions.append(
+                Correction(jeton.debut, jeton.fin, jeton.texte, remplacement,
+                           "ORTHOGRAPHE", "mot absent du dictionnaire")
+            )
+
+        return self._appliquer(texte, propositions)
+
+    @staticmethod
+    def _appliquer(texte: str, propositions: list[Correction]):
+        """Reecrit le texte de la fin vers le debut, pour ne pas decaler les offsets."""
+        propositions.sort(key=lambda c: c.debut, reverse=True)
+        appliquees: list[Correction] = []
+        derniere_position = len(texte) + 1
+
+        for proposition in propositions:
+            if proposition.fin > derniere_position:
+                continue
+            texte = texte[:proposition.debut] + proposition.apres + texte[proposition.fin:]
+            appliquees.append(proposition)
+            derniere_position = proposition.debut
+
+        appliquees.reverse()
+        return texte, appliquees
+
+    # -- regles optionnelles de mise en forme --------------------------------
+
+    def _mise_en_forme(self, texte: str) -> tuple[str, list[Correction]]:
+        corrections: list[Correction] = []
+
+        if "MAJUSCULE_PHRASE" not in self.regles_ignorees:
+            for jeton in reversed(grammaire.decouper(texte)):
+                premiere = jeton.texte[:1]
+                if not premiere.islower():
+                    continue
+                if not _DEBUT_DE_PHRASE.search(texte[:jeton.debut]):
+                    continue
+                corrections.append(
+                    Correction(jeton.debut, jeton.debut + 1, premiere,
+                               premiere.upper(), "MAJUSCULE_PHRASE",
+                               "majuscule en debut de phrase")
+                )
+                texte = texte[:jeton.debut] + premiere.upper() + texte[jeton.debut + 1:]
+
+        if "PONCTUATION_POINT" not in self.regles_ignorees:
+            corps = texte.rstrip()
+            if corps and corps[-1] not in _PONCTUATION_FINALE:
+                position = len(corps)
+                corrections.append(
+                    Correction(position, position, "", ".", "PONCTUATION_POINT",
+                               "point final manquant")
+                )
+                texte = corps + "." + texte[position:]
 
         corrections.reverse()
         return texte, corrections
 
+    # -- entree publique ----------------------------------------------------
+
     def corriger(self, texte: str, passes: int = 2) -> tuple[str, list[Correction]]:
         """Corrige `texte` et renvoie (texte_corrige, corrections_appliquees).
 
-        Deux passes par defaut : corriger « ils on mange » en « ils ont mange »
-        debloque l'analyse du verbe, que la premiere passe ne pouvait pas voir.
+        Deux passes par defaut : corriger « ils on manger » en « ils ont
+        manger » debloque la regle du participe, que la premiere passe ne
+        pouvait pas voir.
         """
         if not texte or not texte.strip():
             return texte, []
@@ -269,18 +285,13 @@ class Correcteur:
                 break
             toutes.extend(corrections)
 
+        corps, corrections = self._mise_en_forme(corps)
+        toutes.extend(corrections)
+
         return marge_gauche + corps + marge_droite, toutes
 
 
-def construire(langue: str = "fr", regles_optionnelles: dict[str, bool] | None = None):
-    """Demarre LanguageTool en local et renvoie un Correcteur pret a l'emploi."""
-    # Un dossier « moteur » a cote de l'application rend l'installation
-    # portable : sans lui, LanguageTool s'installe dans le profil utilisateur.
-    local = dossier_moteur()
-    if local is not None:
-        os.environ.setdefault("LTP_PATH", str(local))
-
-    import language_tool_python
-
-    outil = language_tool_python.LanguageTool(langue)
-    return Correcteur(outil, regles_optionnelles)
+def construire(regles_optionnelles: dict[str, bool] | None = None,
+               lexique_perso: list[str] | None = None) -> Correcteur:
+    """Le correcteur pret a l'emploi, dictionnaire compris."""
+    return Correcteur(Lexique(), regles_optionnelles, lexique_perso)
