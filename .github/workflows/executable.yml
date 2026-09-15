@@ -34,12 +34,20 @@ jobs:
       - name: Compiler l'executable
         run: python -m PyInstaller --noconfirm --clean correcteur.spec
 
+      # L'executable est compile en mode fenetre : sans redirection, il n'a
+      # aucune sortie a offrir. « Start-Process -RedirectStandardOutput » lui
+      # en fournit une, et attend qu'il ait fini.
       - name: Verifier que l'executable corrige vraiment
+        shell: pwsh
         run: |
-          $sortie = & dist\Correcteur.exe --texte "je sais pas si sa va marcher"
+          Start-Process -FilePath dist\Correcteur.exe `
+            -ArgumentList '--texte', 'je sais pas si sa va marcher' `
+            -NoNewWindow -Wait -RedirectStandardOutput sortie.txt
+          $sortie = (Get-Content sortie.txt -Raw -Encoding utf8).Trim()
           if ($sortie -ne "je sais pas si ça va marcher") {
-            throw "sortie inattendue : $sortie"
+            throw "sortie inattendue : « $sortie »"
           }
+          Write-Host "sortie conforme : $sortie"
 
       - uses: actions/upload-artifact@v4
         with:

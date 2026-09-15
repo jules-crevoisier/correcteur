@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 
 from . import __version__, config as config_mod
@@ -18,7 +19,61 @@ from . import demarrage
 from .app import Application
 
 
+def brancher_sortie() -> None:
+    """Rend « print » a nouveau utile quand l'application est compilee.
+
+    Correcteur.exe est compile en mode fenetre : il vit dans la zone de
+    notification, et Windows ne lui donne donc aucune console. PyInstaller met
+    alors sys.stdout a None, et « --texte » n'afficherait rien du tout.
+
+    On recupere la sortie de deux facons, dans cet ordre :
+
+    1. si l'appelant a redirige la sortie — « > fichier », un tube — le
+       descripteur 1 est valide et il suffit de le rouvrir ;
+    2. sinon on se rattache a la console du terminal qui nous a lances.
+
+    Lance d'un double-clic, ni l'une ni l'autre ne marche, et c'est tres bien :
+    il n'y a personne pour lire.
+    """
+    if sys.stdout is not None and sys.stderr is not None:
+        return
+
+    def rouvrir(descripteur: int):
+        try:
+            return os.fdopen(descripteur, "w", encoding="utf-8",
+                             errors="replace", buffering=1)
+        except OSError:
+            return None
+
+    sortie, erreur = rouvrir(1), rouvrir(2)
+
+    if sortie is None and os.name == "nt":
+        import ctypes
+
+        ATTACHER_AU_PARENT = -1
+        try:
+            rattache = ctypes.windll.kernel32.AttachConsole(ATTACHER_AU_PARENT)
+        except (AttributeError, OSError):
+            rattache = False
+        if rattache:
+            try:
+                sortie = open("CONOUT$", "w", encoding="utf-8",
+                              errors="replace", buffering=1)
+                erreur = open("CONOUT$", "w", encoding="utf-8",
+                              errors="replace", buffering=1)
+            except OSError:
+                pass
+
+    if sys.stdout is None and sortie is not None:
+        sys.stdout = sortie
+    if sys.stderr is None and erreur is not None:
+        sys.stderr = erreur
+
+
 def main(argv: list[str] | None = None) -> int:
+    brancher_sortie()
+
+
     analyseur = argparse.ArgumentParser(
         prog="correcteur",
         description="Correcteur d'orthographe francais qui respecte le francais parle.",
