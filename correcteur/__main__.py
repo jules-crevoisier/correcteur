@@ -2,6 +2,7 @@
 """Point d'entree.
 
     python -m correcteur                  lance l'application (icone + raccourci)
+    python -m correcteur --fenetre        ouvre la fenetre de correction
     python -m correcteur --texte "..."    corrige un texte et l'affiche
     python -m correcteur --console        lance sans icone, journal en console
     python -m correcteur --demarrage on   se lance avec Windows
@@ -13,7 +14,7 @@ import argparse
 import sys
 
 from . import __version__, config as config_mod
-from . import demarrage, java
+from . import demarrage
 from .app import Application
 
 
@@ -23,6 +24,8 @@ def main(argv: list[str] | None = None) -> int:
         description="Correcteur d'orthographe francais qui respecte le francais parle.",
     )
     analyseur.add_argument("--texte", help="corrige ce texte, affiche le resultat et quitte")
+    analyseur.add_argument("--fenetre", action="store_true",
+                           help="ouvre la fenetre de correction")
     analyseur.add_argument("--console", action="store_true",
                            help="lance sans icone de barre des taches")
     analyseur.add_argument("--config", action="store_true",
@@ -30,7 +33,7 @@ def main(argv: list[str] | None = None) -> int:
     analyseur.add_argument("--demarrage", choices=["on", "off", "etat"],
                            help="lancement automatique a l'ouverture de session Windows")
     analyseur.add_argument("--verifier", action="store_true",
-                           help="controle l'installation (Java, moteur) et quitte")
+                           help="controle l'installation et quitte")
     analyseur.add_argument("--version", action="version", version=f"correcteur {__version__}")
     args = analyseur.parse_args(argv)
 
@@ -50,7 +53,12 @@ def main(argv: list[str] | None = None) -> int:
         corrige, corrections = app.corriger_texte(args.texte)
         print(corrige)
         for c in corrections:
-            print(f"  {c}   [{c.regle}]", file=sys.stderr)
+            print(f"  {c}   [{c.regle}] {c.message}", file=sys.stderr)
+        return 0
+
+    if args.fenetre:
+        from .fenetre import Fenetre
+        Fenetre(app).lancer()
         return 0
 
     if args.console:
@@ -90,27 +98,28 @@ def _gerer_demarrage(action: str) -> int:
 
 def _verifier() -> int:
     """Controle que tout est en place, avec un diagnostic lisible."""
+    from .chemins import dossier_donnees
+    from .lexique import LexiqueIntrouvable
+
     souci = False
 
     try:
-        executable = java.preparer()
-        print(f"[ok] Java {java.version(executable)} : {executable}")
-    except java.JavaIntrouvable as e:
+        app = Application()
+        corrige, _ = app.corriger_texte("je sais pas si sa va marcher")
+        print(f"[ok] Dictionnaire : {dossier_donnees()}")
+    except LexiqueIntrouvable as e:
         print(f"[X]  {e}")
         return 1
-
-    try:
-        app = Application()
-        corrige, corrections = app.corriger_texte("je sais pas si sa va marcher")
-        attendu = "je sais pas si ça va marcher"
-        if corrige == attendu:
-            print(f"[ok] Moteur de correction : « {corrige} »")
-        else:
-            print(f"[X]  Correction inattendue : « {corrige} »")
-            souci = True
     except Exception as e:
-        print(f"[X]  Le moteur n'a pas pu demarrer : {e}")
+        print(f"[X]  Le correcteur n'a pas pu demarrer : {e}")
         return 1
+
+    attendu = "je sais pas si ça va marcher"
+    if corrige == attendu:
+        print(f"[ok] Correction : « {corrige} »")
+    else:
+        print(f"[X]  Correction inattendue : « {corrige} »")
+        souci = True
 
     print(f"[ok] Reglages : {config_mod.chemin_config()}")
 

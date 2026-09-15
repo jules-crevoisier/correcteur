@@ -1,14 +1,18 @@
 # Correcteur
 
-Correcteur d'orthographe français pour Windows qui **respecte votre façon d'écrire**.
+Correcteur d'orthographe français pour Windows qui **respecte votre façon
+d'écrire**.
 
 Sélectionnez du texte, appuyez sur `Ctrl+Alt+C`, le texte corrigé remplace la
 sélection. Aucune fenêtre, aucun clic, aucun copier-coller manuel.
 
+**Un seul fichier**, `Correcteur.exe` : ni Python, ni Java, ni compte, ni clé
+d'API. Tout fonctionne hors ligne — aucun texte n'est envoyé sur Internet.
+
 ## Pourquoi celui-ci plutôt que Reverso
 
 Les correcteurs classiques appliquent les normes du **français écrit soutenu**.
-Sur un message Discord, le résultat est artificiel :
+Sur un message Discord, le résultat sonne faux :
 
 | Vous écrivez | Reverso propose | Correcteur |
 |---|---|---|
@@ -16,77 +20,60 @@ Sur un message Discord, le résultat est artificiel :
 | `y a personne` | ~~il n'y a personne~~ | `y a personne` |
 | `faut que j'y aille` | ~~il faut que j'y aille~~ | `faut que j'y aille` |
 | `c'est pas grave` | ~~ce n'est pas grave~~ | `c'est pas grave` |
-| `dsl` | ~~ADSL~~ | `dsl` |
+| `c'est quoi ce truc` | ~~qu'est-ce que c'est~~ | `c'est quoi ce truc` |
+| `dsl`, `tkt`, `wsh` | ~~ADSL~~ | `dsl`, `tkt`, `wsh` |
 
 « J'ai pas » n'est pas une faute, c'est du français parlé. Cet outil corrige
-les **fautes** — accords, conjugaisons, accents, homonymes — et laisse le
+les **fautes** — accents, accords, conjugaison, homonymes — et laisse le
 **registre** tranquille.
 
 | Vous écrivez | Correcteur |
 |---|---|
 | `je sais pas si sa va marcher` | `je sais pas si ça va marcher` |
 | `ils on mangé tout les gateaux` | `ils ont mangé tous les gâteaux` |
-| `Les filles sont venu hier` | `Les filles sont venues hier` |
 | `ca ma pris 2 heures` | `ça m'a pris 2 heures` |
 | `Est ce que tu peut venir` | `Est-ce que tu peux venir` |
-
-Tout fonctionne **hors ligne et gratuitement**. Aucun texte n'est envoyé sur
-Internet, aucun compte, aucune clé d'API.
+| `cest vraiment tres interressant se truc` | `c'est vraiment très intéressant ce truc` |
+| `tas vu ou est passé mon telephone` | `t'as vu où est passé mon téléphone` |
+| `jai pas compris se que tu dit` | `j'ai pas compris ce que tu dis` |
+| `elles sont venu hier mes elles sont reparties tot` | `elles sont venues hier mais elles sont reparties tôt` |
+| `je vais mangé un truc` | `je vais manger un truc` |
+| `ils mange trop` | `ils mangent trop` |
 
 ## Installation
 
-1. Installez **Python** depuis [python.org](https://www.python.org/downloads/)
-   en cochant *Add Python to PATH*.
-2. Double-cliquez sur **`installer.bat`** et patientez.
-3. Double-cliquez sur **`Correcteur.vbs`**.
+Téléchargez **`Correcteur.exe`** depuis l'onglet
+[Releases](../../releases) et double-cliquez dessus.
 
-Une icône bleue apparaît près de l'horloge : l'outil est actif.
-
-L'installateur télécharge Java automatiquement s'il est absent — vous n'avez
-rien à installer vous-même. Comptez ~300 Mo au total (Java + dictionnaire
-français), une seule fois.
+Une icône bleue apparaît près de l'horloge : l'outil est actif. C'est tout —
+il n'y a rien d'autre à installer.
 
 ### Démarrage automatique avec Windows
 
-Clic droit sur l'icône → **Lancer au démarrage de Windows**. C'est tout.
+Clic droit sur l'icône → **Lancer au démarrage de Windows**.
 
 L'entrée est inscrite dans votre propre session (`HKCU\...\Run`), sans droits
-administrateur, et se retire par le même menu. Si vous déplacez ensuite le
-dossier de l'application, elle corrige le chemin toute seule au lancement
-suivant.
+administrateur, et se retire par le même menu. Si vous déplacez ensuite
+l'exécutable, il corrige le chemin tout seul au lancement suivant.
 
-En ligne de commande : `python -m correcteur --demarrage on` (ou `off`, ou
-`etat`).
-
-## Exécutable autonome
-
-Pour obtenir une version qui ne demande **ni Python ni Java** sur la machine
-de destination :
-
-```
-installer.bat          (une fois, pour préparer l'environnement)
-construire_exe.bat
-```
-
-Le résultat est dans `dist\Correcteur\` : un dossier déplaçable contenant
-`Correcteur.exe`, le moteur Java et le dictionnaire français. Copiez-le où
-vous voulez — y compris sur une clé USB — lancez `Correcteur.exe`, puis
-activez le démarrage automatique depuis l'icône.
-
-Le format est un dossier plutôt qu'un fichier unique parce que l'ensemble
-pèse ~300 Mo : un exécutable unique devrait tout ré-extraire à chaque
-démarrage. Le dossier ne contient qu'un seul fichier cliquable et démarre
-instantanément.
+En ligne de commande : `Correcteur.exe --demarrage on` (ou `off`, ou `etat`).
 
 ## Utilisation
+
+**Partout**, c'est le raccourci :
 
 1. Écrivez votre message, dans n'importe quelle application.
 2. Sélectionnez-le (`Ctrl+A` suffit dans un champ de saisie).
 3. `Ctrl+Alt+C`.
 
 Le texte corrigé remplace la sélection et une notification résume ce qui a
-changé. Un clic droit sur l'icône permet de mettre l'outil en pause ou
-d'ouvrir les réglages.
+changé.
+
+**Pour relire un texte avant de l'envoyer**, clic droit sur l'icône →
+*Ouvrir la fenêtre*. Collez, `Ctrl+Entrée`, le texte corrigé s'affiche avec la
+liste des corrections.
+
+Le clic droit permet aussi de mettre l'outil en pause ou d'ouvrir les réglages.
 
 ## Réglages
 
@@ -106,8 +93,8 @@ Deux règles sont désactivées d'origine car elles relèvent du goût :
 
 ```json
 "regles_optionnelles": {
-  "UPPERCASE_SENTENCE_START": false,   // majuscule en début de phrase
-  "PONCTUATION_POINT": false           // point final manquant
+  "MAJUSCULE_PHRASE": false,     // majuscule en début de phrase
+  "PONCTUATION_POINT": false     // point final manquant
 }
 ```
 
@@ -121,72 +108,130 @@ Passez-les à `true` pour les activer.
 
 ## Ce que l'outil ne touche jamais
 
+- Le registre parlé : négations sans « ne », `y a`, `faut que`, `ça`, `c'est quoi`
 - Les liens, adresses e-mail, mentions `@pseudo`, salons `#general`
 - Les blocs de code entre backticks et les spoilers `||...||`
 - Les emojis `:joy:` et les emojis Discord personnalisés
 - L'emphase volontaire : `ouiiii`, `mdrrrr`, `nooon`
 - L'argot d'Internet : `dsl`, `tkt`, `jsp`, `wsh`, `askip`… (~150 mots)
-- Tout mot contenant un chiffre
+- Les mots anglais courants : `the game`, `check this out` (~380 mots)
+- Les sigles en capitales, les noms propres et tout mot contenant un chiffre
+
+## Comment ça marche
+
+Aucune bibliothèque de correction, aucun serveur : le moteur tient dans trois
+fichiers Python et un dictionnaire.
+
+| Couche | Fichier | Rôle |
+|---|---|---|
+| Protection | `correcteur/regles.py` | Ce qui sort du circuit avant examen |
+| Grammaire | `correcteur/grammaire.py` | 24 règles de contexte : homonymes, accords, conjugaison |
+| Orthographe | `correcteur/lexique.py` | 450 000 formes françaises, accents et fautes de frappe |
+
+### L'orthographe
+
+Le dictionnaire est indexé par **squelette** : la graphie du mot privée de ses
+accents. `gateaux`, `gâteaux` et `gâteâux` partagent le squelette `gateaux`.
+Un mot inconnu se corrige alors en deux temps :
+
+1. **même squelette** — il ne manquait que les accents : `tres` → `très`,
+   `deja` → `déjà`, `coeur` → `cœur` ;
+2. **squelette à une frappe d'écart** — il y avait aussi une faute de frappe :
+   `interressant` → `intéressant`, `anniverssaire` → `anniversaire`.
+
+On ne devine jamais : on fabrique des candidats et on ne garde que ceux qui
+existent. Quand deux candidats sont aussi plausibles l'un que l'autre — `prés`
+et `près`, `élève` et `élevé` — une liste de fréquences les départage, et si
+elle ne tranche pas nettement, **le mot est laissé tel quel**.
+
+### La grammaire
+
+Le dictionnaire ne voit pas les fautes où les deux graphies existent :
+`sa va`, `ils on mangé`, `j'ai manger`. Vingt-quatre règles regardent les mots
+voisins pour trancher, et chacune ne se déclenche que sur un contexte où
+l'autre lecture est impossible :
+
+| On corrige | On ne touche pas |
+|---|---|
+| `sa va` → `ça va` | `sa mère est venue` |
+| `ils on mangé` → `ils ont mangé` | `on mange à midi` |
+| `j'ai manger` → `j'ai mangé` | `j'ai été manger dehors` |
+| `tout les jours` → `tous les jours` | `tout le monde est là` |
+| `des enfant` → `des enfants` | `je les mange` |
+| `tas vu` → `t'as vu` | `un tas de trucs` |
+| `je vais a la gare` → `à la gare` | `il a la flemme` |
+
+Le principe, partout : **mieux vaut sous-corriger que corrompre**. Un message
+qui garde une faute reste lisible ; un message mal corrigé ne l'est plus.
 
 ## En ligne de commande
 
 ```
-python -m correcteur --texte "je sais pas si sa va marcher"
-python -m correcteur --verifier      # contrôle Java, moteur et réglages
-python -m correcteur --demarrage on  # se lance avec Windows (on/off/etat)
-python -m correcteur --console       # sans icône, journal en console
-python -m correcteur --config        # chemin du fichier de réglages
+Correcteur.exe --texte "je sais pas si sa va marcher"
+Correcteur.exe --fenetre        # ouvre la fenêtre de correction
+Correcteur.exe --verifier       # contrôle dictionnaire, correction et réglages
+Correcteur.exe --demarrage on   # se lance avec Windows (on/off/etat)
+Correcteur.exe --console        # sans icône, journal en console
+Correcteur.exe --config         # chemin du fichier de réglages
 ```
 
-`--verifier` est le premier réflexe si quelque chose ne fonctionne pas : il
-affiche la version de Java détectée, teste une correction réelle et indique
-l'état du démarrage automatique.
+`--verifier` est le premier réflexe si quelque chose ne fonctionne pas.
 
-## Comment il évite de dégrader vos messages
-
-LanguageTool, le moteur linguistique, propose parfois des corrections pires
-que la faute d'origine : `mangé` → `mangait` (qui n'existe pas), `ta fini` →
-`te finir`, `ceter` → `ce ter`. Trois garde-fous filtrent ces propositions :
-
-1. **Validation lexicale** — un mot proposé qui n'est pas au dictionnaire est
-   rejeté.
-2. **Interdiction de re-découpage** — une suggestion qui change le nombre de
-   mots est rejetée, sauf si elle ne fait qu'ajouter une apostrophe ou un
-   trait d'union.
-3. **Changements cosmétiques uniquement** sur les groupes de plusieurs mots —
-   accents, apostrophes, terminaisons d'accord. Les réécritures sont écartées.
-
-Le principe : **mieux vaut sous-corriger que corrompre**. Un message qui
-garde une faute reste lisible ; un message mal corrigé ne l'est plus.
+Depuis les sources, remplacez `Correcteur.exe` par `python -m correcteur`.
 
 ## Développement
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest tests/ -q
+python -m pytest tests/ -q          # ~130 tests, moins d'une seconde
+python -m correcteur --texte "sa va ?"
 ```
 
-`tests/test_moteur.py` simule LanguageTool et teste la logique de filtrage
-(instantané). `tests/test_integration.py` valide le comportement réel contre
-le vrai moteur (~50 s).
+Sous Windows, `installer.bat` prépare l'environnement et `Correcteur.vbs`
+lance l'outil sans fenêtre noire.
 
-`tests/test_demarrage.py` et `tests/test_java.py` simulent respectivement le
-registre Windows et l'environnement Java : toute la suite tourne sur
-n'importe quel système.
+### Fabriquer l'exécutable
+
+```
+construire_exe.bat
+```
+
+Le résultat est `dist\Correcteur.exe` : un fichier unique d'une vingtaine de
+mégaoctets, dictionnaire compris.
+
+C'est aussi ce que fait GitHub à chaque envoi, sur n'importe quelle branche
+([`.github/workflows/executable.yml`](.github/workflows/executable.yml)) :
+l'exécutable est construit sur une machine Windows, testé, puis déposé dans
+l'onglet *Actions* — et publié dans les *Releases* sur un tag `v*`.
+
+### Régénérer le dictionnaire
+
+Les fichiers de `donnees/` sont livrés prêts à l'emploi. Ils ne se
+reconstruisent que si le dictionnaire Hunspell change :
+
+```bash
+python outils/construire_lexique.py
+```
+
+Origine et licences des données : [`donnees/LICENCES.md`](donnees/LICENCES.md).
+Le dictionnaire français vient de [Dicollecte](https://grammalecte.net/)
+(MPL 2.0), la liste de fréquences de
+[wordfreq](https://github.com/rspeer/wordfreq) (Apache 2.0).
 
 ## Structure
 
 | Fichier | Rôle |
 |---|---|
-| `correcteur/regles.py` | Quelles règles ignorer, quels mots protéger |
-| `correcteur/moteur.py` | Filtrage des suggestions et garde-fous |
+| `correcteur/lexique.py` | Dictionnaire, candidats, décision |
+| `correcteur/grammaire.py` | Règles de contexte |
+| `correcteur/regles.py` | Mots et motifs protégés, règles optionnelles |
+| `correcteur/moteur.py` | Assemblage des trois couches |
 | `correcteur/app.py` | Enchaînement sélection → correction → collage |
 | `correcteur/presse_papier.py` | Capture de la sélection via le presse-papiers |
 | `correcteur/raccourci.py` | Raccourci clavier global |
 | `correcteur/interface.py` | Icône dans la zone de notification |
+| `correcteur/fenetre.py` | Fenêtre de correction (tkinter) |
 | `correcteur/config.py` | Lecture et écriture des réglages |
-| `correcteur/java.py` | Localisation de Java (portable, `JAVA_HOME`, `PATH`) |
 | `correcteur/demarrage.py` | Lancement automatique via le registre Windows |
-| `correcteur/chemins.py` | Emplacements selon le mode (sources, `.exe`, portable) |
-| `outils/installer_java.ps1` | Téléchargement d'un Java portable |
-| `outils/assembler.py` | Assemblage de la distribution autonome |
+| `correcteur/chemins.py` | Emplacements selon le mode (sources, `.exe`) |
+| `outils/construire_lexique.py` | Fabrication des fichiers de `donnees/` |

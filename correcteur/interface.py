@@ -58,6 +58,20 @@ class InterfaceBarre:
             "Correcteur", "Correction activee" if actif else "Correction en pause"
         )
 
+    def _ouvrir_fenetre(self, _icone=None, _element=None) -> None:
+        """Ouvre la fenetre de correction dans un processus a part.
+
+        pystray occupe deja la boucle d'evenements du processus ; tkinter
+        exige la sienne. Les faire cohabiter est une source de blocages, un
+        second processus n'en est pas une.
+        """
+        commande = ([sys.executable, "--fenetre"] if getattr(sys, "frozen", False)
+                    else [sys.executable, "-m", "correcteur", "--fenetre"])
+        try:
+            subprocess.Popen(commande)
+        except OSError as e:
+            self.notifier("Fenetre", f"Ouverture impossible : {e}")
+
     def _ouvrir_config(self, _icone=None, _element=None) -> None:
         chemin = config_mod.chemin_config()
         config_mod.charger()  # cree le fichier s'il manque
@@ -98,6 +112,8 @@ class InterfaceBarre:
                 lambda _: "Mettre en pause" if self.app.actif else "Reprendre",
                 self._basculer,
             ),
+            pystray.MenuItem("Ouvrir la fenêtre", self._ouvrir_fenetre,
+                             default=True),
             pystray.MenuItem("Ouvrir les reglages", self._ouvrir_config),
             pystray.MenuItem(
                 "Lancer au demarrage de Windows",

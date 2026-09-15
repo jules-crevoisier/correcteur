@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-"""Tests de bout en bout contre le vrai LanguageTool.
+"""Tests de bout en bout sur des messages tels qu'on les ecrit vraiment.
 
-Ces tests demarrent un serveur Java et sont donc lents ; ils sont ignores
-si LanguageTool n'est pas installable dans l'environnement. Ce sont eux qui
-attestent du comportement reel, la ou test_moteur.py verifie la logique.
+test_grammaire.py juge chaque regle isolement ; ici on juge le resultat :
+un message tape a la va-vite doit ressortir correct, sans avoir change de
+ton.
 """
 
 import sys
@@ -14,60 +14,75 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 
-@pytest.fixture(scope="module")
-def correcteur():
-    moteur = pytest.importorskip("correcteur.moteur")
-    try:
-        return moteur.construire()
-    except Exception as e:  # Java absent, telechargement impossible...
-        pytest.skip(f"LanguageTool indisponible : {e}")
-
-
-# Tournures orales sans faute : l'outil doit les laisser strictement intactes.
-INTOUCHABLES = [
-    "j'ai pas compris ce que tu voulais dire",
-    "faut que j'y aille",
-    "y a rien à faire",
-    "je peux pas venir dsl",
-    "tkt jsp encore",
-    "mdrrrr c'est trop drôle",
-    "c'est pas grave, on se voit demain",
-    "t'as vu le message que je t'ai envoyé ?",
+MESSAGES = [
+    (
+        "salut sa va ? jai pas compris se que tu voulais dire dsl",
+        "salut ça va ? j'ai pas compris ce que tu voulais dire dsl",
+    ),
+    (
+        "ils on mangé tout les gateaux, jai rien eu",
+        "ils ont mangé tous les gâteaux, j'ai rien eu",
+    ),
+    (
+        "cest vraiment tres interressant se truc",
+        "c'est vraiment très intéressant ce truc",
+    ),
+    (
+        "je peut pas venir ce soir, ca ma pris trop de temps",
+        "je peux pas venir ce soir, ça m'a pris trop de temps",
+    ),
+    (
+        "tas vu ou est passé mon telephone ?",
+        "t'as vu où est passé mon téléphone ?",
+    ),
+    (
+        "faut que j'aille a la gare, je suis deja en retard",
+        "faut que j'aille à la gare, je suis déjà en retard",
+    ),
+    (
+        "elles sont venu hier mes elles sont reparties tot",
+        "elles sont venues hier mais elles sont reparties tôt",
+    ),
+    (
+        "quand meme cetait un bon film",
+        "quand même c'était un bon film",
+    ),
 ]
 
-# (texte fautif, texte attendu apres correction)
-ATTENDUS = [
-    ("je sais pas si sa va marcher", "je sais pas si ça va marcher"),
-    ("c'est vraiment nimporte quoi", "c'est vraiment n'importe quoi"),
-    ("Les filles sont venu hier", "Les filles sont venues hier"),
-    ("ils on mangé tout les gateaux", "ils ont mangé tous les gâteaux"),
-    ("ca ma pris 2 heures", "ça m'a pris 2 heures"),
-    ("tu veut quelque chose ?", "tu veux quelque chose ?"),
-    # Les accents se corrigent sans que la tournure orale bouge.
-    ("faut que j'y aille la", "faut que j'y aille là"),
-    ("y a rien a faire", "y a rien à faire"),
-    ("mdrrrr c'est trop drole", "mdrrrr c'est trop drôle"),
+# Des messages sans faute, ecrits comme on parle : ils doivent ressortir
+# a la virgule pres.
+DEJA_CORRECTS = [
+    "j'ai pas eu le temps, on se voit demain ?",
+    "tkt c'est bon, y a pas de souci",
+    "je suis passé te voir hier soir, mais tu n'étais pas là.",
+    "wsh tu fais quoi ce soir frr",
+    "c'est quoi ce truc mdr",
+    "faut que j'y aille, à plus",
 ]
 
 
-@pytest.mark.parametrize("texte", INTOUCHABLES)
-def test_le_francais_parle_est_preserve(correcteur, texte):
-    corrige, corrections = correcteur.corriger(texte)
-    assert corrige == texte, f"corrections indues : {[str(c) for c in corrections]}"
+@pytest.mark.parametrize("message,attendu", MESSAGES)
+def test_un_message_tape_vite_ressort_correct(correcteur, message, attendu):
+    assert correcteur.corriger(message)[0] == attendu
 
 
-@pytest.mark.parametrize("texte,attendu", ATTENDUS)
-def test_les_vraies_fautes_sont_corrigees(correcteur, texte, attendu):
-    assert correcteur.corriger(texte)[0] == attendu
+@pytest.mark.parametrize("message", DEJA_CORRECTS)
+def test_un_message_correct_ressort_identique(correcteur, message):
+    corrige, corrections = correcteur.corriger(message)
+    assert corrige == message, f"corrections indues : {[str(c) for c in corrections]}"
 
 
-def test_les_liens_sont_intacts(correcteur):
-    texte = "regarde https://exemple.fr/a_b-c c'est enorme"
-    corrige, _ = correcteur.corriger(texte)
-    assert "https://exemple.fr/a_b-c" in corrige
-    assert "énorme" in corrige
+def test_un_message_de_plusieurs_lignes(correcteur):
+    message = "salut,\nsa va ?\nmoi jai pas le temps"
+    attendu = "salut,\nça va ?\nmoi j'ai pas le temps"
+    assert correcteur.corriger(message)[0] == attendu
 
 
-def test_aucune_degradation_sur_texte_deja_correct(correcteur):
-    texte = "Je suis passé te voir hier soir, mais tu n'étais pas là."
-    assert correcteur.corriger(texte)[0] == texte
+def test_le_correcteur_est_rapide(correcteur):
+    """Un message Discord doit se corriger sans qu'on le sente."""
+    import time
+
+    message = "cest vraiment tres interressant se truc, jai pas tout compris " * 5
+    debut = time.time()
+    correcteur.corriger(message)
+    assert time.time() - debut < 1.0

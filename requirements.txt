@@ -1,5 +1,5 @@
-# Moteur linguistique (telecharge LanguageTool au premier lancement)
-language-tool-python>=2.8
+# Le moteur de correction n'a besoin de rien : le dictionnaire francais est
+# livre dans « donnees », et tout le reste tient dans la bibliotheque standard.
 
 # Presse-papiers et raccourci clavier global
 pyperclip>=1.8

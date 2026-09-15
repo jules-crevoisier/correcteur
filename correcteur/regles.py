@@ -2,110 +2,33 @@
 """Politique de correction : ce qu'on corrige, ce qu'on laisse tranquille.
 
 Le principe directeur : on corrige les *fautes*, jamais le *registre*.
-« j'ai pas » est du français parlé correct, pas une erreur. LanguageTool,
-comme Reverso, applique par défaut les normes du francais ecrit soutenu ;
-tout ce module sert a desactiver cette couche-la.
+« j'ai pas » est du français parlé correct, pas une erreur. Reverso et les
+correcteurs classiques appliquent les normes du français écrit soutenu ; ce
+module et `grammaire.py` s'entendent pour ne jamais le faire.
+
+Concrètement, aucune règle du correcteur ne touche à :
+
+    j'ai pas compris          (la négation parlée, sans « ne »)
+    y a personne              (« il y a » réduit à « y a »)
+    faut que j'y aille        (le sujet impersonnel omis)
+    c'est quoi ce truc        (l'interrogation orale)
+    ça marche                 (« ça » n'est pas remplacé par « cela »)
+    dispo, frigo, bcp         (les abréviations)
+    ouiiii, mdrrrr            (l'emphase)
+
+Ce fichier liste en plus les mots et les motifs auxquels le correcteur ne
+doit toucher sous aucun prétexte, et les deux règles de mise en forme qu'il
+laisse désactivées par défaut.
 """
 
 # ---------------------------------------------------------------------------
-# Categories entierement ecartees.
-#
-# Ces categories de LanguageTool ne signalent pas des fautes mais des ecarts
-# par rapport au francais formel : familiarites, anglicismes, regionalismes,
-# repetitions stylistiques. Sur un message Discord, elles n'ont aucun sens.
+# Regles desactivees par defaut, que l'utilisateur peut activer depuis la
+# configuration (cle « regles_optionnelles »).
 # ---------------------------------------------------------------------------
-CATEGORIES_IGNOREES = {
-    # « y a », « c'est eux qu'ont fait », « parle-moi pas »... 
-    # Cette categorie est presque integralement du maintien de registre.
-    "CAT_TOURS_CRITIQUES",
-    # « totalement » -> « completement », « ca sera » -> « cela sera »...
-    "STYLE",
-    # « tres tres » signale comme familier.
-    "REPETITIONS_STYLE",
-    # « dispo » -> « disponible », « c'est quoi » -> « qu'est-ce que »...
-    "CAT_REGLES_DE_BASE",
-    # Pleonasmes : question de style, pas d'orthographe.
-    "CAT_PLEONASMES",
-    # « smooth », « momentum »... on ne fait pas la police de l'anglicisme.
-    "CAT_ANGLICISMES_FOREIGN_TERMS",
-    "CAT_CALQUES",
-    # Regionalismes et archaismes : ce n'est pas une faute d'ecrire « cenne ».
-    "CAT_REGIONALISMES",
-    "CAT_ARCHAISMES",
-    # Marques de commerce : « frigo » -> « refrigerateur ». Non.
-    "CAT_MARQUES_DE_COMMERCE",
-    # Coherence semantique : trop de faux positifs sur du texte court.
-    "SEMANTICS",
-    # Ponctuation stylistique (virgules « manquantes », etc.).
-    "PONCTUATION_VIRGULE",
-    "PONCTUATION_STYLE_OS",
-}
-
-# ---------------------------------------------------------------------------
-# Regles ecartees une par une.
-#
-# Celles-ci vivent dans des categories qu'on veut garder (la grammaire, la
-# typographie) mais qui imposent malgre tout le registre soutenu.
-# ---------------------------------------------------------------------------
-REGLES_IGNOREES = {
-    # LE coupable principal : « j'ai pas » -> « je n'ai pas ».
-    # C'est exactement le comportement que Reverso impose.
-    "P_V_PAS",
-    # « faut que j'y aille » -> « il faut que j'y aille ».
-    "IL_FAUT",
-    # « c'est pas grave » -> « ce n'est pas grave ».
-    "NE_IMP_PAS",
-    # « y a » -> « il y a » (doublon de CAT_TOURS_CRITIQUES, par securite).
-    "IL_Y_A",
-    "Y_APOSTROPHE",
-    "Y_EN_A",
-    "Y_DOIVENT",
-    "Y_A",
-    "Y_AVAIT",
-    # Negations partielles : meme logique que P_V_PAS.
-    "NEGATION_PLUS",
-    "NEGATION_QUE",
-    "NEGATION_PERSONNE",
-    "NEGATION_NULLE_PART",
-    "ON_N_A",
-    # « je m'excuse » -> « excusez-moi » : lecon de politesse, pas une faute.
-    "JE_M_EXCUSE",
-    # Abreviations jugees familieres.
-    "DET_ABREGE",
-    "QQ",
-    "WE",
-    "DISPO",
-    # Structures interrogatives orales : « tu viens ? », « c'est quoi ? ».
-    "QUESTION_REGISTRE_SOUTENU",
-    "QU_EST_CE_QUE",
-    "QUOI_VERBE_INTERROGATION",
-    "QUOI_FAIRE",
-    "POSER_UNE_QUESTION",
-    "C_EST_QUOI",
-    # « ca » juge familier face a « cela ».
-    "CA_CE",
-    # Mots repetes pour l'emphase : « non non non », « tres tres bien ».
-    "FRENCH_WORD_REPEAT_RULE",
-    "REP_TRES",
-    "REP_OUI",
-    "REP_NON",
-    "REP_JUSTE",
-    # « tas » pour « t'as ».
-    "CONFUSION_TU_AS",
-    "BARBARISME_TU",
-    # Espaces insecables avant ? ! : ; — corrects en typographie francaise
-    # mais ils s'affichent mal sur Discord et cassent parfois le collage.
-    "UNPAIRED_BRACKETS",
-    "FRENCH_WHITESPACE",
-    "FRENCH_WHITESPACE_STRICT",
-}
-
-# Regles desactivees par defaut mais que l'utilisateur peut reactiver
-# depuis la configuration (cle « regles_optionnelles »).
 REGLES_OPTIONNELLES = {
-    # Met une majuscule en debut de phrase. Propre, mais certains preferent
-    # garder leur style tout-minuscules sur Discord.
-    "UPPERCASE_SENTENCE_START": False,
+    # Met une majuscule en debut de phrase. Propre, mais beaucoup de gens
+    # tiennent a leur style tout-minuscules sur Discord.
+    "MAJUSCULE_PHRASE": False,
     # Ajoute le point final manquant.
     "PONCTUATION_POINT": False,
 }
@@ -113,9 +36,9 @@ REGLES_OPTIONNELLES = {
 # ---------------------------------------------------------------------------
 # Lexique a proteger.
 #
-# LanguageTool ne connait pas l'argot d'Internet et propose des remplacements
-# absurdes : « dsl » -> « ADSL », « mdr » -> « mdr » introuvable, etc.
-# Tout mot de cette liste est immunise contre les regles d'orthographe.
+# Aucun dictionnaire ne connait l'argot d'Internet, et les suggestions qu'il
+# inspire sont absurdes : « dsl » -> « dol », « tkt » -> « tket ». Tout mot de
+# cette liste sort du circuit avant meme d'etre examine.
 # ---------------------------------------------------------------------------
 LEXIQUE_PROTEGE = {
     # Abreviations courantes
@@ -141,6 +64,69 @@ LEXIQUE_PROTEGE = {
     # Formes contractees frequentes
     "chuis", "chais", "ouais", "ouaip", "nan", "bah", "ben", "hein", "euh",
     "hmm", "pff", "yes", "yep", "nope", "ok", "okay",
+}
+
+# ---------------------------------------------------------------------------
+# Mots anglais.
+#
+# Un message ecrit en francais en contient toujours quelques-uns, et le
+# dictionnaire francais les prend pour des fautes : « the » deviendrait
+# « thé », « can » deviendrait « c'an ». Seuls figurent ici les mots anglais
+# qui ne sont pas aussi des mots francais — « site », « table » ou « long »
+# n'ont pas besoin d'etre proteges, et « son » doit rester corrigible.
+# ---------------------------------------------------------------------------
+LEXIQUE_ANGLAIS = {
+    "above", "account", "across", "activity", "add", "all", "also",
+    "although", "always", "amazing", "and", "any", "anyone", "anything",
+    "anywhere", "app", "appear", "area", "arm", "around", "ask", "at",
+    "awesome", "back", "because", "become", "been", "before", "begin",
+    "behind", "being", "believe", "below", "beside", "best", "between",
+    "book", "branch", "bring", "bro", "browser", "buy", "by", "can",
+    "card", "care", "check", "child", "city", "class", "click", "college",
+    "come", "community", "company", "consider", "control", "could",
+    "cover", "crazy", "create", "cut", "day", "death", "decision",
+    "delete", "deploy", "development", "did", "difference", "director",
+    "disk", "does", "doing", "door", "download", "drug", "dude", "during",
+    "early", "easy", "edit", "education", "effect", "empty", "end",
+    "even", "evening", "event", "everyone", "everything", "everywhere",
+    "experience", "eye", "fact", "fake", "fall", "false", "family",
+    "fast", "father", "feature", "feel", "field", "first", "fix",
+    "folder", "follow", "form", "free", "friend", "from", "funny", "game",
+    "get", "give", "going", "got", "government", "great", "ground",
+    "group", "grow", "guy", "guys", "had", "hand", "happen", "has",
+    "hate", "he", "head", "health", "hear", "heart", "help", "her",
+    "here", "him", "his", "history", "hope", "host", "hour", "how",
+    "however", "idea", "include", "install", "interest", "into", "is",
+    "it", "its", "just", "keep", "kid", "kill", "kind", "know", "last",
+    "late", "law", "lead", "learn", "leave", "level", "life", "line",
+    "link", "list", "little", "load", "logout", "lose", "make", "many",
+    "market", "matter", "maybe", "mean", "meet", "member", "memory",
+    "merge", "might", "mind", "model", "money", "month", "morning",
+    "most", "mother", "move", "much", "music", "my", "name", "near",
+    "need", "network", "never", "next", "nice", "night", "nobody", "not",
+    "nothing", "now", "number", "of", "offer", "old", "one", "only",
+    "other", "others", "our", "over", "own", "paper", "party", "password",
+    "pay", "payment", "perfect", "person", "play", "player", "please",
+    "policy", "power", "president", "price", "problem", "program",
+    "project", "provide", "push", "reach", "read", "real", "really",
+    "reason", "receive", "relationship", "remain", "remember", "remove",
+    "research", "result", "right", "road", "role", "room", "run", "said",
+    "save", "say", "says", "school", "season", "see", "seem", "send",
+    "sense", "server", "setup", "share", "she", "ship", "side", "since",
+    "sit", "so", "society", "some", "someone", "something", "somewhere",
+    "sorry", "space", "speak", "spend", "start", "stay", "story",
+    "student", "study", "stuff", "system", "take", "talk", "tax", "teach",
+    "teacher", "team", "than", "thank", "thanks", "that", "the", "their",
+    "them", "then", "there", "therefore", "these", "they", "things",
+    "think", "this", "though", "through", "time", "to", "today",
+    "tomorrow", "tonight", "tool", "town", "true", "turn", "two", "under",
+    "understand", "unless", "until", "up", "update", "upload", "very",
+    "view", "voice", "wait", "walk", "want", "war", "was", "watch",
+    "water", "way", "we", "website", "week", "weird", "welcome", "well",
+    "were", "what", "when", "where", "which", "while", "who", "whom",
+    "whose", "why", "wife", "will", "win", "with", "within", "without",
+    "woman", "word", "work", "world", "worst", "would", "write", "wrong",
+    "yeah", "year", "yes", "yesterday", "you", "young", "your",
 }
 
 # Prefixes/motifs qu'on ne touche jamais, ou qu'on protege integralement.

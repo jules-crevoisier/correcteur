@@ -1,3 +1,8 @@
 -r requirements.txt
 pytest>=7.0
 pyinstaller>=6.0
+
+# Uniquement pour regenerer donnees/ avec outils/construire_lexique.py.
+# Le dictionnaire etant livre avec le projet, ces deux-la sont facultatifs.
+spylls>=0.1.7
+wordfreq>=3.0
