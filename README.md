@@ -1,13 +1,14 @@
-# Correcteur
+# Papote
 
 Correcteur d'orthographe français pour Windows qui **respecte votre façon
-d'écrire**.
+d'écrire**. Il s'appelle Papote parce qu'il est fait pour la conversation,
+pas pour la dissertation.
 
 Il corrige **pendant que vous tapez**, dans n'importe quelle application. Rien
 à sélectionner, aucun raccourci à retenir : vous écrivez `sa va`, il écrit
 `ça va`. Une correction vous déplaît ? `Ctrl+Alt+Z` la défait.
 
-**Un seul fichier**, `Correcteur.exe` : ni Python, ni Java, ni compte, ni clé
+**Un seul fichier**, `Papote.exe` : ni Python, ni Java, ni compte, ni clé
 d'API. Tout fonctionne hors ligne — aucun texte n'est envoyé sur Internet.
 
 ## Pourquoi celui-ci plutôt que Reverso
@@ -15,7 +16,7 @@ d'API. Tout fonctionne hors ligne — aucun texte n'est envoyé sur Internet.
 Les correcteurs classiques appliquent les normes du **français écrit soutenu**.
 Sur un message Discord, le résultat sonne faux :
 
-| Vous écrivez | Reverso propose | Correcteur |
+| Vous écrivez | Reverso propose | Papote |
 |---|---|---|
 | `j'ai pas compris` | ~~je n'ai pas compris~~ | `j'ai pas compris` |
 | `y a personne` | ~~il n'y a personne~~ | `y a personne` |
@@ -28,7 +29,7 @@ Sur un message Discord, le résultat sonne faux :
 les **fautes** — accents, accords, conjugaison, homonymes — et laisse le
 **registre** tranquille.
 
-| Vous écrivez | Correcteur |
+| Vous écrivez | Papote |
 |---|---|
 | `je sais pas si sa va marcher` | `je sais pas si ça va marcher` |
 | `ils on mangé tout les gateaux` | `ils ont mangé tous les gâteaux` |
@@ -43,13 +44,18 @@ les **fautes** — accents, accords, conjugaison, homonymes — et laisse le
 
 ## Installation
 
-Téléchargez **`Correcteur.exe`** depuis l'onglet
+Téléchargez **`Papote.exe`** depuis l'onglet
 [Releases](../../releases) — la dernière version est tout en haut — et
 double-cliquez dessus.
 
 Windows affichera un avertissement SmartScreen au premier lancement :
 l'exécutable n'est pas signé numériquement. *Informations complémentaires* →
 *Exécuter quand même*.
+
+> L'outil s'est appelé **Correcteur** jusqu'à la version 1.0. Si vous l'aviez
+> déjà installé, vos réglages et votre dictionnaire sont repris tels quels au
+> premier lancement de Papote, et l'ancienne entrée de démarrage automatique
+> est remplacée par la nouvelle. L'ancien `Correcteur.exe` peut être supprimé.
 
 Une icône bleue apparaît près de l'horloge : l'outil est actif. C'est tout —
 il n'y a rien d'autre à installer.
@@ -63,7 +69,7 @@ L'entrée est inscrite dans votre propre session (`HKCU\...\Run`), sans droits
 administrateur, et se retire par le même menu. Si vous déplacez ensuite
 l'exécutable, il corrige le chemin tout seul au lancement suivant.
 
-En ligne de commande : `Correcteur.exe --demarrage on` (ou `off`, ou `etat`).
+En ligne de commande : `Papote.exe --demarrage on` (ou `off`, ou `etat`).
 
 ## Utilisation
 
@@ -155,7 +161,7 @@ Une touche seule est refusée : elle partirait chaque fois que vous l'écrivez.
 Les touches de fonction (`F1` à `F12`) font exception, elles ne servent à rien
 d'autre.
 
-Le fichier reste lisible dans `%APPDATA%\Correcteur\config.json` si vous y
+Le fichier reste lisible dans `%APPDATA%\Papote\config.json` si vous y
 tenez ; l'application le relit toute seule dans les deux secondes.
 
 ## Mises à jour
@@ -196,11 +202,11 @@ quelques fichiers Python et un dictionnaire.
 
 | Couche | Fichier | Rôle |
 |---|---|---|
-| Vos remplacements | `correcteur/config.py` | Ce que vous lui avez appris passe avant tout |
-| Protection | `correcteur/regles.py` | Ce qui sort du circuit avant examen |
-| Grammaire | `correcteur/grammaire.py` | 24 règles de contexte : homonymes, accords, conjugaison |
-| Orthographe | `correcteur/lexique.py` | 450 000 formes françaises, accents et fautes de frappe |
-| Frappe | `correcteur/frappe.py` | Suit ce que vous tapez et décide quand intervenir |
+| Vos remplacements | `papote/config.py` | Ce que vous lui avez appris passe avant tout |
+| Protection | `papote/regles.py` | Ce qui sort du circuit avant examen |
+| Grammaire | `papote/grammaire.py` | 24 règles de contexte : homonymes, accords, conjugaison |
+| Orthographe | `papote/lexique.py` | 450 000 formes françaises, accents et fautes de frappe |
+| Frappe | `papote/frappe.py` | Suit ce que vous tapez et décide quand intervenir |
 
 ### La correction au fil de la frappe
 
@@ -259,33 +265,33 @@ qui garde une faute reste lisible ; un message mal corrigé ne l'est plus.
 ## En ligne de commande
 
 ```
-Correcteur.exe --texte "je sais pas si sa va marcher"
-Correcteur.exe --fenetre        # ouvre la fenêtre de correction
-Correcteur.exe --verifier       # contrôle dictionnaire, correction et réglages
-Correcteur.exe --maj            # cherche une nouvelle version et la télécharge
-Correcteur.exe --demarrage on   # se lance avec Windows (on/off/etat)
-Correcteur.exe --console        # sans icône, journal en console
-Correcteur.exe --config         # chemin du fichier de réglages
+Papote.exe --texte "je sais pas si sa va marcher"
+Papote.exe --fenetre        # ouvre la fenêtre de correction
+Papote.exe --verifier       # contrôle dictionnaire, correction et réglages
+Papote.exe --maj            # cherche une nouvelle version et la télécharge
+Papote.exe --demarrage on   # se lance avec Windows (on/off/etat)
+Papote.exe --console        # sans icône, journal en console
+Papote.exe --config         # chemin du fichier de réglages
 ```
 
 `--verifier` est le premier réflexe si quelque chose ne fonctionne pas.
 
 Ces commandes écrivent dans le terminal qui les a lancées. Lancé d'un
-double-clic, `Correcteur.exe` n'affiche rien et se contente d'apparaître près
+double-clic, `Papote.exe` n'affiche rien et se contente d'apparaître près
 de l'horloge : c'est une application de zone de notification, pas un
 programme en ligne de commande.
 
-Depuis les sources, remplacez `Correcteur.exe` par `python -m correcteur`.
+Depuis les sources, remplacez `Papote.exe` par `python -m papote`.
 
 ## Développement
 
 ```bash
 pip install -r requirements-dev.txt
 python -m pytest tests/ -q          # ~220 tests, moins d'une seconde
-python -m correcteur --texte "sa va ?"
+python -m papote --texte "sa va ?"
 ```
 
-Sous Windows, `installer.bat` prépare l'environnement et `Correcteur.vbs`
+Sous Windows, `installer.bat` prépare l'environnement et `Papote.vbs`
 lance l'outil sans fenêtre noire.
 
 ### Fabriquer l'exécutable
@@ -294,7 +300,7 @@ lance l'outil sans fenêtre noire.
 construire_exe.bat
 ```
 
-Le résultat est `dist\Correcteur.exe` : un fichier unique d'une vingtaine de
+Le résultat est `dist\Papote.exe` : un fichier unique d'une vingtaine de
 mégaoctets, dictionnaire compris.
 
 C'est aussi ce que fait GitHub à chaque envoi, sur n'importe quelle branche
@@ -303,13 +309,13 @@ l'exécutable est construit sur une machine Windows, testé, puis déposé dans
 l'onglet *Actions*.
 
 Sur `main`, il est en plus publié dans les *Releases*, sous un numéro calculé
-tout seul : `majeur.mineur` vient de `SERIE` dans `correcteur/__init__.py`, le
+tout seul : `majeur.mineur` vient de `SERIE` dans `papote/__init__.py`, le
 dernier nombre est le nombre de commits. Chaque envoi donne donc une version
 de plus, sans jamais retomber sur la même, et il n'y a aucun tag à poser à la
 main. Pour ouvrir une nouvelle série — `v1.1.x` — il suffit de changer `SERIE`.
 
 Le numéro est inscrit dans le code avant la compilation
-(`correcteur/version_compilee.py`, ignoré par git) : c'est ainsi que
+(`papote/version_compilee.py`, ignoré par git) : c'est ainsi que
 l'exécutable sait, plus tard, qu'une version plus récente est parue.
 
 ### Régénérer le dictionnaire
@@ -330,18 +336,18 @@ Le dictionnaire français vient de [Dicollecte](https://grammalecte.net/)
 
 | Fichier | Rôle |
 |---|---|
-| `correcteur/lexique.py` | Dictionnaire, candidats, décision |
-| `correcteur/grammaire.py` | Règles de contexte |
-| `correcteur/regles.py` | Mots et motifs protégés, règles optionnelles |
-| `correcteur/moteur.py` | Assemblage des trois couches |
-| `correcteur/app.py` | Enchaînement sélection → correction → collage |
-| `correcteur/presse_papier.py` | Capture de la sélection via le presse-papiers |
-| `correcteur/interface.py` | Icône dans la zone de notification |
-| `correcteur/fenetre.py` | Fenêtre : corriger, dictionnaire, réglages (tkinter) |
-| `correcteur/frappe.py` | Correction au fil de la frappe et annulation |
-| `correcteur/maj.py` | Recherche, téléchargement et mise en place des versions |
-| `correcteur/raccourci.py` | Raccourcis globaux et lecture des combinaisons |
-| `correcteur/config.py` | Lecture, migration et écriture des réglages |
-| `correcteur/demarrage.py` | Lancement automatique via le registre Windows |
-| `correcteur/chemins.py` | Emplacements selon le mode (sources, `.exe`) |
+| `papote/lexique.py` | Dictionnaire, candidats, décision |
+| `papote/grammaire.py` | Règles de contexte |
+| `papote/regles.py` | Mots et motifs protégés, règles optionnelles |
+| `papote/moteur.py` | Assemblage des trois couches |
+| `papote/app.py` | Enchaînement sélection → correction → collage |
+| `papote/presse_papier.py` | Capture de la sélection via le presse-papiers |
+| `papote/interface.py` | Icône dans la zone de notification |
+| `papote/fenetre.py` | Fenêtre : corriger, dictionnaire, réglages (tkinter) |
+| `papote/frappe.py` | Correction au fil de la frappe et annulation |
+| `papote/maj.py` | Recherche, téléchargement et mise en place des versions |
+| `papote/raccourci.py` | Raccourcis globaux et lecture des combinaisons |
+| `papote/config.py` | Lecture, migration et écriture des réglages |
+| `papote/demarrage.py` | Lancement automatique via le registre Windows |
+| `papote/chemins.py` | Emplacements selon le mode (sources, `.exe`) |
 | `outils/construire_lexique.py` | Fabrication des fichiers de `donnees/` |

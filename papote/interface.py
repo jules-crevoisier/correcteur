@@ -87,7 +87,7 @@ class InterfaceBarre:
         actif = self.app.basculer_correction_auto()
         icone.title = self._titre()
         self.notifier(
-            "Correcteur",
+            "Papote",
             "Le texte se corrige pendant que vous écrivez." if actif
             else "La correction automatique est coupée ; le raccourci reste actif.",
         )
@@ -100,7 +100,7 @@ class InterfaceBarre:
         icone.icon = _icone(actif)
         icone.title = self._titre()
         self.notifier(
-            "Correcteur", "Correction activée" if actif else "Correction en pause"
+            "Papote", "Correction activée" if actif else "Correction en pause"
         )
 
     def _basculer_demarrage(self, _icone, _element) -> None:
@@ -121,10 +121,10 @@ class InterfaceBarre:
 
     def _titre(self) -> str:
         if not self.app.actif:
-            return "Correcteur (en pause)"
+            return "Papote (en pause)"
         if self.app.correction_auto:
-            return "Correcteur — corrige pendant que vous écrivez"
-        return f"Correcteur — {self.app.config['raccourci']}"
+            return "Papote — corrige pendant que vous écrivez"
+        return f"Papote — {self.app.config['raccourci']}"
 
     # -- reglages modifies depuis la fenetre --------------------------------
 
@@ -192,7 +192,7 @@ class InterfaceBarre:
             pystray.MenuItem("Quitter", self._quitter),
         )
         self.icone = pystray.Icon(
-            "correcteur", _icone(True), self._titre(), menu
+            "papote", _icone(True), self._titre(), menu
         )
         self.app.demarrer()
         self.app.prechauffer()

@@ -17,11 +17,11 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from correcteur import maj  # noqa: E402
+from papote import maj  # noqa: E402
 
 
-def publication(tag="v1.0.20", nom="Correcteur.exe",
-                adresse="https://github.com/x/y/releases/download/v1.0.20/Correcteur.exe",
+def publication(tag="v1.0.20", nom="Papote.exe",
+                adresse="https://github.com/x/y/releases/download/v1.0.20/Papote.exe",
                 empreinte=None):
     return json.dumps({
         "tag_name": tag,
@@ -51,8 +51,8 @@ def github(monkeypatch):
 
 @pytest.fixture
 def installe(monkeypatch, tmp_path):
-    """Fait croire au module qu'il tourne depuis un Correcteur.exe."""
-    executable = tmp_path / "Correcteur.exe"
+    """Fait croire au module qu'il tourne depuis un Papote.exe."""
+    executable = tmp_path / "Papote.exe"
     executable.write_bytes(b"MZ ancien executable")
     monkeypatch.setattr(maj, "compilee", lambda: True)
     monkeypatch.setattr(maj, "dossier", lambda: tmp_path)
@@ -80,11 +80,11 @@ def test_comparaison_des_versions(candidate, reference, attendu):
 def test_la_derniere_version_est_lue(github):
     version = maj.derniere_version()
     assert version.numero == "v1.0.20"
-    assert version.adresse.endswith("Correcteur.exe")
+    assert version.adresse.endswith("Papote.exe")
 
 
 def test_une_adresse_qui_n_est_pas_en_https_est_refusee(github):
-    github["json"] = publication(adresse="http://ailleurs.example/Correcteur.exe")
+    github["json"] = publication(adresse="http://ailleurs.example/Papote.exe")
     with pytest.raises(maj.MiseAJourImpossible):
         maj.derniere_version()
 

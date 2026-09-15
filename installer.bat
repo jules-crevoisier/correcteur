@@ -4,7 +4,7 @@ setlocal
 cd /d "%~dp0"
 
 echo ================================================
-echo   Installation du Correcteur
+echo   Installation de Papote
 echo ================================================
 echo.
 
@@ -27,14 +27,14 @@ call .venv\Scripts\python.exe -m pip install -r requirements.txt --quiet
 if errorlevel 1 ( echo [X] Echec. & pause & exit /b 1 )
 
 echo [3/3] Verification...
-call .venv\Scripts\python.exe -m correcteur --verifier
+call .venv\Scripts\python.exe -m papote --verifier
 if errorlevel 1 ( echo [X] Echec. & pause & exit /b 1 )
 
 echo.
 echo ================================================
 echo   Installation terminee.
 echo.
-echo   Lancez "Correcteur.vbs" pour demarrer.
+echo   Lancez "Papote.vbs" pour demarrer.
 echo   Raccourci par defaut : Ctrl+Alt+C
 echo.
 echo   Pour qu'il demarre avec Windows : clic droit sur

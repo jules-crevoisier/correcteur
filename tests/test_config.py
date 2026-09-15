@@ -9,7 +9,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from correcteur import config as config_mod  # noqa: E402
+from papote import config as config_mod  # noqa: E402
 
 
 @pytest.fixture
@@ -76,3 +76,39 @@ def test_l_ecriture_est_relisible(reglages):
 def test_l_ecriture_ne_laisse_pas_de_fichier_provisoire(reglages):
     config_mod.sauvegarder(config_mod.DEFAUTS)
     assert list(reglages.parent.glob("*.tmp")) == []
+
+
+def test_les_reglages_de_l_ancien_nom_sont_repris(tmp_path, monkeypatch):
+    """L'outil s'appelait « Correcteur » : on ne perd pas ce qu'il savait."""
+    monkeypatch.setattr(config_mod, "_base_config", lambda: tmp_path)
+    monkeypatch.setattr(config_mod, "dossier_config", lambda: tmp_path / "Papote")
+
+    ancien = tmp_path / config_mod.ANCIEN_DOSSIER
+    ancien.mkdir()
+    (ancien / "config.json").write_text(json.dumps({
+        "raccourci": "f9",
+        "lexique_perso": ["Kayn"],
+        "remplacements_perso": {"ptetre": "peut-être"},
+    }), encoding="utf-8")
+
+    config = config_mod.charger()
+    assert config["raccourci"] == "f9"
+    assert config["mots_perso"] == ["Kayn"]
+    assert config["remplacements_perso"] == {"ptetre": "peut-être"}
+    # Et ils sont desormais ecrits sous le nouveau nom.
+    assert (tmp_path / "Papote" / "config.json").exists()
+
+
+def test_les_reglages_deja_migres_ne_sont_pas_ecrases(tmp_path, monkeypatch):
+    monkeypatch.setattr(config_mod, "_base_config", lambda: tmp_path)
+    monkeypatch.setattr(config_mod, "dossier_config", lambda: tmp_path / "Papote")
+
+    ancien = tmp_path / config_mod.ANCIEN_DOSSIER
+    ancien.mkdir()
+    (ancien / "config.json").write_text('{"raccourci": "f9"}', encoding="utf-8")
+
+    nouveau = tmp_path / "Papote"
+    nouveau.mkdir()
+    (nouveau / "config.json").write_text('{"raccourci": "f8"}', encoding="utf-8")
+
+    assert config_mod.charger()["raccourci"] == "f8"

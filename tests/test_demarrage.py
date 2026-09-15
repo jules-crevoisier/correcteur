@@ -11,7 +11,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from correcteur import demarrage  # noqa: E402
+from papote import demarrage  # noqa: E402
 
 
 class FauxRegistre:
@@ -84,7 +84,7 @@ def test_la_commande_est_entre_guillemets(sous_windows):
 
 def test_synchroniser_repare_un_chemin_obsolete(sous_windows):
     """Deplacer l'application ne doit pas casser le demarrage automatique."""
-    registre = FauxRegistre({demarrage.NOM_VALEUR: r'"C:\ancien\Correcteur.exe"'})
+    registre = FauxRegistre({demarrage.NOM_VALEUR: r'"C:\ancien\Papote.exe"'})
     assert demarrage.synchroniser(registre) is True
     assert registre.valeurs[demarrage.NOM_VALEUR] == demarrage.commande_lancement()
 
@@ -103,3 +103,22 @@ def test_hors_windows_rien_ne_seffectue(monkeypatch):
     assert demarrage.actif(registre) is False
     with pytest.raises(RuntimeError):
         demarrage.activer(registre)
+
+
+def test_l_entree_de_l_ancien_nom_est_reprise(sous_windows):
+    """L'outil s'appelait « Correcteur » : son lancement automatique suit."""
+    registre = FauxRegistre({demarrage.ANCIEN_NOM: "ancienne commande"})
+    assert demarrage.actif(registre)
+
+    demarrage.synchroniser(registre)
+    assert registre.lire(demarrage.ANCIEN_NOM) is None
+    assert registre.lire(demarrage.NOM_VALEUR) == demarrage.commande_lancement()
+
+
+def test_desactiver_efface_aussi_l_ancienne_entree(sous_windows):
+    registre = FauxRegistre({
+        demarrage.NOM_VALEUR: "commande",
+        demarrage.ANCIEN_NOM: "ancienne commande",
+    })
+    demarrage.desactiver(registre)
+    assert not demarrage.actif(registre)

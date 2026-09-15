@@ -92,7 +92,7 @@ class Application:
                     correcteur = moteur.depuis_config(self.config)
                     correcteur.prechauffer()
                     self._correcteur = correcteur
-                    self.journal("Correcteur pret.")
+                    self.journal("Papote pret.")
         return self._correcteur
 
     @property
@@ -127,7 +127,7 @@ class Application:
                 self.notifier("Dictionnaire introuvable", str(e).split("\n")[0])
             except Exception:
                 self.journal(traceback.format_exc())
-                self.notifier("Correcteur indisponible",
+                self.notifier("Papote indisponible",
                               "Le dictionnaire n'a pas pu etre charge.")
 
         threading.Thread(target=_demarrer, daemon=True).start()
@@ -323,7 +323,7 @@ class Application:
             pass
         self._activer_raccourcis()
         self.journal(
-            f"Correcteur actif. Raccourci : {self.config['raccourci']} · "
+            f"Papote actif. Raccourci : {self.config['raccourci']} · "
             f"annuler : {self.config['raccourci_annuler']}"
         )
         if self.config.get("verifier_maj", True):

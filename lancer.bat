@@ -5,4 +5,4 @@ if not exist ".venv\Scripts\python.exe" (
     pause
     exit /b 1
 )
-call .venv\Scripts\pythonw.exe -m correcteur
+call .venv\Scripts\pythonw.exe -m papote

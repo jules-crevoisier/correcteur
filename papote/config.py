@@ -64,13 +64,20 @@ RENOMMAGES_REGLES = {
 }
 
 
-def dossier_config() -> Path:
-    """%APPDATA%\\Correcteur sous Windows, ~/.config/correcteur ailleurs."""
+# L'application s'est appelee « Correcteur » jusqu'a la version 1.0 : ses
+# reglages sont repris au premier lancement sous le nouveau nom.
+ANCIEN_DOSSIER = "Correcteur"
+
+
+def _base_config() -> Path:
     if os.name == "nt":
-        base = Path(os.environ.get("APPDATA", Path.home()))
-    else:
-        base = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
-    return base / "Correcteur"
+        return Path(os.environ.get("APPDATA", Path.home()))
+    return Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+
+
+def dossier_config() -> Path:
+    """%APPDATA%\\Papote sous Windows, ~/.config/Papote ailleurs."""
+    return _base_config() / "Papote"
 
 
 def chemin_config() -> Path:
@@ -110,9 +117,29 @@ def _migrer(charges: dict) -> dict:
     return migre
 
 
+def _reprendre_anciens_reglages() -> dict | None:
+    """Les reglages ecrits du temps ou l'application s'appelait autrement."""
+    ancien = _base_config() / ANCIEN_DOSSIER / "config.json"
+    if not ancien.is_file():
+        return None
+    try:
+        with ancien.open(encoding="utf-8") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return None
+
+
 def charger() -> dict:
     """Lit la configuration, en creant le fichier au premier lancement."""
     chemin = chemin_config()
+
+    if not chemin.exists():
+        anciens = _reprendre_anciens_reglages()
+        if anciens is not None:
+            config = _fusionner(DEFAUTS, _migrer(anciens))
+            sauvegarder(config)
+            return config
+
     if not chemin.exists():
         sauvegarder(DEFAUTS)
         return dict(DEFAUTS)

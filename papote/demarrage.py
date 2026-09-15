@@ -16,7 +16,12 @@ from pathlib import Path
 from .chemins import racine_application
 
 CLE_RUN = r"Software\Microsoft\Windows\CurrentVersion\Run"
-NOM_VALEUR = "Correcteur"
+NOM_VALEUR = "Papote"
+
+# L'application s'est appelee « Correcteur » jusqu'a la version 1.0 : son
+# entree au registre est reprise, puis effacee, pour ne pas laisser derriere
+# nous un lancement automatique qui pointe dans le vide.
+ANCIEN_NOM = "Correcteur"
 
 
 class Registre:
@@ -82,7 +87,9 @@ def commande_lancement() -> str:
 def actif(registre: Registre | None = None) -> bool:
     if not disponible():
         return False
-    return (registre or Registre()).lire(NOM_VALEUR) is not None
+    registre = registre or Registre()
+    return (registre.lire(NOM_VALEUR) is not None
+            or registre.lire(ANCIEN_NOM) is not None)
 
 
 def activer(registre: Registre | None = None) -> str:
@@ -91,15 +98,19 @@ def activer(registre: Registre | None = None) -> str:
         raise RuntimeError(
             "Le demarrage automatique n'est gere que sous Windows."
         )
+    registre = registre or Registre()
     commande = commande_lancement()
-    (registre or Registre()).ecrire(NOM_VALEUR, commande)
+    registre.ecrire(NOM_VALEUR, commande)
+    registre.supprimer(ANCIEN_NOM)
     return commande
 
 
 def desactiver(registre: Registre | None = None) -> None:
     if not disponible():
         return
-    (registre or Registre()).supprimer(NOM_VALEUR)
+    registre = registre or Registre()
+    registre.supprimer(NOM_VALEUR)
+    registre.supprimer(ANCIEN_NOM)
 
 
 def basculer(registre: Registre | None = None) -> bool:
@@ -123,7 +134,11 @@ def synchroniser(registre: Registre | None = None) -> bool:
     registre = registre or Registre()
     existante = registre.lire(NOM_VALEUR)
     if existante is None:
-        return False
+        # Rien sous le nouveau nom : peut-etre l'ancien est-il encore la.
+        if registre.lire(ANCIEN_NOM) is None:
+            return False
+        registre.supprimer(ANCIEN_NOM)
+        existante = None
     attendue = commande_lancement()
     if existante != attendue:
         registre.ecrire(NOM_VALEUR, attendue)

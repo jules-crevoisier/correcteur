@@ -10,8 +10,8 @@ Le remplacement suit le detour habituel sous Windows : on ne peut pas
 ecraser un fichier en cours d'execution, mais on peut le *renommer*. La mise
 a jour se fait donc en trois temps, au tout debut du demarrage :
 
-    Correcteur.exe        -> Correcteur.ancien.exe
-    Correcteur.nouveau.exe -> Correcteur.exe
+    Papote.exe        -> Papote.ancien.exe
+    Papote.nouveau.exe -> Papote.exe
     on relance, et on rend la main
 
 Rien de tout cela ne concerne l'execution depuis les sources : `git pull`
@@ -35,12 +35,12 @@ from . import __version__
 # On ne telecharge que d'ici, et que ce fichier-la.
 DEPOT = "jules-crevoisier/correcteur"
 ADRESSE = f"https://api.github.com/repos/{DEPOT}/releases/latest"
-NOM_ATTENDU = "Correcteur.exe"
+NOM_ATTENDU = "Papote.exe"
 
 DELAI = 15  # secondes
 
-NOUVEAU = "Correcteur.nouveau.exe"
-ANCIEN = "Correcteur.ancien.exe"
+NOUVEAU = "Papote.nouveau.exe"
+ANCIEN = "Papote.ancien.exe"
 
 
 class MiseAJourImpossible(RuntimeError):
@@ -81,7 +81,7 @@ def plus_recente(candidate: str, reference: str) -> bool:
 
 
 def compilee() -> bool:
-    """Tourne-t-on depuis Correcteur.exe, ou depuis les sources ?"""
+    """Tourne-t-on depuis Papote.exe, ou depuis les sources ?"""
     return bool(getattr(sys, "frozen", False))
 
 
@@ -99,7 +99,7 @@ def derniere_version() -> Version:
         ADRESSE,
         headers={
             "Accept": "application/vnd.github+json",
-            "User-Agent": f"Correcteur/{__version__}",
+            "User-Agent": f"Papote/{__version__}",
         },
     )
     try:
@@ -161,7 +161,7 @@ def telecharger(version: Version, destination: Path | None = None) -> Path:
     provisoire = cible.with_suffix(".partiel")
 
     requete = urllib.request.Request(
-        version.adresse, headers={"User-Agent": f"Correcteur/{__version__}"}
+        version.adresse, headers={"User-Agent": f"Papote/{__version__}"}
     )
     try:
         with urllib.request.urlopen(requete, timeout=DELAI) as reponse, \
@@ -240,7 +240,7 @@ def installer_maintenant(version: Version) -> Path:
     """Telecharge tout de suite ; la mise en place attend le redemarrage."""
     if not compilee():
         raise MiseAJourImpossible(
-            "la mise a jour automatique ne concerne que Correcteur.exe ; "
+            "la mise a jour automatique ne concerne que Papote.exe ; "
             "depuis les sources, un « git pull » suffit."
         )
     return telecharger(version)
