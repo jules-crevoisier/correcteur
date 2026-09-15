@@ -43,7 +43,12 @@ les **fautes** — accents, accords, conjugaison, homonymes — et laisse le
 ## Installation
 
 Téléchargez **`Correcteur.exe`** depuis l'onglet
-[Releases](../../releases) et double-cliquez dessus.
+[Releases](../../releases) — la dernière version est tout en haut — et
+double-cliquez dessus.
+
+Windows affichera un avertissement SmartScreen au premier lancement :
+l'exécutable n'est pas signé numériquement. *Informations complémentaires* →
+*Exécuter quand même*.
 
 Une icône bleue apparaît près de l'horloge : l'outil est actif. C'est tout —
 il n'y a rien d'autre à installer.
@@ -207,7 +212,14 @@ mégaoctets, dictionnaire compris.
 C'est aussi ce que fait GitHub à chaque envoi, sur n'importe quelle branche
 ([`.github/workflows/executable.yml`](.github/workflows/executable.yml)) :
 l'exécutable est construit sur une machine Windows, testé, puis déposé dans
-l'onglet *Actions* — et publié dans les *Releases* sur un tag `v*`.
+l'onglet *Actions*.
+
+Sur `main`, il est en plus publié dans les *Releases*, sous un numéro calculé
+tout seul : `majeur.mineur` vient de `__version__` dans
+`correcteur/__init__.py`, le dernier nombre est le nombre de commits. Chaque
+envoi donne donc une version de plus, sans jamais retomber sur la même, et il
+n'y a aucun tag à poser à la main. Pour ouvrir une nouvelle série — `v1.1.x` —
+il suffit de changer `__version__`.
 
 ### Régénérer le dictionnaire
 
