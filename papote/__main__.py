@@ -156,9 +156,7 @@ def main(argv: list[str] | None = None) -> int:
         return _relire(app, args.relecture)
 
     if args.fenetre:
-        from .fenetre import Fenetre
-        Fenetre(app).lancer()
-        return 0
+        return _ouvrir_fenetre(app)
 
     if args.console:
         app.demarrer()
@@ -192,6 +190,24 @@ def _gerer_demarrage(action: str) -> int:
     else:
         demarrage.desactiver()
         print("Retire du demarrage de Windows.")
+    return 0
+
+
+def _ouvrir_fenetre(app) -> int:
+    """Ouvre la fenetre : celle en HTML, ou l'ancienne si le moteur manque.
+
+    Le moteur d'Edge est installe partout depuis Windows 10, mais « partout »
+    n'est pas « toujours » : une machine d'entreprise durcie, une version
+    ancienne, et il n'est pas la. Une fenetre qui refuse de s'ouvrir ne
+    laisse aucun moyen de dire pourquoi — l'ancienne, elle, s'ouvre.
+    """
+    from . import fenetre_web
+
+    if fenetre_web.disponible() and fenetre_web.ouvrir(app):
+        return 0
+
+    from .fenetre import Fenetre
+    Fenetre(app).lancer()
     return 0
 
 

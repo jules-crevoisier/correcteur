@@ -1,0 +1,713 @@
+/*
+  L'apparence de Papote.
+
+  Ce qui fait qu'une interface parait soignee tient a peu de choses, et ce
+  sont toujours les memes :
+
+  - une seule echelle de tailles, et on s'y tient ;
+  - des surfaces qui se distinguent par leur clarte, pas par des bordures.
+    Un trait a 6 % d'opacite se lit comme un pli du papier ; a 40 %, comme
+    une couture ;
+  - un seul rayon de coin par famille d'objets ;
+  - des transitions courtes, sur une courbe qui ralentit a l'arrivee. Le
+    mouvement lineaire a l'air mecanique ;
+  - le texte au repos n'est jamais blanc pur sur noir pur : le contraste
+    maximal fatigue et fait vibrer les caracteres.
+
+  Le theme suit celui de Windows. Les deux sont ecrits ici, et c'est le
+  systeme qui choisit.
+*/
+
+/* ==========================================================================
+   Jetons
+   ========================================================================== */
+
+:root {
+  --fond: #0e1014;
+  --fond-voile: rgba(14, 16, 20, 0.72);
+  --surface: #161922;
+  --surface-haute: #1e2230;
+  --surface-pressee: #121620;
+
+  --trait: rgba(255, 255, 255, 0.07);
+  --trait-net: rgba(255, 255, 255, 0.12);
+
+  --texte: #e9ebf0;
+  --texte-doux: #9aa2b6;
+  --texte-eteint: #667090;
+
+  --accent: #5b8cff;
+  --accent-vif: #7aa2ff;
+  --accent-sourd: rgba(91, 140, 255, 0.14);
+  --sur-accent: #0b1020;
+
+  --succes: #3ecf8e;
+  --succes-sourd: rgba(62, 207, 142, 0.14);
+  --alerte: #ffb454;
+  --alerte-sourd: rgba(255, 180, 84, 0.14);
+
+  --ombre: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.28);
+  --ombre-haute: 0 2px 6px rgba(0, 0, 0, 0.35), 0 18px 48px rgba(0, 0, 0, 0.42);
+
+  --rayon: 12px;
+  --rayon-petit: 8px;
+  --rayon-rond: 999px;
+
+  /* Elle ralentit fort a l'arrivee : c'est ce qui donne l'impression que
+     l'objet a un poids plutot que d'etre teleporte. */
+  --courbe: cubic-bezier(0.22, 1, 0.36, 1);
+  --vitesse: 180ms;
+
+  --rail: 232px;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --fond: #f6f7f9;
+    --fond-voile: rgba(246, 247, 249, 0.75);
+    --surface: #ffffff;
+    --surface-haute: #f0f2f6;
+    --surface-pressee: #e7eaf0;
+
+    --trait: rgba(9, 13, 25, 0.08);
+    --trait-net: rgba(9, 13, 25, 0.14);
+
+    --texte: #11151f;
+    --texte-doux: #5a6379;
+    --texte-eteint: #8d95a8;
+
+    --accent: #2f6bff;
+    --accent-vif: #1f57e8;
+    --accent-sourd: rgba(47, 107, 255, 0.10);
+    --sur-accent: #ffffff;
+
+    --succes: #129a63;
+    --succes-sourd: rgba(18, 154, 99, 0.10);
+    --alerte: #b56a00;
+    --alerte-sourd: rgba(181, 106, 0, 0.10);
+
+    --ombre: 0 1px 2px rgba(16, 24, 40, 0.06), 0 8px 24px rgba(16, 24, 40, 0.08);
+    --ombre-haute: 0 2px 6px rgba(16, 24, 40, 0.08),
+                   0 18px 48px rgba(16, 24, 40, 0.12);
+  }
+}
+
+/* ==========================================================================
+   Bases
+   ========================================================================== */
+
+* { box-sizing: border-box; }
+
+/* `hidden` est un attribut, pas une classe : la moindre regle qui pose un
+   `display` le bat, et l'element reste visible. C'est ce qui affichait
+   l'annonce de mise a jour meme lancé depuis les sources. */
+[hidden] { display: none !important; }
+
+html, body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+body {
+  background: var(--fond);
+  color: var(--texte);
+  /* Segoe UI Variable est la police de Windows 11 ; les suivantes servent
+     partout ailleurs. On ne telecharge rien : une police qui met une seconde
+     a arriver fait sauter toute la page. */
+  font-family: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI",
+               system-ui, -apple-system, "Inter", sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection { background: var(--accent-sourd); }
+
+/* Le defilement doit se voir sans encombrer. */
+* { scrollbar-width: thin; scrollbar-color: var(--trait-net) transparent; }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-thumb {
+  background: var(--trait-net);
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: var(--rayon-rond);
+}
+*::-webkit-scrollbar-thumb:hover { background-color: var(--texte-eteint);
+  background-clip: content-box; }
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--rayon-petit);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition-duration: 1ms !important; animation-duration: 1ms !important; }
+}
+
+/* ==========================================================================
+   Ossature
+   ========================================================================== */
+
+.cadre {
+  display: grid;
+  grid-template-columns: var(--rail) 1fr;
+  height: 100%;
+}
+
+/* En dessous, la colonne passe en bandeau horizontal : la fenetre reste
+   utilisable a la moitie de sa largeur. */
+@media (max-width: 720px) {
+  .cadre { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+}
+
+/* -------------------- la colonne -------------------- */
+
+.rail {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 12px;
+  background: var(--fond-voile);
+  backdrop-filter: blur(24px) saturate(160%);
+  border-right: 1px solid var(--trait);
+  overflow: hidden;
+}
+
+@media (max-width: 720px) {
+  .rail {
+    border-right: 0;
+    border-bottom: 1px solid var(--trait);
+    padding: 10px 12px;
+  }
+  .rail-pied { display: none; }
+}
+
+.marque {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 14px;
+}
+.marque-logo { display: flex; }
+.marque-logo svg { display: block; }
+.marque-texte { display: flex; flex-direction: column; line-height: 1.15; }
+.marque-texte strong { font-size: 15px; letter-spacing: -0.01em; }
+.marque-texte small { color: var(--texte-eteint); font-size: 11px; }
+
+nav { display: flex; flex-direction: column; gap: 2px; }
+
+@media (max-width: 720px) {
+  .marque { padding: 0 8px 10px; }
+  nav { flex-direction: row; overflow-x: auto; padding-bottom: 2px; }
+  nav .entree { white-space: nowrap; }
+}
+
+.entree {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--rayon-petit);
+  background: transparent;
+  color: var(--texte-doux);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--vitesse) var(--courbe),
+              color var(--vitesse) var(--courbe);
+}
+.entree svg { flex: none; opacity: 0.85; }
+.entree:hover { background: var(--surface-haute); color: var(--texte); }
+.entree[aria-current="page"] {
+  background: var(--accent-sourd);
+  color: var(--accent-vif);
+  font-weight: 600;
+}
+.entree[aria-current="page"] svg { opacity: 1; }
+
+.rail-pied { margin-top: auto; }
+
+.annonce {
+  background: var(--succes-sourd);
+  border: 1px solid var(--trait);
+  border-radius: var(--rayon);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  animation: surgir 320ms var(--courbe);
+}
+.annonce-titre { color: var(--succes); font-weight: 600; font-size: 13px; }
+.annonce-texte { margin: 0 0 4px; color: var(--texte-doux); font-size: 12px; }
+
+@keyframes surgir {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* -------------------- la zone de travail -------------------- */
+
+main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+
+.entete {
+  padding: 26px 32px 18px;
+  border-bottom: 1px solid var(--trait);
+}
+.entete h1 {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 600;
+  /* Un titre resserre se lit comme un titre ; a l'interlettrage du corps de
+     texte, il a l'air d'un paragraphe en gras. */
+  letter-spacing: -0.022em;
+}
+.entete p { margin: 3px 0 0; color: var(--texte-doux); }
+
+@media (max-width: 720px) {
+  .entete { padding: 18px 20px 14px; }
+  .entete h1 { font-size: 21px; }
+}
+
+.defile {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 22px 32px 40px;
+}
+@media (max-width: 720px) { .defile { padding: 16px 20px 32px; } }
+
+.page { display: none; flex-direction: column; gap: 18px; }
+.page.active { display: flex; animation: entrer 260ms var(--courbe); }
+
+@keyframes entrer {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.colonnes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 18px;
+  align-items: start;
+}
+
+/* ==========================================================================
+   Cartes
+   ========================================================================== */
+
+.carte {
+  background: var(--surface);
+  border: 1px solid var(--trait);
+  border-radius: var(--rayon);
+  padding: 18px 20px;
+  box-shadow: var(--ombre);
+}
+.carte h2 {
+  margin: 0 0 2px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+.aide {
+  margin: 0 0 14px;
+  color: var(--texte-doux);
+  font-size: 12.5px;
+  max-width: 62ch;
+}
+.carte h2 + .aide { margin-top: 6px; }
+
+/* ==========================================================================
+   L'editeur
+   ========================================================================== */
+
+.editeur {
+  background: var(--surface);
+  border: 1px solid var(--trait);
+  border-radius: var(--rayon);
+  box-shadow: var(--ombre);
+  overflow: hidden;
+  transition: border-color var(--vitesse) var(--courbe),
+              box-shadow var(--vitesse) var(--courbe);
+}
+.editeur:focus-within {
+  border-color: var(--accent);
+  box-shadow: var(--ombre), 0 0 0 3px var(--accent-sourd);
+}
+
+#champ {
+  display: block;
+  width: 100%;
+  min-height: 210px;
+  max-height: 46vh;
+  resize: vertical;
+  padding: 18px 20px;
+  border: 0;
+  background: transparent;
+  color: var(--texte);
+  font: inherit;
+  font-size: 15px;
+  line-height: 1.65;
+}
+#champ:focus { outline: none; }
+#champ::placeholder { color: var(--texte-eteint); }
+
+.editeur-barre {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--trait);
+  background: var(--surface-haute);
+}
+.pousse { flex: 1; }
+.compteur { color: var(--texte-eteint); font-size: 12px;
+  font-variant-numeric: tabular-nums; }
+
+/* ==========================================================================
+   Boutons
+   ========================================================================== */
+
+.bouton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border: 1px solid var(--trait-net);
+  border-radius: var(--rayon-petit);
+  background: var(--surface);
+  color: var(--texte);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--vitesse) var(--courbe),
+              border-color var(--vitesse) var(--courbe),
+              transform 90ms var(--courbe);
+}
+.bouton:hover { background: var(--surface-haute); border-color: var(--texte-eteint); }
+/* Deux pixels d'enfoncement : assez pour que le clic se sente, trop peu pour
+   qu'on le remarque. */
+.bouton:active { transform: translateY(1px); background: var(--surface-pressee); }
+.bouton[disabled] { opacity: 0.5; cursor: default; transform: none; }
+
+.bouton.principal {
+  background: var(--accent);
+  border-color: transparent;
+  color: var(--sur-accent);
+  font-weight: 600;
+}
+.bouton.principal:hover { background: var(--accent-vif); border-color: transparent; }
+.bouton.discret {
+  background: transparent;
+  border-color: transparent;
+  color: var(--texte-doux);
+}
+.bouton.discret:hover { background: var(--surface-haute); color: var(--texte); }
+.bouton.etroit { justify-content: center; width: 100%; }
+.bouton.minuscule { padding: 4px 9px; font-size: 12px; }
+
+kbd {
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.16);
+  font: inherit;
+  font-size: 11px;
+  opacity: 0.9;
+}
+
+/* ==========================================================================
+   Saisies
+   ========================================================================== */
+
+.saisie { display: flex; gap: 8px; align-items: center; margin-bottom: 14px; }
+.saisie input { flex: 1; min-width: 0; }
+.fleche { color: var(--texte-eteint); }
+
+input[type="text"], input:not([type]) {
+  padding: 7px 11px;
+  border: 1px solid var(--trait-net);
+  border-radius: var(--rayon-petit);
+  background: var(--surface-haute);
+  color: var(--texte);
+  font: inherit;
+  font-size: 13px;
+  transition: border-color var(--vitesse) var(--courbe),
+              box-shadow var(--vitesse) var(--courbe);
+}
+input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-sourd);
+}
+input::placeholder { color: var(--texte-eteint); }
+
+/* ==========================================================================
+   Listes
+   ========================================================================== */
+
+.jetons { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0;
+  list-style: none; }
+.jeton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px 4px 11px;
+  border: 1px solid var(--trait);
+  border-radius: var(--rayon-rond);
+  background: var(--surface-haute);
+  font-size: 12.5px;
+  animation: surgir 220ms var(--courbe);
+}
+.jeton button {
+  display: grid;
+  place-items: center;
+  width: 17px; height: 17px;
+  border: 0;
+  border-radius: var(--rayon-rond);
+  background: transparent;
+  color: var(--texte-eteint);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background var(--vitesse) var(--courbe),
+              color var(--vitesse) var(--courbe);
+}
+.jeton button:hover { background: var(--alerte-sourd); color: var(--alerte); }
+
+.lignes { margin: 0; padding: 0; list-style: none;
+  display: flex; flex-direction: column; }
+.lignes li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 2px;
+  border-bottom: 1px solid var(--trait);
+  font-size: 13px;
+  animation: surgir 220ms var(--courbe);
+}
+.lignes li:last-child { border-bottom: 0; }
+.lignes .pousse { flex: 1; }
+.lignes code {
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: var(--surface-haute);
+  font-family: "Cascadia Code", "Consolas", ui-monospace, monospace;
+  font-size: 12px;
+}
+
+.vide { color: var(--texte-eteint); font-size: 12.5px; font-style: italic;
+  padding: 6px 2px; }
+
+/* ==========================================================================
+   Corrections et mots inconnus
+   ========================================================================== */
+
+.corrections {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.correction {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 5px 11px;
+  border-radius: var(--rayon-rond);
+  background: var(--succes-sourd);
+  font-size: 12.5px;
+  animation: surgir 240ms var(--courbe) backwards;
+}
+.correction del { color: var(--texte-eteint); text-decoration: line-through; }
+.correction ins { color: var(--succes); text-decoration: none; font-weight: 600; }
+
+.inconnus { display: flex; flex-direction: column; gap: 8px; }
+.inconnu {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  padding: 10px 14px;
+  background: var(--surface);
+  border: 1px solid var(--trait);
+  border-radius: var(--rayon);
+  animation: surgir 240ms var(--courbe) backwards;
+}
+.inconnu-mot { font-weight: 600; }
+.inconnu-mot::after { content: " →"; color: var(--texte-eteint);
+  font-weight: 400; }
+
+/* ==========================================================================
+   Interrupteurs et segments
+   ========================================================================== */
+
+.ligne-action {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--trait);
+}
+.ligne-action:last-child { border-bottom: 0; }
+.ligne-action > div:first-child { flex: 1; min-width: 0; }
+.ligne-titre { font-size: 13.5px; }
+.ligne-action .aide { margin: 1px 0 0; font-size: 12px; }
+
+.bascule {
+  position: relative;
+  flex: none;
+  width: 40px; height: 23px;
+  border: 0;
+  border-radius: var(--rayon-rond);
+  background: var(--surface-pressee);
+  box-shadow: inset 0 0 0 1px var(--trait-net);
+  cursor: pointer;
+  transition: background var(--vitesse) var(--courbe);
+}
+.bascule::after {
+  content: "";
+  position: absolute;
+  top: 3px; left: 3px;
+  width: 17px; height: 17px;
+  border-radius: var(--rayon-rond);
+  background: var(--texte-doux);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  transition: transform var(--vitesse) var(--courbe),
+              background var(--vitesse) var(--courbe);
+}
+.bascule[aria-checked="true"] { background: var(--accent);
+  box-shadow: inset 0 0 0 1px transparent; }
+.bascule[aria-checked="true"]::after { transform: translateX(17px);
+  background: #fff; }
+
+.segments {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--rayon-petit);
+  background: var(--surface-haute);
+  box-shadow: inset 0 0 0 1px var(--trait);
+}
+.segment {
+  padding: 6px 16px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--texte-doux);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background var(--vitesse) var(--courbe),
+              color var(--vitesse) var(--courbe);
+}
+.segment[aria-pressed="true"] {
+  background: var(--surface);
+  color: var(--texte);
+  font-weight: 600;
+  box-shadow: var(--ombre);
+}
+
+.raccourci-champ {
+  flex: none;
+  min-width: 132px;
+  justify-content: center;
+  font-family: "Cascadia Code", "Consolas", ui-monospace, monospace;
+  font-size: 12px;
+}
+.raccourci-champ.ecoute {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-sourd);
+}
+
+/* ==========================================================================
+   Vos fautes
+   ========================================================================== */
+
+.total {
+  font-size: 34px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+.total small { font-size: 14px; font-weight: 400; color: var(--texte-doux);
+  letter-spacing: 0; margin-left: 6px; }
+
+.barres { margin: 0 0 14px; padding: 0; list-style: none;
+  display: flex; flex-direction: column; gap: 7px; }
+.barres li { display: grid; grid-template-columns: 8.5rem 1fr auto;
+  align-items: center; gap: 10px; font-size: 13px; }
+.barres .mot { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.barres .piste { height: 7px; border-radius: var(--rayon-rond);
+  background: var(--surface-haute); overflow: hidden; }
+.barres .part {
+  height: 100%;
+  border-radius: var(--rayon-rond);
+  background: linear-gradient(90deg, var(--accent), var(--accent-vif));
+  transform-origin: left;
+  animation: pousser 520ms var(--courbe) backwards;
+}
+.barres .compte { color: var(--texte-doux); font-size: 12px;
+  font-variant-numeric: tabular-nums; }
+
+@keyframes pousser { from { transform: scaleX(0); } to { transform: none; } }
+
+/* ==========================================================================
+   Journal
+   ========================================================================== */
+
+.journal {
+  max-height: 190px;
+  overflow: auto;
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border-radius: var(--rayon-petit);
+  background: var(--surface-haute);
+  color: var(--texte-doux);
+  font-family: "Cascadia Code", "Consolas", ui-monospace, monospace;
+  font-size: 11.5px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.rangee { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ==========================================================================
+   Le mot de la fin
+   ========================================================================== */
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 26px;
+  transform: translate(-50%, 18px);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  max-width: min(560px, calc(100vw - 48px));
+  padding: 10px 18px;
+  border: 1px solid var(--trait);
+  border-radius: var(--rayon-rond);
+  background: var(--surface);
+  box-shadow: var(--ombre-haute);
+  font-size: 13px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 220ms var(--courbe), transform 220ms var(--courbe);
+}
+.toast.visible { opacity: 1; transform: translate(-50%, 0); }
+.toast::before {
+  content: "";
+  flex: none;
+  width: 7px; height: 7px;
+  border-radius: var(--rayon-rond);
+  background: var(--texte-eteint);
+}
+.toast.succes::before { background: var(--succes); }
+.toast.alerte::before { background: var(--alerte); }

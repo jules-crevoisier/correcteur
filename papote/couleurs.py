@@ -40,19 +40,3 @@ FAMILLE = "Segoe UI"
 
 def police(taille: int = 10, gras: bool = False) -> tuple:
     return (FAMILLE, taille, "bold") if gras else (FAMILLE, taille)
-
-
-def _largeur_texte(texte: str, taille: int, gras: bool) -> int:
-    """Largeur reelle du texte, pour dimensionner ce qu'on dessine autour."""
-    try:
-        mesure = tkfont.Font(family=FAMILLE, size=taille,
-                             weight="bold" if gras else "normal")
-        return mesure.measure(texte)
-    except tk.TclError:
-        # Pas de fenetre : une approximation vaut mieux qu'une exception.
-        return len(texte) * (taille - 2)
-
-
-
-def police(taille: int = 10, gras: bool = False) -> tuple:
-    return (FAMILLE, taille, "bold") if gras else (FAMILLE, taille)

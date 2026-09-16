@@ -8,3 +8,8 @@ keyboard>=0.13.5
 # Icone dans la zone de notification
 pystray>=0.19
 Pillow>=10.0
+
+# La fenetre : une page web rendue par le moteur d'Edge, present sur toute
+# machine depuis Windows 10. Rien n'est telecharge a l'installation.
+pywebview>=5.0
+pythonnet>=3.0 ; sys_platform == "win32"
