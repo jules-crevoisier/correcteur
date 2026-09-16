@@ -158,22 +158,58 @@ def main(argv: list[str] | None = None) -> int:
     if args.fenetre:
         return _ouvrir_fenetre(app)
 
-    if args.console:
-        app.demarrer()
-        app.prechauffer()
-        print("Ctrl+C pour quitter.")
-        try:
-            import keyboard
-            keyboard.wait()
-        except KeyboardInterrupt:
-            pass
-        finally:
-            app.arreter()
+    verrou = _prendre_le_verrou(app)
+    if verrou is None:
         return 0
 
-    from .interface import InterfaceBarre
-    InterfaceBarre(app).lancer()
-    return 0
+    try:
+        if args.console:
+            app.demarrer()
+            app.prechauffer()
+            print("Ctrl+C pour quitter.")
+            try:
+                import keyboard
+                keyboard.wait()
+            except KeyboardInterrupt:
+                pass
+            finally:
+                app.arreter()
+            return 0
+
+        from .interface import InterfaceBarre
+        InterfaceBarre(app).lancer()
+        return 0
+    finally:
+        verrou.rendre()
+
+
+def _prendre_le_verrou(app):
+    """Le verrou d'instance, ou None s'il faut renoncer a demarrer.
+
+    Deux Papote qui ecoutent le meme clavier, ce sont deux corrections pour
+    une frappe, et un texte que personne ne peut plus lire. Celle qui arrive
+    en second le dit et s'efface.
+
+    Un verrou qu'on ne peut pas poser du tout — un dossier en lecture seule
+    — ne doit pas empecher de demarrer : mieux vaut une Papote sans filet
+    que pas de Papote.
+    """
+    from . import instance
+
+    verrou = instance.verrou_par_defaut()
+    try:
+        verrou.prendre()
+    except instance.Occupee:
+        message = "Papote tourne déjà. Regardez près de l'horloge."
+        print(message, file=sys.stderr)
+        try:
+            app.notifier("Papote est déjà lancé", message)
+        except Exception:                          # noqa: BLE001
+            pass
+        return None
+    except OSError as e:
+        journal.erreur("Verrou d'instance impossible", e)
+    return verrou
 
 
 def _gerer_demarrage(action: str) -> int:

@@ -30,6 +30,7 @@ et rend des remplacements, ce qui la rend entierement testable.
 
 from __future__ import annotations
 
+import os
 import threading
 import time
 from dataclasses import dataclass
@@ -768,9 +769,36 @@ class EcouteClavier:
             # Majuscule, fonction, verrouillage... : rien a ajouter au tampon.
             return None
 
-        if keyboard.is_pressed("shift"):
+        # Le verrou majuscule et la touche majuscule se defont l'un l'autre :
+        # verrou seul donne « A », verrou et shift donnent « a ».
+        if keyboard.is_pressed("shift") != self._verrou_majuscule():
             return nom.upper()
         return nom
+
+    def _verrou_majuscule(self) -> bool:
+        """Le verrouillage majuscule est-il actif ?
+
+        `keyboard` ne le dit pas : il rend le nom de la touche, toujours en
+        minuscule, quel que soit le verrou. « BONJOUR » entrait donc dans le
+        tampon comme « bonjour » — et la correction, qui reecrit ce qu'elle
+        a lu, rendait le mot en minuscules. Quelqu'un qui ecrit en capitales
+        les perdait a la premiere faute corrigee.
+
+        Il n'y a que sous Windows que la question se pose : c'est le seul
+        systeme ou Papote ecoute le clavier.
+        """
+        if os.name != "nt":
+            return False
+        try:
+            import ctypes
+
+            # 0x14 : VK_CAPITAL. Le bit de poids faible dit l'etat du verrou,
+            # le bit de poids fort dirait que la touche est enfoncee.
+            return bool(ctypes.windll.user32.GetKeyState(0x14) & 1)
+        except Exception:                          # noqa: BLE001
+            # Pas de Windows sous la main, ou un appel refuse : on s'en tient
+            # a ce que dit la touche majuscule.
+            return False
 
     # -- relecture a la pause ------------------------------------------------
 

@@ -946,3 +946,41 @@ def test_l_arret_attend_le_guetteur(correcteur, clavier, monkeypatch):
     assert guetteur is not None and guetteur.is_alive()
     ecouteur.desactiver()
     assert not guetteur.is_alive()
+
+
+# ---------------------------------------------------------------------------
+# Le verrouillage majuscule
+#
+# `keyboard` rend toujours le nom de la touche en minuscule. Sans lire le
+# verrou, « BONJOUR » entrait dans le tampon comme « bonjour », et la
+# correction — qui reecrit ce qu'elle a lu — rendait le mot en minuscules.
+# ---------------------------------------------------------------------------
+
+def test_le_verrou_majuscule_met_la_lettre_en_capitale(correcteur, clavier,
+                                                       monkeypatch):
+    ecouteur = ecoute(correcteur)
+    monkeypatch.setattr(ecouteur, "_verrou_majuscule", lambda: True)
+    assert ecouteur._traduire(FauxEvenement("a")) == "A"
+
+
+def test_le_verrou_et_la_touche_majuscule_se_defont(correcteur, clavier,
+                                                    monkeypatch):
+    ecouteur = ecoute(correcteur)
+    monkeypatch.setattr(ecouteur, "_verrou_majuscule", lambda: True)
+    clavier.enfonces.add("shift")
+    assert ecouteur._traduire(FauxEvenement("a")) == "a"
+
+
+def test_sans_verrou_rien_ne_change(correcteur, clavier, monkeypatch):
+    ecouteur = ecoute(correcteur)
+    monkeypatch.setattr(ecouteur, "_verrou_majuscule", lambda: False)
+    assert ecouteur._traduire(FauxEvenement("a")) == "a"
+
+
+def test_hors_de_windows_le_verrou_est_ignore(correcteur, clavier,
+                                              monkeypatch):
+    """La question ne se pose que la ou Papote ecoute le clavier."""
+    import os as os_mod
+
+    monkeypatch.setattr(os_mod, "name", "posix")
+    assert ecoute(correcteur)._verrou_majuscule() is False
