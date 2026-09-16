@@ -198,7 +198,14 @@ def clavier(monkeypatch):
 
 
 def ecoute(correcteur):
-    return EcouteClavier(Frappe(correcteur))
+    """Une ecoute branchee sur rien, qui corrige partout.
+
+    Sans `application`, elle interroge le systeme pour savoir ou l'on tape.
+    Sur une machine de test Windows, la reponse est une vraie application —
+    parfois un terminal, ou Papote se tait — et le test echoue pour une
+    raison qui n'a rien a voir avec ce qu'il eprouve.
+    """
+    return EcouteClavier(Frappe(correcteur), application=lambda: None)
 
 
 @pytest.mark.parametrize("touche,attendu", [
