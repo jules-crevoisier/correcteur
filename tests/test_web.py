@@ -209,3 +209,52 @@ def test_la_page_est_embarquee_dans_l_executable():
     recette = (RACINE / "papote.spec").read_text(encoding="utf-8")
     assert '"papote/web"' in recette
     assert "webview.platforms.edgechromium" in recette
+
+
+# -- l'annulation de la page « Corriger » -----------------------------------
+
+def test_le_bouton_annuler_existe(page, script):
+    """« Corriger » reecrit le texte : sans annulation, l'original est perdu."""
+    assert 'id="annuler"' in page
+    assert '$("#annuler")' in script
+
+
+def test_l_etat_est_retenu_avant_chaque_reecriture(script):
+    """Les trois endroits ou le programme ecrit dans le champ."""
+    assert script.count("retenirLetat()") >= 3
+
+
+def test_l_annulation_se_vide(script):
+    """Un bouton qui ne mene nulle part est pire qu'un bouton absent."""
+    assert 'hidden = etatsPrecedents.length === 0' in script
+
+
+# -- ce qu'on ne peut pas defaire -------------------------------------------
+
+def test_les_boutons_destructeurs_demandent_confirmation(script):
+    """Effacer l'historique, le journal ou la transcription ne se reprend pas."""
+    for bouton in ("#effacer-historique", "#vider-journal", "#dictee-oublier"):
+        assert f'armer("{bouton}"' in script, bouton
+
+
+def test_le_bouton_arme_se_voit(style):
+    assert ".bouton.arme" in style
+
+
+def test_l_armement_retombe_tout_seul(script):
+    """Un bouton qui reste arme est un piege pose sur le chemin."""
+    assert "DELAI_CONFIRMATION" in script
+    assert 'bouton.addEventListener("blur", desarmer)' in script
+
+
+# -- l'application courante ne s'applique plus toute seule ------------------
+
+def test_le_champ_vide_n_exclut_plus_le_marque_page(script):
+    """« champ.value || champ.placeholder » excluait « jeu.exe »."""
+    assert "champ.placeholder" not in script
+
+
+def test_l_application_courante_se_propose_d_un_clic(page, script):
+    assert 'id="courante-exclusion"' in page
+    assert 'id="courante-registre"' in page
+    assert "proposerLapplicationCourante" in script

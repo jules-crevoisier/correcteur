@@ -66,6 +66,13 @@
               <kbd>Ctrl ↵</kbd>
             </button>
             <button class="bouton" id="copier">Copier</button>
+            <!-- Corriger reecrit le texte par-dessus l'original. Ctrl+Z ne
+                 defait pas ce que le programme a ecrit : sans ce bouton, le
+                 texte d'avant n'existait plus nulle part. -->
+            <button class="bouton discret" id="annuler" hidden>
+              Annuler
+              <kbd>Ctrl Z</kbd>
+            </button>
             <button class="bouton discret" id="vider">Effacer</button>
             <span class="pousse"></span>
             <span class="compteur" id="compteur"></span>
@@ -133,6 +140,11 @@
               <input id="exclusion" placeholder="jeu.exe" autocomplete="off">
               <button class="bouton" type="submit">Exclure</button>
             </form>
+            <!-- L'application au premier plan, proposee d'un clic. Elle
+                 servait de valeur par defaut a un champ vide : valider sans
+                 rien ecrire excluait une application qu'on n'avait pas
+                 nommee — ou « jeu.exe », le simple exemple du champ. -->
+            <p class="aide" id="courante-exclusion" hidden></p>
             <ul class="jetons" id="exclues"></ul>
           </div>
 
@@ -145,6 +157,7 @@
                      autocomplete="off">
               <button class="bouton" type="submit">Soutenu ici</button>
             </form>
+            <p class="aide" id="courante-registre" hidden></p>
             <ul class="lignes" id="registres-application"></ul>
           </div>
         </div>

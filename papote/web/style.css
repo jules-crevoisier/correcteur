@@ -808,3 +808,13 @@ input::placeholder { color: var(--texte-eteint); }
   accent-color: var(--accent);
   cursor: pointer;
 }
+
+
+/* Un bouton arme : il a ete presse une fois, le suivant efface. La couleur
+   dit ce que le libelle dit deja, pour que cela se voie du coin de l'oeil. */
+.bouton.arme,
+.bouton.discret.arme {
+  background: var(--alerte-sourd);
+  border-color: color-mix(in srgb, var(--alerte) 55%, transparent);
+  color: var(--alerte);
+}

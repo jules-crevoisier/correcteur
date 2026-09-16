@@ -101,6 +101,43 @@ function dire(message, ton) {
   minuterieToast = setTimeout(() => toast.classList.remove("visible"), 4200);
 }
 
+/* Un bouton qui efface demande a etre presse deux fois.
+
+   Trois boutons de cette fenetre detruisent quelque chose qu'on ne peut pas
+   reconstituer : l'historique des fautes, le journal, la transcription en
+   cours. Un clic de trop et tout est parti, sans avertissement et sans
+   retour. Le premier clic arme, le second agit, et l'arme retombe toute
+   seule si l'on s'en va. */
+const DELAI_CONFIRMATION = 4000;
+
+function armer(selecteur, action) {
+  const bouton = $(selecteur);
+  const libelle = bouton.textContent;
+  let arme = false;
+  let minuterie = null;
+
+  function desarmer() {
+    clearTimeout(minuterie);
+    arme = false;
+    bouton.textContent = libelle;
+    bouton.classList.remove("arme");
+  }
+
+  bouton.addEventListener("click", async () => {
+    if (!arme) {
+      arme = true;
+      bouton.textContent = "Confirmer ?";
+      bouton.classList.add("arme");
+      minuterie = setTimeout(desarmer, DELAI_CONFIRMATION);
+      return;
+    }
+    desarmer();
+    await action();
+  });
+  bouton.addEventListener("blur", desarmer);
+}
+
+
 /* -------------------------------------------------------------------------
    Petits assembleurs
    ------------------------------------------------------------------------- */
@@ -213,10 +250,37 @@ function compter() {
   $("#compteur").textContent = mots ? mots + (mots > 1 ? " mots" : " mot") : "";
 }
 
+/* Ce que le texte etait avant que le programme n'y touche.
+
+   « Corriger » reecrit le champ par-dessus l'original, et Ctrl+Z ne defait
+   pas ce qu'un programme a ecrit : le texte d'avant n'existait plus nulle
+   part. Quelqu'un qui colle un texte, corrige, et n'aime pas le resultat
+   n'avait aucun moyen de revenir. */
+const etatsPrecedents = [];
+const PROFONDEUR_ANNULATION = 20;
+
+function retenirLetat() {
+  etatsPrecedents.push($("#champ").value);
+  if (etatsPrecedents.length > PROFONDEUR_ANNULATION) etatsPrecedents.shift();
+  $("#annuler").hidden = false;
+}
+
+function annulerLaDerniere() {
+  if (!etatsPrecedents.length) return;
+  $("#champ").value = etatsPrecedents.pop();
+  $("#annuler").hidden = etatsPrecedents.length === 0;
+  compter();
+  montrerCorrections([]);
+  montrerInconnus([]);
+  $("#champ").focus();
+  dire("Texte rétabli.", "succes");
+}
+
 async function corriger() {
   const champ = $("#champ");
   const bouton = $("#corriger");
   if (!champ.value.trim()) return;
+  retenirLetat();
 
   bouton.disabled = true;
   bouton.textContent = "…";
@@ -267,6 +331,7 @@ function montrerInconnus(inconnus) {
     inconnu.propositions.forEach((proposition) => {
       const bouton = creer("button", "bouton minuscule", proposition);
       bouton.addEventListener("click", async () => {
+        retenirLetat();
         const reponse = repondre(
           await appeler("remplacer", $("#champ").value, inconnu.mot, proposition));
         if (reponse.erreur) return;
@@ -358,13 +423,33 @@ async function chargerFautes() {
    Page « Applications »
    ------------------------------------------------------------------------- */
 
+/* L'application au premier plan, proposee d'un clic.
+
+   Elle servait de valeur par defaut a un champ vide : valider sans rien
+   ecrire excluait une application qu'on n'avait pas nommee — et quand
+   aucune n'etait detectee, c'etait « jeu.exe », le simple exemple du champ.
+   Un clic explicite vaut mieux qu'un defaut invisible. */
+function proposerLapplicationCourante(zone, champ, courante) {
+  const ligne = vider($(zone));
+  ligne.hidden = !courante;
+  if (!courante) return;
+  ligne.appendChild(document.createTextNode("Au premier plan : "));
+  const bouton = creer("button", "bouton discret minuscule", courante);
+  bouton.type = "button";
+  bouton.addEventListener("click", () => {
+    $(champ).value = courante;
+    $(champ).focus();
+  });
+  ligne.appendChild(bouton);
+}
+
 async function chargerApplications() {
   const donnees = await appeler("applications");
 
-  if (donnees.courante) {
-    $("#exclusion").placeholder = donnees.courante;
-    $("#registre-application").placeholder = donnees.courante;
-  }
+  proposerLapplicationCourante("#courante-exclusion", "#exclusion",
+                               donnees.courante);
+  proposerLapplicationCourante("#courante-registre", "#registre-application",
+                               donnees.courante);
 
   const exclues = vider($("#exclues"));
   donnees.exclues.forEach((application) => {
@@ -542,6 +627,13 @@ function brancher() {
       evenement.preventDefault();
       corriger();
     }
+    // Ctrl+Z ne defait que ce que le programme a ecrit. Tant qu'il n'y a
+    // rien a rendre, la touche garde son role : defaire la frappe.
+    if ((evenement.ctrlKey || evenement.metaKey) && evenement.key === "z"
+        && !evenement.shiftKey && etatsPrecedents.length) {
+      evenement.preventDefault();
+      annulerLaDerniere();
+    }
   });
 
   $("#copier").addEventListener("click", async () => {
@@ -556,7 +648,10 @@ function brancher() {
     }
   });
 
+  $("#annuler").addEventListener("click", annulerLaDerniere);
+
   $("#vider").addEventListener("click", () => {
+    if ($("#champ").value) retenirLetat();
     $("#champ").value = "";
     compter();
     montrerCorrections([]);
@@ -585,8 +680,7 @@ function brancher() {
   $("#forme-exclusion").addEventListener("submit", async (evenement) => {
     evenement.preventDefault();
     const champ = $("#exclusion");
-    const reponse = repondre(
-      await appeler("exclure", champ.value || champ.placeholder));
+    const reponse = repondre(await appeler("exclure", champ.value));
     if (!reponse.erreur) { champ.value = ""; chargerApplications(); }
   });
 
@@ -594,11 +688,11 @@ function brancher() {
     evenement.preventDefault();
     const champ = $("#registre-application");
     const reponse = repondre(await appeler(
-      "registre_application", champ.value || champ.placeholder, "soutenu"));
+      "registre_application", champ.value, "soutenu"));
     if (!reponse.erreur) { champ.value = ""; chargerApplications(); }
   });
 
-  $("#effacer-historique").addEventListener("click", async () => {
+  armer("#effacer-historique", async () => {
     repondre(await appeler("effacer_historique"));
     chargerFautes();
   });
@@ -634,7 +728,7 @@ function brancher() {
     }
   });
 
-  $("#vider-journal").addEventListener("click", async () => {
+  armer("#vider-journal", async () => {
     repondre(await appeler("vider_journal"));
     chargerJournal();
   });
@@ -806,7 +900,7 @@ function brancherDictee() {
     }
   });
 
-  $("#dictee-oublier").addEventListener("click", async () => {
+  armer("#dictee-oublier", async () => {
     await appeler("oublier_dictee");
     suivreLaDictee(false);
     chargerDictee();
