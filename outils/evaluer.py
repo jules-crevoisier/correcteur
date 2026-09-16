@@ -1,0 +1,345 @@
+# -*- coding: utf-8 -*-
+"""Mesure la qualite du correcteur sur un corpus de phrases.
+
+Deux listes, et deux chiffres qui comptent :
+
+    RAPPEL      la part des fautes qu'il attrape ;
+    PRECISION   la part des phrases correctes qu'il laisse tranquilles.
+
+Le second compte plus que le premier. Une faute laissee passe se remarque a
+peine ; une phrase juste abimee se voit tout de suite, et fait desinstaller
+l'outil.
+
+    python outils/evaluer.py            le tableau de bord
+    python outils/evaluer.py --detail   chaque cas rate, avec ce qu'il donne
+"""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+RACINE = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(RACINE))
+
+# (texte fautif, texte attendu, categorie)
+FAUTES = [
+    # -- accents et orthographe
+    ("je sais pas si sa va", "je sais pas si ça va", "accent"),
+    ("c'est tres interressant", "c'est très intéressant", "accent"),
+    ("il est deja parti", "il est déjà parti", "accent"),
+    ("un probleme de developpement", "un problème de développement", "accent"),
+    ("le francais est difficile", "le français est difficile", "accent"),
+    ("j'ai mange des gateaux", "j'ai mangé des gâteaux", "accent"),
+    ("elle etait la hier", "elle était là hier", "accent"),
+    ("quand meme", "quand même", "accent"),
+    ("s'il vous plait", "s'il vous plaît", "accent"),
+    ("il connait la reponse", "il connaît la réponse", "accent"),
+    ("un anniverssaire", "un anniversaire", "frappe"),
+    ("c'est un exmple", "c'est un exemple", "frappe"),
+    ("jai pas compris", "j'ai pas compris", "apostrophe"),
+    ("cest pas grave", "c'est pas grave", "apostrophe"),
+    ("daccord jarrive", "d'accord j'arrive", "apostrophe"),
+    ("il ma dit quil venait", "il m'a dit qu'il venait", "apostrophe"),
+    ("cetait bien", "c'était bien", "apostrophe"),
+
+    # -- homophones
+    ("sa fait longtemps", "ça fait longtemps", "homophone"),
+    ("il à mangé", "il a mangé", "homophone"),
+    ("je vais a la gare", "je vais à la gare", "homophone"),
+    ("elle et contente", "elle est contente", "homophone"),
+    ("ils on mangé", "ils ont mangé", "homophone"),
+    ("elles son parties", "elles sont parties", "homophone"),
+    ("je sais pas se que tu veux", "je sais pas ce que tu veux", "homophone"),
+    ("il ce lave", "il se lave", "homophone"),
+    ("tu sais ou est mon sac", "tu sais où est mon sac", "homophone"),
+    ("je suis la", "je suis là", "homophone"),
+    ("tout les jours", "tous les jours", "homophone"),
+    ("mes je peux pas", "mais je peux pas", "homophone"),
+    ("un peut plus tard", "un peu plus tard", "homophone"),
+    ("est ce que tu viens", "est-ce que tu viens", "homophone"),
+    ("ca ma pris deux heures", "ça m'a pris deux heures", "homophone"),
+    ("tas vu le film", "t'as vu le film", "homophone"),
+    ("il me la dit hier", "il me l'a dit hier", "homophone"),
+    ("se soir on sort", "ce soir on sort", "homophone"),
+    ("dans leur maisons", "dans leurs maisons", "homophone"),
+    ("c'est la ou j'habite", "c'est là où j'habite", "homophone"),
+    ("je ne sais pas ou aller", "je ne sais pas où aller", "homophone"),
+    ("il ny a personne", "il n'y a personne", "homophone"),
+    ("sa ma fait plaisir", "ça m'a fait plaisir", "homophone"),
+    ("j'espere que sa ira", "j'espère que ça ira", "homophone"),
+    ("ils se parle plus", "ils se parlent plus", "conjugaison"),
+    ("je me souvien tres bien", "je me souviens très bien", "conjugaison"),
+    ("elle mavait prevenu", "elle m'avait prévenu", "apostrophe"),
+    ("les gens dici sont sympa", "les gens d'ici sont sympa", "apostrophe"),
+    ("les resultat sont tombés hier", "les résultats sont tombés hier", "accord"),
+    ("je t'enverrai les document demain", "je t'enverrai les documents demain", "accord"),
+
+    # -- conjugaison
+    ("je peut pas venir", "je peux pas venir", "conjugaison"),
+    ("je croit pas", "je crois pas", "conjugaison"),
+    ("tu mange quoi", "tu manges quoi", "conjugaison"),
+    ("tu voit ce que je veux dire", "tu vois ce que je veux dire", "conjugaison"),
+    ("ils mange trop", "ils mangent trop", "conjugaison"),
+    ("elles arrive demain", "elles arrivent demain", "conjugaison"),
+    ("nous mange ensemble", "nous mangeons ensemble", "conjugaison"),
+    ("nous parle souvent", "nous parlons souvent", "conjugaison"),
+    ("vous mange quoi", "vous mangez quoi", "conjugaison"),
+    ("vous parle trop vite", "vous parlez trop vite", "conjugaison"),
+    ("il mangent trop", "il mange trop", "conjugaison"),
+    ("elle parlent fort", "elle parle fort", "conjugaison"),
+    ("j'ai manger des frites", "j'ai mangé des frites", "conjugaison"),
+    ("je vais mangé un truc", "je vais manger un truc", "conjugaison"),
+    ("il a oublier son sac", "il a oublié son sac", "conjugaison"),
+    ("je dois partir travailler", "je dois partir travailler", "conjugaison"),
+    ("les gens pense trop", "les gens pensent trop", "conjugaison"),
+    ("les enfants joue dehors", "les enfants jouent dehors", "conjugaison"),
+    ("mes parents arrive ce soir", "mes parents arrivent ce soir", "conjugaison"),
+    ("si j'aurais su", "si j'avais su", "conjugaison"),
+    ("si j'aurais le temps", "si j'avais le temps", "conjugaison"),
+    ("si tu pourrais venir", "si tu pouvais venir", "conjugaison"),
+
+    # -- conjugaison (deuxieme serie, ecrite apres coup pour eprouver)
+    ("nous somme en retard", "nous sommes en retard", "conjugaison"),
+    ("vous ete prêts", "vous êtes prêts", "conjugaison"),
+    ("il faut que tu vien", "il faut que tu viens", "conjugaison"),
+    ("il mangeais tous les jours", "il mangeait tous les jours", "conjugaison"),
+    ("nous avons manger dehors", "nous avons mangé dehors", "conjugaison"),
+    ("elle a beaucoup travailler", "elle a beaucoup travaillé", "conjugaison"),
+    ("je suis aller au cinéma", "je suis allé au cinéma", "conjugaison"),
+    ("vous avez oublier vos clés", "vous avez oublié vos clés", "conjugaison"),
+
+    # -- accords
+    ("des enfant", "des enfants", "accord"),
+    ("des grand bâtiments", "des grands bâtiments", "accord"),
+    ("les nouveau modèles", "les nouveaux modèles", "accord"),
+    ("mes meilleur amis", "mes meilleurs amis", "accord"),
+    ("plusieurs personne ont appelé", "plusieurs personnes ont appelé", "accord"),
+    ("ils se sont trompé", "ils se sont trompés", "accord"),
+    ("elle s'est levé tôt", "elle s'est levée tôt", "accord"),
+    ("nous nous sommes perdu", "nous nous sommes perdus", "accord"),
+    ("les filles son parti", "les filles sont partis", "accord"),
+    ("les enfant sont la", "les enfants sont là", "accord"),
+    ("mes ami arrivent", "mes amis arrivent", "accord"),
+    ("quelques minute", "quelques minutes", "accord"),
+    ("elles sont venu hier", "elles sont venues hier", "accord"),
+    ("ils sont parti tôt", "ils sont partis tôt", "accord"),
+    ("elle est venu me voir", "elle est venue me voir", "accord"),
+    ("nous sommes arrivé", "nous sommes arrivés", "accord"),
+    ("des voitures rouge", "des voitures rouges", "accord"),
+    ("les enfants sont content", "les enfants sont contents", "accord"),
+    ("des jolies fleur", "des jolies fleurs", "accord"),
+    ("trois petit chats", "trois petits chats", "accord"),
+]
+
+# Phrases correctes : elles doivent ressortir a l'identique.
+INTOUCHABLES = [
+    # -- francais parle, la raison d'etre de l'outil
+    "j'ai pas compris ce que tu voulais dire",
+    "faut que j'y aille",
+    "y a rien à faire",
+    "c'est pas grave, on se voit demain",
+    "je sais pas si ça va marcher",
+    "t'as vu le message que je t'ai envoyé ?",
+    "c'est quoi ce truc",
+    "on se capte plus tard",
+    "je peux pas venir dsl",
+    "tkt jsp encore",
+    "wsh frr askip c'est mort",
+    "mdrrrr c'est trop drôle",
+    "ouiiii carrément",
+    # -- francais correct
+    "Il se lave les mains avant de manger.",
+    "Ils se sont retrouvés devant le cinéma hier soir.",
+    "Je me demande ce que tu fais ce soir.",
+    "Elle a la grippe depuis lundi.",
+    "Paul a la clé de la maison.",
+    "On se voit ce week-end si tu veux.",
+    "Le chat dort sur le canapé du salon.",
+    "Nous sommes allés à la plage tous les jours.",
+    "Tu peux me passer le sel s'il te plaît ?",
+    "Ce film était vraiment très bien.",
+    "Il faut que je parte avant huit heures.",
+    "Mes parents habitent à Lyon depuis vingt ans.",
+    "Est-ce que tu as reçu mon message ?",
+    "Je n'ai pas eu le temps de finir le travail.",
+    "Elle m'a dit qu'elle viendrait plus tard.",
+    "Les enfants jouent dans le jardin.",
+    "Ce sont des choses qui arrivent.",
+    "Il y a beaucoup de monde dans le métro.",
+    "Tout le monde se demande où il est passé.",
+    "J'aimerais bien savoir ce qui s'est passé.",
+    "Le projet avance bien, on devrait finir demain.",
+    "Elle est partie sans rien dire.",
+    "Nous avons mangé au restaurant hier midi.",
+    "Je vais essayer de venir, mais je ne promets rien.",
+    "Ça fait longtemps qu'on ne s'est pas vus.",
+    "Il se peut que je sois en retard.",
+    "Tu as vu le dernier épisode de la série ?",
+    "On a passé une très bonne soirée ensemble.",
+    "Ce que je préfère, c'est le chocolat noir.",
+    "Le train part à dix-huit heures trente.",
+    "Les gens que je connais pensent comme moi.",
+    "Nous parlons de choses sérieuses.",
+    "Vous mangez souvent ici ?",
+    "Ils arrivent demain matin par le train.",
+    "Elle chante bien mais elle danse mal.",
+    "Je leur ai dit de venir plus tôt.",
+    "Il leur reste encore du travail.",
+    "Leur maison est plus grande que la nôtre.",
+    "Un tas de choses restent à faire.",
+    "Il a la flemme de sortir ce soir.",
+    "Je les mange tous les matins.",
+    "Les enfants sont contents de partir.",
+    "Des voitures rouges passaient dans la rue.",
+    "Elle est venue me voir hier.",
+    "Ils sont partis sans prévenir.",
+    "Si j'avais su, je serais resté.",
+    "Je serais content de le revoir.",
+    "Je serai là demain sans faute.",
+    "Quelques minutes plus tard, il est parti.",
+    # -- noms qui ressemblent a des participes
+    "J'ai envie de dormir.",
+    "Il a peur du noir.",
+    "On a eu de la chance.",
+    "J'ai une idée pour demain.",
+    "Elle a pris sa place dans la file.",
+    "Nous avons confiance en lui.",
+    "Ils ont honte de leur réaction.",
+    "Tu as de la peine à le croire.",
+    # -- pieges de conjugaison
+    "Il faut que tu manges avant de partir.",
+    "Si tu peux venir, préviens-moi.",
+    "Il est si content de te voir.",
+    "Mange tes légumes avant le dessert.",
+    "Nous nous levons tôt le dimanche.",
+    "Vous vous trompez de numéro.",
+    "Il nous parle souvent de toi.",
+    "Je vous appelle demain matin.",
+    "Elle les regarde jouer dans la cour.",
+    "Nous avons eu chaud.",
+    "Ils ont froid aux mains.",
+    "Vous êtes prêts pour demain ?",
+    "Elle voudrait bien mais elle peut pas.",
+    "Quand tu voudras, tu me diras.",
+    "Je serais ravi de t'aider.",
+    "Nous serions partis plus tôt.",
+    "Il ment tout le temps.",
+    "Il a mis les voiles.",
+    # -- pieges d'accord
+    "Les gens comme lui sont rares.",
+    "Les deux premières semaines sont dures.",
+    "Ces quelques minutes ont suffi.",
+    "Des tas de gens font la queue.",
+    "Les cours reprennent en septembre.",
+    "Les vôtres sont meilleurs.",
+    "Toutes les nuits, je rêve de ça.",
+    "Ces derniers temps, il travaille beaucoup.",
+    "Leur fille travaille à Paris.",
+    "Il leur faut du temps.",
+    "Nos amis sont arrivés en retard.",
+    "Certains jours, rien ne va.",
+    "Les uns partent, les autres restent.",
+    "Il se lave les mains avant de manger.",
+    "Les enfants rentrent après l'école.",
+    "Les voitures passent sous le pont.",
+    "Des gens bien intentionnés.",
+    "Les trois quarts des gens pensent comme ça.",
+    "Je leur ai donné mes clés.",
+    "Il leur arrive de se tromper.",
+    # -- troisieme serie, ecrite a l'aveugle pour eprouver les regles d'accord
+    "Je t'enverrai les documents demain matin.",
+    "Nous nous demandons si c'est bien raisonnable.",
+    "Elle m'avait prévenu qu'il arriverait en retard.",
+    "Tout ce que je sais, c'est qu'il est parti.",
+    "Ils ne se parlent plus depuis des mois.",
+    "Ce sont les meilleurs moments de ma vie.",
+    "On dirait que ça ne va pas fort.",
+    "Les deux tiers des élèves ont réussi.",
+    "Il n'y a plus rien à ajouter.",
+    "J'aurais dû t'écouter dès le début.",
+    "Elles se sont écrit pendant des années.",
+    "Rien ne sert de courir, il faut partir à point.",
+    "Cette histoire ne tient pas debout.",
+    "Les gens d'ici sont accueillants.",
+    "Je me souviens très bien de ce jour-là.",
+    "Il a plus de temps que moi.",
+    "À plus tard !",
+    # -- anglais et code au milieu du francais
+    "the game is over",
+    "check this out",
+    "regarde https://exemple.fr/a_b-c",
+    "écris `git commit -m truc` dans le terminal",
+    "salut <@123456789> tu viens ?",
+]
+
+
+def evaluer(correcteur, detail: bool = False) -> dict:
+    reussites, echecs = [], []
+    for fautif, attendu, categorie in FAUTES:
+        obtenu = correcteur.corriger(fautif)[0]
+        (reussites if obtenu == attendu else echecs).append(
+            (categorie, fautif, attendu, obtenu)
+        )
+
+    intacts, abimees = [], []
+    for phrase in INTOUCHABLES:
+        obtenu = correcteur.corriger(phrase)[0]
+        (intacts if obtenu == phrase else abimees).append((phrase, obtenu))
+
+    if detail:
+        if echecs:
+            print("\n--- fautes non corrigees " + "-" * 45)
+            for categorie, fautif, attendu, obtenu in echecs:
+                print(f"  [{categorie}] {fautif}")
+                print(f"      attendu : {attendu}")
+                print(f"      obtenu  : {obtenu}")
+        if abimees:
+            print("\n--- phrases abimees " + "-" * 50)
+            for phrase, obtenu in abimees:
+                print(f"  {phrase}")
+                print(f"      -> {obtenu}")
+
+    return {"reussites": reussites, "echecs": echecs,
+            "intacts": intacts, "abimees": abimees}
+
+
+def par_categorie(resultats: dict) -> None:
+    categories: dict[str, list[int]] = {}
+    for liste, indice in ((resultats["reussites"], 0), (resultats["echecs"], 1)):
+        for categorie, *_ in liste:
+            compte = categories.setdefault(categorie, [0, 0])
+            compte[indice] += 1
+
+    print("\n  categorie        corrigees")
+    for categorie in sorted(categories):
+        bon, rate = categories[categorie]
+        total = bon + rate
+        print(f"  {categorie:15}  {bon:2}/{total:<3} {'█' * bon}{'░' * rate}")
+
+
+def main() -> int:
+    from papote.moteur import construire
+
+    detail = "--detail" in sys.argv
+    correcteur = construire()
+    resultats = evaluer(correcteur, detail)
+
+    fautes = len(FAUTES)
+    justes = len(INTOUCHABLES)
+    rappel = len(resultats["reussites"]) / fautes * 100
+    precision = len(resultats["intacts"]) / justes * 100
+
+    par_categorie(resultats)
+    print(f"\n  RAPPEL     {len(resultats['reussites']):3}/{fautes}  "
+          f"({rappel:.0f} %)   fautes attrapees")
+    print(f"  PRECISION  {len(resultats['intacts']):3}/{justes}  "
+          f"({precision:.0f} %)   phrases correctes laissees tranquilles")
+    if resultats["abimees"]:
+        print(f"\n  {len(resultats['abimees'])} phrase(s) abimee(s) — "
+              f"relancez avec --detail")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
