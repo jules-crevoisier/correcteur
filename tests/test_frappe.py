@@ -10,6 +10,7 @@ texte.
 """
 
 import sys
+import time
 import types
 from pathlib import Path
 
@@ -370,3 +371,150 @@ def test_le_registre_suit_l_application(correcteur, clavier):
     assert temoins == [SOUTENU]
     assert surveillant._registre == SOUTENU
     assert surveillant.politique.registre_ici("discord.exe") == PARLE
+
+
+# -- relecture a la pause ----------------------------------------------------
+#
+# Mot a mot, le correcteur travaille a l'aveugle : il ne voit pas ce qui n'est
+# pas encore ecrit. « les gens » ne peut pas devenir « les gens sont fous »
+# avant que « fou » ne soit tape. La relecture rattrape ce qui demandait la
+# phrase entiere.
+
+def taper(frappe, texte: str) -> None:
+    for caractere in texte:
+        frappe.caractere(caractere)
+
+
+def test_la_relecture_accorde_ce_que_la_frappe_ne_pouvait_pas_voir(correcteur):
+    frappe = Frappe(correcteur)
+    taper(frappe, "les gens son fou")
+    assert frappe.texte == "les gens sont fou", "la frappe corrige déjà « son »"
+
+    remplacement = frappe.relire()
+    assert remplacement is not None
+    assert frappe.texte == "les gens sont fous"
+
+
+@pytest.mark.parametrize("tape,attendu", [
+    ("elle est venu", "elle est venue"),
+    ("nous sommes arrive", "nous sommes arrivés"),
+    ("les enfant", "les enfants"),
+])
+def test_la_relecture_rattrape_les_accords(correcteur, tape, attendu):
+    frappe = Frappe(correcteur)
+    taper(frappe, tape)
+    frappe.relire()
+    assert frappe.texte == attendu
+
+
+def test_la_relecture_ne_termine_pas_un_mot_commence(correcteur):
+    """Quelqu'un qui s'arrete sur « je mang » allait peut-etre ecrire
+    « mangeais » : lui imposer « mange » serait insupportable."""
+    frappe = Frappe(correcteur)
+    taper(frappe, "je mang")
+    assert frappe.relire() is None
+    assert frappe.texte == "je mang"
+
+
+def test_la_relecture_laisse_la_faute_de_frappe_du_dernier_mot(correcteur):
+    """Elle sera corrigee des qu'une espace suivra — la, rien ne dit que le
+    mot est fini."""
+    frappe = Frappe(correcteur)
+    taper(frappe, "je vais au bureua")
+    assert frappe.relire() is None
+
+
+def test_la_relecture_corrige_le_dernier_mot_fini_par_une_espace(correcteur):
+    frappe = Frappe(correcteur)
+    taper(frappe, "je vais au bureua ")
+    assert frappe.texte == "je vais au bureau "
+
+
+def test_une_phrase_deja_juste_ne_bouge_pas(correcteur):
+    frappe = Frappe(correcteur)
+    taper(frappe, "les enfants sont rentrés")
+    assert frappe.relire() is None
+
+
+def test_la_relecture_ne_touche_pas_a_un_tampon_vide(correcteur):
+    assert Frappe(correcteur).relire() is None
+
+
+def test_une_relecture_trop_longue_est_refusee(correcteur):
+    """Une longue rafale de retours arriere se verrait a l'ecran."""
+    frappe = Frappe(correcteur, effacement_relecture=0)
+    taper(frappe, "nous sommes arrive")
+    assert frappe.relire() is None
+    assert frappe.texte == "nous sommes arrive"
+
+
+def test_la_regle_d_une_lettre_ajoutee_n_est_pas_perdue(correcteur):
+    """« fou » -> « fous » se termine la ou commence la reecriture.
+
+    Sans cela, l'apprentissage ne saurait pas quelle regle annuler quand
+    l'utilisateur defait la correction.
+    """
+    frappe = Frappe(correcteur)
+    taper(frappe, "les gens son fou")
+    remplacement = frappe.relire()
+    assert remplacement.regles, "aucune regle attribuee"
+
+
+def test_le_guetteur_ne_relit_qu_une_fois_par_pause(correcteur, monkeypatch):
+    """Sans temoin, il relancerait la relecture quatre fois par seconde."""
+    import papote.frappe as frappe_mod
+
+    frappe = Frappe(correcteur)
+    ecoute = frappe_mod.EcouteClavier(frappe, delai_oubli=5.0)
+    ecoute.actif = True
+    taper(frappe, "les gens son fou")
+
+    relectures = []
+    monkeypatch.setattr(frappe, "relire",
+                        lambda: relectures.append(1) or None)
+    monkeypatch.setattr(ecoute, "_application", lambda: None)
+    ecoute._relu = False
+    ecoute._derniere_touche = time.monotonic() - 1.0
+
+    ecoute._relire_si_pause()
+    ecoute._relire_si_pause()
+    ecoute._relire_si_pause()
+    assert len(relectures) == 1
+
+
+def test_le_guetteur_attend_le_silence(correcteur, monkeypatch):
+    import papote.frappe as frappe_mod
+
+    frappe = Frappe(correcteur)
+    ecoute = frappe_mod.EcouteClavier(frappe, delai_oubli=5.0)
+    ecoute.actif = True
+    taper(frappe, "les gens son fou")
+
+    relectures = []
+    monkeypatch.setattr(frappe, "relire",
+                        lambda: relectures.append(1) or None)
+    monkeypatch.setattr(ecoute, "_application", lambda: None)
+    ecoute._relu = False
+    # Les doigts viennent de bouger : trop tot.
+    ecoute._derniere_touche = time.monotonic()
+    ecoute._relire_si_pause()
+    assert not relectures
+
+
+def test_apres_un_long_silence_on_ne_relit_plus(correcteur, monkeypatch):
+    """Passe le delai d'oubli, on ne sait plus ou est le curseur."""
+    import papote.frappe as frappe_mod
+
+    frappe = Frappe(correcteur)
+    ecoute = frappe_mod.EcouteClavier(frappe, delai_oubli=2.0)
+    ecoute.actif = True
+    taper(frappe, "les gens son fou")
+
+    relectures = []
+    monkeypatch.setattr(frappe, "relire",
+                        lambda: relectures.append(1) or None)
+    monkeypatch.setattr(ecoute, "_application", lambda: None)
+    ecoute._relu = False
+    ecoute._derniere_touche = time.monotonic() - 10.0
+    ecoute._relire_si_pause()
+    assert not relectures

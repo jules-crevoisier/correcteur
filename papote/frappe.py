@@ -103,12 +103,17 @@ class Frappe:
     """
 
     def __init__(self, correcteur, longueur_max: int = 400,
-                 effacement_max: int = 40):
+                 effacement_max: int = 40,
+                 effacement_relecture: int = 90):
         self.correcteur = correcteur
         self.longueur_max = longueur_max
         # Au-dela, la correction porte trop loin en arriere : la rafale de
         # retours arriere serait visible, et une desynchronisation couteuse.
         self.effacement_max = effacement_max
+        # La relecture a la pause peut se permettre davantage : personne ne
+        # tape pendant qu'elle travaille, et un accord se corrige souvent au
+        # debut d'une phrase deja longue.
+        self.effacement_relecture = effacement_relecture
         self.texte = ""
 
     # -- ce qui arrive du clavier -------------------------------------------
@@ -190,11 +195,79 @@ class Frappe:
             return None
 
         self.texte = corrige + separateur
-        # Seules comptent les regles qui ont touche la partie reecrite.
+        # Seules comptent les regles qui ont touche la partie reecrite. Le
+        # « superieur ou egal » n'est pas une coquetterie : « fou » -> « fous »
+        # n'ajoute qu'une lettre, et sa correction se termine exactement la ou
+        # commence la reecriture. Sans lui, l'apprentissage ne saurait jamais
+        # quelle regle annuler.
         regles = tuple(dict.fromkeys(
-            c.regle for c in corrections if c.fin > commun
+            c.regle for c in corrections if c.fin >= commun
         ))
         return Remplacement(len(efface), ecrit, efface, regles)
+
+
+    # -- relecture a la pause ------------------------------------------------
+
+    def relire(self) -> Remplacement | None:
+        """Relit toute la phrase, une fois les doigts arretes.
+
+        Mot a mot, le correcteur travaille a l'aveugle : il ne voit pas ce qui
+        n'est pas encore ecrit. « les gens » ne devient « les gens sont fous »
+        qu'une fois « fou » tape, et la regle d'accord ne peut rien avant.
+        Cette relecture rattrape ce que la frappe ne pouvait pas savoir —
+        accords, conjugaisons, tout ce qui demande la phrase entiere.
+
+        Elle s'autorise deux choses de plus que `_examiner`, parce qu'il n'y a
+        plus personne aux commandes : la recherche a deux frappes d'ecart, et
+        un effacement plus large. Elle s'en interdit une : toucher au mot en
+        cours de frappe, qui n'est peut-etre qu'a moitie ecrit.
+        """
+        corps = self.texte
+        if not corps.strip():
+            return None
+
+        # Le dernier mot est peut-etre a moitie ecrit — on s'est peut-etre
+        # arrete au milieu pour reflechir. On note ou il commence.
+        dernier_mot = self._debut_du_mot_en_cours()
+
+        corrige, corrections = self.correcteur.corriger(
+            corps, mise_en_forme=False, profond=True)
+        if corrige == corps or not corrections:
+            return None
+
+        # Completer un mot inacheve serait insupportable : « je mang »
+        # deviendrait « je mange » sous les doigts de quelqu'un qui allait
+        # ecrire « mangeais ». L'accord, lui, n'a pas ce defaut : il ne
+        # s'applique qu'a un mot que le dictionnaire connait deja, donc a un
+        # mot fini. On ecarte donc l'orthographe sur le dernier mot, et elle
+        # seule.
+        if any(c.fin > dernier_mot and c.regle == "ORTHOGRAPHE"
+               for c in corrections):
+            return None
+
+        commun = _prefixe_commun(corps, corrige)
+
+        efface = corps[commun:]
+        ecrit = corrige[commun:]
+        if len(efface) > self.effacement_relecture or "\n" in efface:
+            return None
+
+        self.texte = corrige
+        regles = tuple(dict.fromkeys(
+            c.regle for c in corrections if c.fin >= commun
+        ))
+        return Remplacement(len(efface), ecrit, efface, regles)
+
+    def _debut_du_mot_en_cours(self) -> int:
+        """Ou commence le mot qu'on est en train de taper.
+
+        Si le tampon se termine par un separateur, aucun mot n'est en cours et
+        toute la phrase est relisible.
+        """
+        for i in range(len(self.texte) - 1, -1, -1):
+            if self.texte[i] in SEPARATEURS:
+                return i + 1
+        return 0
 
 
 def _prefixe_commun(gauche: str, droite: str) -> int:
@@ -225,6 +298,15 @@ class EcouteClavier:
     # seconde de retard sur un changement de fenetre n'a aucune consequence.
     MEMOIRE_APPLICATION = 0.5
 
+    # Silence au bout duquel on relit la phrase entiere. Assez long pour ne
+    # pas tomber au milieu d'une hesitation, assez court pour que la
+    # correction arrive avant qu'on ait appuye sur Entree.
+    DELAI_RELECTURE = 0.9
+
+    # Cadence du guetteur. Il ne fait rien tant que les doigts bougent ; ce
+    # n'est pas la peine de le reveiller souvent.
+    BATTEMENT = 0.25
+
     def __init__(self, frappe: Frappe, delai_oubli: float = 5.0,
                  sur_correction: Callable[[Remplacement], None] | None = None,
                  sur_annulation: Callable[[Remplacement], None] | None = None,
@@ -254,6 +336,11 @@ class EcouteClavier:
         # c'est elle qu'un retour arriere immediat defait.
         self._defaisable: Remplacement | None = None
         self._branchement = None
+        # La relecture n'a lieu qu'une fois par pause : sans ce temoin, le
+        # guetteur la relancerait quatre fois par seconde.
+        self._relu = True
+        self._guetteur: threading.Thread | None = None
+        self._arret = threading.Event()
 
     # -- cycle de vie -------------------------------------------------------
 
@@ -266,11 +353,16 @@ class EcouteClavier:
         self._defaisable = None
         self._branchement = keyboard.hook(self._sur_evenement)
         self.actif = True
+        self._arret.clear()
+        self._guetteur = threading.Thread(target=self._guetter, daemon=True)
+        self._guetteur.start()
 
     def desactiver(self) -> None:
         import keyboard
 
         self.actif = False
+        self._arret.set()
+        self._guetteur = None
         self.frappe.oublier()
         if self._branchement is None:
             return
@@ -333,6 +425,7 @@ class EcouteClavier:
             self.frappe.oublier()
             self._defaisable = None
         self._derniere_touche = maintenant
+        self._relu = False
 
         if (getattr(evenement, "name", None) == "backspace"
                 and self._defaisable is not None):
@@ -392,6 +485,48 @@ class EcouteClavier:
         if keyboard.is_pressed("shift"):
             return nom.upper()
         return nom
+
+    # -- relecture a la pause ------------------------------------------------
+
+    def _guetter(self) -> None:
+        """Attend que les doigts s'arretent, puis relit la phrase.
+
+        Mot a mot, le correcteur ne voit que ce qui est deja ecrit : « les
+        gens » ne peut pas devenir « les gens sont fous » avant que « fou » ne
+        soit tape. Cette relecture rattrape ce qui demandait la phrase
+        entiere — les accords, surtout.
+        """
+        while not self._arret.wait(self.BATTEMENT):
+            try:
+                self._relire_si_pause()
+            except Exception:
+                # Une relecture ratee ne doit jamais emporter le clavier.
+                self.frappe.oublier()
+
+    def _relire_si_pause(self) -> None:
+        if not self.actif or self._relu or self._en_ecriture:
+            return
+        if not self.frappe.texte:
+            return
+
+        attente = time.monotonic() - self._derniere_touche
+        if attente < self.DELAI_RELECTURE:
+            return
+        if attente > self.delai_oubli:
+            # Le silence a dure : on ne sait plus ou est le curseur, et le
+            # tampon va etre oublie de toute facon.
+            self._relu = True
+            return
+
+        # L'utilisateur a pu changer de fenetre sans toucher au clavier.
+        if not self.politique.corrige_ici(self._application()):
+            self._relu = True
+            return
+
+        self._relu = True
+        remplacement = self.frappe.relire()
+        if remplacement is not None:
+            self._appliquer(remplacement)
 
     # -- ecriture -----------------------------------------------------------
 
