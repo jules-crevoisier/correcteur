@@ -275,27 +275,94 @@ def test_on_ne_s_ecoute_pas_soi_meme(correcteur, clavier):
 
 # -- retour arriere = annuler ------------------------------------------------
 
-def test_le_retour_arriere_defait_la_correction(correcteur, clavier, monkeypatch):
-    """Comme sur un clavier de telephone : on efface, la correction s'annule."""
+def _corriger_puis(surveillant, touches: str, tapes: list) -> None:
+    for caractere in touches:
+        surveillant._sur_evenement(FauxEvenement(
+            {" ": "space"}.get(caractere, caractere)))
+
+
+def test_le_premier_retour_arriere_ne_retire_que_l_espace(correcteur, clavier,
+                                                           monkeypatch):
+    """« mot␣ » puis retour arriere, c'est pour coller une virgule au mot.
+
+    Corriger un mot pose une espace derriere lui. Beaucoup de gens la
+    retirent aussitot pour ecrire « bonjour, » plutot que « bonjour , ».
+    Prendre ce geste pour un refus de la correction la defaisait a chaque
+    virgule.
+    """
     surveillant = ecoute(correcteur)
     surveillant.actif = True
     tapes = []
     monkeypatch.setattr(surveillant, "_taper_ailleurs", tapes.append)
 
-    for caractere in "sa va ":
-        surveillant._sur_evenement(FauxEvenement(
-            {" ": "space"}.get(caractere, caractere)))
-
+    _corriger_puis(surveillant, "sa va ", tapes)
     assert tapes, "la correction n'a pas eu lieu"
+    apres_correction = len(tapes)
+
+    surveillant._sur_evenement(FauxEvenement("backspace"))
+
+    assert len(tapes) == apres_correction, "rien ne devait etre retape"
+    assert surveillant.frappe.texte == "ça va"
+
+
+def test_la_virgule_se_colle_au_mot_corrige(correcteur, clavier, monkeypatch):
+    surveillant = ecoute(correcteur)
+    surveillant.actif = True
+    tapes = []
+    monkeypatch.setattr(surveillant, "_taper_ailleurs", tapes.append)
+
+    _corriger_puis(surveillant, "sa va ", tapes)
+    surveillant._sur_evenement(FauxEvenement("backspace"))
+    surveillant._sur_evenement(FauxEvenement(","))
+
+    assert surveillant.frappe.texte == "ça va,"
+
+
+def test_le_second_retour_arriere_defait_la_correction(correcteur, clavier,
+                                                        monkeypatch):
+    """Comme sur un clavier de telephone : on efface, la correction s'annule.
+
+    Le premier appui a retire l'espace ; le second attaque le mot, et c'est
+    la qu'on comprend le refus.
+    """
+    surveillant = ecoute(correcteur)
+    surveillant.actif = True
+    tapes = []
+    monkeypatch.setattr(surveillant, "_taper_ailleurs", tapes.append)
+
+    _corriger_puis(surveillant, "sa va ", tapes)
     correction = tapes[-1]
 
     surveillant._sur_evenement(FauxEvenement("backspace"))
+    surveillant._sur_evenement(FauxEvenement("backspace"))
     annulation = tapes[-1]
 
-    # Le retour arriere de l'utilisateur a deja efface un caractere : il en
-    # reste un de moins a reprendre.
-    assert annulation.effacer == len(correction.ecrire) - 1
-    assert annulation.ecrire == correction.avant
+    # L'espace est deja parti, et la touche vient d'emporter une lettre : il
+    # reste le mot moins ces deux caracteres a reprendre.
+    assert annulation.effacer == len(correction.ecrire) - 2
+    # On remet le mot d'origine, sans son espace : elle a ete retiree expres.
+    assert annulation.ecrire == correction.avant.rstrip(" ")
+
+
+def test_une_correction_sans_espace_se_defait_du_premier_appui(correcteur,
+                                                                clavier,
+                                                                monkeypatch):
+    """La relecture a la pause ne pose pas de separateur : rien a retirer."""
+    from papote.frappe import Remplacement
+
+    surveillant = ecoute(correcteur)
+    surveillant.actif = True
+    tapes = []
+    monkeypatch.setattr(surveillant, "_taper_ailleurs", tapes.append)
+
+    surveillant._appliquer(Remplacement(3, "fous", "fou", ("ACCORD",)))
+    assert surveillant._separateur_en_attente is False
+
+    # Sans cela, le long silence depuis le demarrage ferme d'abord la
+    # fenetre du retour arriere.
+    surveillant._derniere_touche = time.monotonic()
+    surveillant._sur_evenement(FauxEvenement("backspace"))
+    assert tapes[-1].ecrire == "fou"
 
 
 def test_une_autre_touche_referme_la_fenetre_de_l_annulation(correcteur, clavier,

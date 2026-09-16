@@ -79,17 +79,22 @@ class Remplacement:
         return Remplacement(len(self.ecrire), self.avant, self.ecrire,
                             self.regles)
 
-    @property
-    def inverse_apres_retour_arriere(self) -> "Remplacement":
+    def inverse_apres_retour_arriere(
+            self, separateur_retire: bool = False) -> "Remplacement":
         """L'annulation quand l'utilisateur vient d'appuyer sur retour arriere.
 
         Sa touche a deja efface un caractere : il en reste un de moins a
         reprendre. C'est ce qui permet a Papote de se defaire d'un simple
         retour arriere, comme un clavier de telephone, sans avoir a empecher
         la touche d'agir.
+
+        `separateur_retire` dit qu'un premier retour arriere a deja emporte
+        l'espace pose par la correction. Il ne faut alors pas le remettre :
+        s'il a ete efface, c'est qu'on voulait coller quelque chose au mot.
         """
-        return Remplacement(max(0, len(self.ecrire) - 1), self.avant,
-                            self.ecrire, self.regles)
+        ecrit = self.ecrire[:-1] if separateur_retire else self.ecrire
+        avant = self.avant[:-1] if separateur_retire else self.avant
+        return Remplacement(max(0, len(ecrit) - 1), avant, ecrit, self.regles)
 
     def __str__(self) -> str:
         return f"{self.avant.strip()} → {self.ecrire.strip()}"
@@ -424,6 +429,9 @@ class EcouteClavier:
         # La derniere correction, tant qu'aucune autre touche n'est venue :
         # c'est elle qu'un retour arriere immediat defait.
         self._defaisable: Remplacement | None = None
+        # Cette correction s'est-elle terminee par un separateur que
+        # l'utilisateur n'a pas encore retire ? Voir `_sur_evenement`.
+        self._separateur_en_attente = False
         self._branchement = None
         # La relecture n'a lieu qu'une fois par pause : sans ce temoin, le
         # guetteur la relancerait quatre fois par seconde.
@@ -521,12 +529,22 @@ class EcouteClavier:
 
         if (getattr(evenement, "name", None) == "backspace"
                 and self._defaisable is not None):
+            if self._separateur_en_attente:
+                # Le premier retour arriere retire l'espace que la correction
+                # vient de poser. Ce n'est pas un refus : c'est qu'on veut
+                # coller une virgule au mot — « bonjour, » plutot que
+                # « bonjour , ». On laisse donc la touche agir, et la
+                # correction reste defaisable d'un second appui.
+                self._separateur_en_attente = False
+                self.frappe.retour_arriere()
+                return
             self._defaire(self._defaisable)
             return
 
         caractere = self._traduire(evenement)
         # Toute autre touche referme la fenetre du retour arriere.
         self._defaisable = None
+        self._separateur_en_attente = False
         if caractere is None:
             return
 
@@ -701,6 +719,7 @@ class EcouteClavier:
         self.annulables.append(remplacement)
         del self.annulables[:-self.profondeur_annulation]
         self._defaisable = remplacement
+        self._separateur_en_attente = remplacement.ecrire[-1:] in SEPARATEURS
         if self.sur_correction is not None:
             self.sur_correction(remplacement)
         self._taper_ailleurs(remplacement)
@@ -712,10 +731,14 @@ class EcouteClavier:
 
     def _defaire(self, remplacement: Remplacement) -> None:
         """Annule la correction que le retour arriere vient d'entamer."""
+        separateur_retire = (remplacement.ecrire[-1:] in SEPARATEURS
+                             and not self._separateur_en_attente)
         self._defaisable = None
+        self._separateur_en_attente = False
         if self.annulables and self.annulables[-1] is remplacement:
             self.annulables.pop()
-        self._taper_ailleurs(remplacement.inverse_apres_retour_arriere)
+        self._taper_ailleurs(
+            remplacement.inverse_apres_retour_arriere(separateur_retire))
         self.frappe.oublier()
         if self.sur_annulation is not None:
             self.sur_annulation(remplacement)
