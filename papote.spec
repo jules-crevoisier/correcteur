@@ -26,6 +26,8 @@ analyse = Analysis(
     datas=[
         (str(RACINE / "donnees" / "lexique_fr.txt.gz"), "donnees"),
         (str(RACINE / "donnees" / "frequences_fr.txt.gz"), "donnees"),
+        (str(RACINE / "donnees" / "analyses_fr.txt.gz"), "donnees"),
+        (str(RACINE / "donnees" / "flexions_fr.txt.gz"), "donnees"),
         (str(RACINE / "donnees" / "LICENCES.md"), "donnees"),
         # La fenetre est une page web : elle voyage avec le reste.
         (str(RACINE / "papote" / "web"), "papote/web"),

@@ -305,7 +305,8 @@ quelques fichiers Python et un dictionnaire.
 | Où et comment | `papote/politique.py` | Se taire ici, hausser le ton là |
 | Vos remplacements | `papote/config.py` | Ce que vous lui avez appris passe avant tout |
 | Protection | `papote/regles.py` | Ce qui sort du circuit avant examen |
-| Grammaire | `papote/grammaire.py` | 36 règles de contexte : homonymes, accords, conjugaison |
+| Grammaire | `papote/grammaire.py` | 44 règles de contexte : homonymes, accords, conjugaison |
+| Morphologie | `papote/morphologie.py` | Ce qu'est chaque mot : personne, nombre, genre |
 | Orthographe | `papote/lexique.py` | 450 000 formes françaises, accents et fautes de frappe |
 | Frappe | `papote/frappe.py` | Suit ce que vous tapez et décide quand intervenir |
 
@@ -346,7 +347,7 @@ elle ne tranche pas nettement, **le mot est laissé tel quel**.
 ### La grammaire
 
 Le dictionnaire ne voit pas les fautes où les deux graphies existent :
-`sa va`, `ils on mangé`, `j'ai manger`. Trente-six règles regardent les mots
+`sa va`, `ils on mangé`, `j'ai manger`. Quarante-quatre règles regardent les mots
 voisins pour trancher, et chacune ne se déclenche que sur un contexte où
 l'autre lecture est impossible :
 
@@ -360,15 +361,63 @@ l'autre lecture est impossible :
 | `tas vu` → `t'as vu` | `un tas de trucs` |
 | `je vais a la gare` → `à la gare` | `il a la flemme` |
 | `les gens pense` → `les gens pensent` | `ces quelques minutes ont suffi` |
+| `les gens finit` → `les gens finissent` | `les chiens court vite` |
+| `ils vient demain` → `ils viennent` | `ce sont des choses qui arrivent` |
+| `les bijou` → `les bijoux` | `la souris est cassée` |
+| `ils ont prit` → `ils ont pris` | `le prix est correct` |
 | `nous somme en retard` → `nous sommes` | `nous sommes allés à la plage` |
 | `des voitures rouge` → `rouges` | `il se lave les mains avant de manger` |
 | `si j'aurais su` → `si j'avais su` | `je serais ravi de t'aider` |
 | `ils se sont trompé` → `trompés` | `elles se sont écrit` |
 
-La conjugaison ne repose sur aucune table de verbes : les formes se
-fabriquent et se soumettent au dictionnaire. Pour accorder `nous mange`, Papote
-essaie `mangons` puis `mangeons` et garde celle qui existe — ce qui règle
-`mangeons`, `plaçons` et `achète` sans avoir codé une seule exception.
+### La morphologie
+
+Longtemps, les accords se sont faits en devinant. Le pluriel d'un nom, c'était
+« ajoute un *s*, sauf en *-al* et en *-eau* » — ce qui rate `bijoux`. Le pluriel
+d'un verbe, c'était « retire le *-er* et mets *-ent* » — ce qui ne voyait qu'un
+verbe sur six. Et « ce mot finit par un *s*, donc c'est un pluriel » prenait
+`le temps`, `la souris` et `le prix` pour des pluriels.
+
+Tout cela est pourtant écrit dans le dictionnaire Hunspell, sous les drapeaux
+qui décrivent les paradigmes. `outils/morphologie_hunspell.py` l'en extrait par
+deux signes que Dicollecte y a laissés :
+
+- **les élisions.** Chaque règle indique ce qui peut la précéder, et cette liste
+  est une empreinte de la personne. `j'` ne précède qu'une première personne,
+  `s'` qu'une troisième ; `m'` manque devant un `nous`, `t'` devant un `vous`,
+  `q'` devant un impératif ;
+- **le `L'`.** Du côté des noms, il marque les formes qui acceptent l'article
+  élidé. Or `l'` ne précède qu'un singulier : `l'affiche` se dit, `l'affiches`
+  non. Le drapeau donne donc le nombre, sans exception.
+
+Reste l'ordre des règles, qui se lit tout seul : le français se conjugue
+toujours dans le même sens — je, tu, il, nous, vous, ils — et un créneau placé
+juste après un `vous` est forcément un pluriel. C'est ce qui distingue
+`il vient` de `ils viennent`, que la terminaison ne distingue pas.
+
+Il en sort deux tables, 186 000 formes et 26 000 paradigmes, que Papote consulte
+par dichotomie sans rien construire au démarrage :
+
+```
+pensent   3p             penser
+affiche   1s,3s,i2s,xs   affiche afficher
+```
+
+Le paradigme d'un verbe arrive **découpé par temps**, et c'est ce qui permet
+d'accorder sans déplacer : dans `les gens finit`, on cherche la troisième
+personne du pluriel *dans le temps de `finit`*, ce qui donne `finissent` et non
+`finirent` — un passé simple parfaitement correct, mais hors sujet.
+
+Ce que le dictionnaire ne dit pas, Papote ne l'invente pas : **il ignore le
+genre des noms**. Il connaît celui des paradigmes à deux genres — `chat` /
+`chatte` —, pas celui de `voiture` ni de `cheval`. L'accord se fait donc en
+nombre, et en genre seulement quand le genre est connu :
+
+| | |
+|---|---|
+| `des chattes gentil` → `gentilles` | le dictionnaire connaît le genre |
+| `des voitures blanc` → `blancs` | il ne le connaît pas : le nombre seul |
+
 
 Le principe, partout : **mieux vaut sous-corriger que corrompre**. Un message
 qui garde une faute reste lisible ; un message mal corrigé ne l'est plus.

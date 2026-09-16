@@ -20,6 +20,13 @@ Développement des radicaux et des affixes de `fr.dic` / `fr.aff`, groupé par
 graphie sans accents. Œuvre dérivée du dictionnaire ci-dessus, donc **MPL 2.0**
 elle aussi.
 
+## `analyses_fr.txt.gz`, `flexions_fr.txt.gz` — la morphologie
+
+Ce qu'est chaque forme — personne, nombre, genre — et le paradigme dont elle
+vient. Lu dans les drapeaux de `fr.dic` / `fr.aff` par
+`outils/morphologie_hunspell.py`, qui explique comment. Œuvre dérivée du
+dictionnaire ci-dessus, donc **MPL 2.0** elle aussi.
+
 ## `frequences_fr.txt.gz` — les 48 000 mots les plus employés
 
 Ordre de fréquence extrait de [wordfreq](https://github.com/rspeer/wordfreq)

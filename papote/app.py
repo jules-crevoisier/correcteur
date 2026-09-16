@@ -15,6 +15,7 @@ from . import memoire as memoire_mod
 from . import config as config_mod
 from . import demarrage, frappe as frappe_mod, journal as journal_mod
 from . import lexique, maj, moteur
+from . import morphologie
 from . import politique as politique_mod
 from . import presse_papier
 from .raccourci import Raccourci, RaccourciInvalide
@@ -34,6 +35,7 @@ class Application:
         self.actif = True
         self._correcteurs: dict[str, moteur.Correcteur] = {}
         self._lexique: lexique.Lexique | None = None
+        self._morphologie: morphologie.Morphologie | None = None
         self._verrou = threading.Lock()
         self._ecoute: frappe_mod.EcouteClavier | None = None
 
@@ -165,9 +167,11 @@ class Application:
                 self.journal("Chargement du dictionnaire...")
                 self._lexique = lexique.Lexique()
                 self._lexique.charger()
+                self._morphologie = morphologie.Morphologie()
+                self._morphologie.charger()
                 self.journal("Papote pret.")
             self._correcteurs[registre] = moteur.depuis_config(
-                self.config, self._lexique, registre
+                self.config, self._lexique, registre, self._morphologie
             )
         return self._correcteurs[registre]
 

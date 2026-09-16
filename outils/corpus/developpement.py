@@ -86,6 +86,40 @@ FAUTES = [
     ("si j'aurais le temps", "si j'avais le temps", "conjugaison"),
     ("si tu pourrais venir", "si tu pouvais venir", "conjugaison"),
 
+    # -- conjugaison, hors du 1er groupe. Tant que le correcteur devinait
+    #    l'infinitif a la terminaison, il ne voyait que les verbes en
+    #    « -er » ; le dictionnaire, lui, les conjugue tous.
+    ("les gens finit tard", "les gens finissent tard", "conjugaison"),
+    ("les enfants dort déjà", "les enfants dorment déjà", "conjugaison"),
+    ("les gens prend le bus", "les gens prennent le bus", "conjugaison"),
+    ("ils vient demain", "ils viennent demain", "conjugaison"),
+    ("tu dort encore", "tu dors encore", "conjugaison"),
+    ("je part demain", "je pars demain", "conjugaison"),
+    ("il sortais hier", "il sortait hier", "conjugaison"),
+    ("ils ont prit le train", "ils ont pris le train", "conjugaison"),
+    ("elle a mit la table", "elle a mis la table", "conjugaison"),
+
+    # -- accord : les pluriels que le dictionnaire connait et qu'aucune
+    #    terminaison ne devine.
+    ("les bijou brillent", "les bijoux brillent", "accord"),
+    ("les cheval courent", "les chevaux courent", "accord"),
+    ("les journal sont vieux", "les journaux sont vieux", "accord"),
+    ("des animaux royal", "des animaux royaux", "accord"),
+    ("ils sont national", "ils sont nationaux", "accord"),
+    ("un chevaux blanc", "un cheval blanc", "accord"),
+
+    # -- le sujet n'est pas toujours colle a son verbe
+    ("beaucoup de gens pense ça", "beaucoup de gens pensent ça", "accord"),
+    ("les gens qui pense ça", "les gens qui pensent ça", "accord"),
+    ("la plupart des gens pense", "la plupart des gens pensent", "accord"),
+
+    # -- l'adjectif s'accorde, meme quand son feminin est irregulier
+    ("des chevaux blanc", "des chevaux blancs", "accord"),
+    ("les yeux fermé", "les yeux fermés", "accord"),
+    ("des jolies fleur", "des jolies fleurs", "accord"),
+    ("trois chat noir", "trois chats noirs", "accord"),
+    ("des chattes gentil", "des chattes gentilles", "accord"),
+
     # -- conjugaison (deuxieme serie, ecrite apres coup pour eprouver)
     ("nous somme en retard", "nous sommes en retard", "conjugaison"),
     ("vous ete prêts", "vous êtes prêts", "conjugaison"),
@@ -151,6 +185,19 @@ FAUTES = [
 
 # Phrases correctes : elles doivent ressortir a l'identique.
 INTOUCHABLES = [
+    # « court » est un adjectif autant qu'un verbe, et les deux lectures
+    # demandent des corrections opposees : « les chiens courts » ou « les
+    # chiens courent ». Devant ce partage, le correcteur n'invente pas.
+    "les chiens court vite",
+    "des tickets restaurant",
+    "je les mange tous les jours",
+    "beaucoup de monde est venu",
+    # « le prix », « les prix » : un nom qui finit par « s » sans etre un
+    # pluriel. La terminaison le disait pluriel, le dictionnaire non.
+    "le prix est correct",
+    "la souris est cassée",
+    "ce sont des choses qui arrivent",
+    "lui et elle sont partis",
     # -- francais parle, la raison d'etre de l'outil
     "j'ai pas compris ce que tu voulais dire",
     "faut que j'y aille",

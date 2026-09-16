@@ -6,11 +6,13 @@ les terminaisons possibles (« chats », « chatte », « chattes »). Lire ce f
 a l'execution demande une bibliotheque et coute ~700 us par mot inconnu : bien
 trop lent pour tester le millier de candidats qu'exige une correction.
 
-Ce script fait le travail une bonne fois pour toutes et produit deux fichiers
-que l'application se contente de lire ligne a ligne :
+Ce script fait le travail une bonne fois pour toutes et produit quatre
+fichiers que l'application se contente de lire ligne a ligne :
 
     donnees/lexique_fr.txt.gz      toutes les formes, groupees par squelette
     donnees/frequences_fr.txt.gz   les plus courantes, de la plus a la moins
+    donnees/analyses_fr.txt.gz     ce qu'est chaque forme, triee par forme
+    donnees/flexions_fr.txt.gz     les paradigmes, tries par lemme
 
 Le lexique est groupe par *squelette* — la graphie privee de ses accents — et
 trie, ce qui permet a l'application de le consulter par dichotomie sans
@@ -19,6 +21,17 @@ construire le moindre index au demarrage :
     gateaux\tgâteaux
     pres\tprès prés prêts
     bonjour
+
+Les deux derniers portent la grammaire que Hunspell garde sous ses drapeaux
+— personne, nombre, genre. Leur lecture est expliquee dans
+`outils/morphologie_hunspell.py` ; ici on se contente de l'ecrire.
+
+    affichons\t1p\tafficher
+    affiche\t1s,3s,i2s,xs\taffiche afficher
+
+Ils ne couvrent que les paradigmes dont au moins une forme figure parmi les
+mots courants. Le reste, personne ne l'ecrit, et la grammaire n'a aucune
+raison de s'en meler.
 
 A relancer uniquement si le dictionnaire (donnees/fr.dic) change :
 
@@ -133,6 +146,57 @@ def frequences(lexique: set[str]) -> list[str]:
     ]
 
 
+def morphologie(courants: set[str]) -> tuple[list[str], list[str]]:
+    """Les deux tables de grammaire, dans l'ordre ou l'application les lit.
+
+    On ne retient que les paradigmes dont une forme au moins est employee.
+    Les autres pesent la moitie du fichier pour des mots que personne n'ecrit,
+    et une regle d'accord qui ne se declenche jamais ne sert a rien.
+
+    Le paradigme retenu l'est en entier : « pensassent » n'est pas un mot
+    courant, mais c'est la forme qu'il faut savoir ecrire le jour ou
+    quelqu'un tape « il fallait qu'ils pensasse ».
+    """
+    from spylls.hunspell import Dictionary
+
+    from morphologie_hunspell import paradigmes
+
+    dictionnaire = Dictionary.from_files(str(DONNEES / "fr"))
+    def employe(groupes):
+        return any(f in courants or f.lower() in courants
+                   for groupe in groupes for f in groupe)
+
+    retenus = [
+        (lemme, categorie, groupes)
+        for lemme, categorie, groupes in paradigmes(dictionnaire)
+        if lemme in courants or employe(groupes)
+    ]
+
+    flexions = sorted(
+        "{}\t{}\t{}".format(
+            lemme, categorie,
+            ";".join(" ".join(f"{forme}:{','.join(sorted(traits))}"
+                              for forme, traits in sorted(groupe.items()))
+                     for groupe in groupes),
+        )
+        for lemme, categorie, groupes in retenus
+    )
+
+    analyses: dict[str, tuple[set[str], set[str]]] = {}
+    for lemme, _categorie, groupes in retenus:
+        for groupe in groupes:
+            for forme, traits in groupe.items():
+                connus, lemmes = analyses.setdefault(forme, (set(), set()))
+                connus |= traits
+                lemmes.add(lemme)
+    tables = sorted(
+        "{}\t{}\t{}".format(forme, ",".join(sorted(traits)),
+                             " ".join(sorted(lemmes)))
+        for forme, (traits, lemmes) in analyses.items()
+    )
+    return tables, flexions
+
+
 def _ecrire(chemin: Path, lignes: list[str]) -> None:
     contenu = "\n".join(lignes)
     with gzip.open(chemin, "wt", encoding="utf-8", compresslevel=9) as f:
@@ -151,7 +215,13 @@ def main() -> int:
     _ecrire(DONNEES / "lexique_fr.txt.gz", grouper(lexique))
 
     print("Extraction des frequences...")
-    _ecrire(DONNEES / "frequences_fr.txt.gz", frequences(lexique))
+    courants = frequences(lexique)
+    _ecrire(DONNEES / "frequences_fr.txt.gz", courants)
+
+    print("Lecture de la grammaire cachee dans les drapeaux...")
+    analyses, flexions = morphologie(set(courants))
+    _ecrire(DONNEES / "analyses_fr.txt.gz", analyses)
+    _ecrire(DONNEES / "flexions_fr.txt.gz", flexions)
     return 0
 
 
