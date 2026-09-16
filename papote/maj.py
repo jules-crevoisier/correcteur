@@ -177,6 +177,37 @@ def telecharger(version: Version, destination: Path | None = None) -> Path:
     return cible
 
 
+# Marqueur pose par la fenetre pour demander a l'icone de se relancer. Les
+# deux vivent dans des processus differents : un fichier est le canal le plus
+# simple, et le seul qui survive a l'absence de l'un des deux.
+MARQUEUR = "redemarrage.demande"
+
+
+def _chemin_marqueur() -> Path:
+    from .config import dossier_config
+
+    return dossier_config() / MARQUEUR
+
+
+def demander_redemarrage() -> None:
+    """Demande a l'application qui tourne de se relancer."""
+    chemin = _chemin_marqueur()
+    chemin.parent.mkdir(parents=True, exist_ok=True)
+    chemin.write_text("", encoding="utf-8")
+
+
+def redemarrage_demande() -> bool:
+    """Le relancement a-t-il ete demande ? La reponse efface la demande."""
+    chemin = _chemin_marqueur()
+    if not chemin.is_file():
+        return False
+    try:
+        chemin.unlink()
+    except OSError:
+        pass
+    return True
+
+
 def en_attente() -> Path | None:
     """La version deja telechargee qui n'attend que le prochain demarrage."""
     if not compilee():

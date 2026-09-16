@@ -12,7 +12,8 @@ from typing import Callable
 
 from . import apprentissage as apprentissage_mod
 from . import config as config_mod
-from . import demarrage, frappe as frappe_mod, lexique, maj, moteur
+from . import demarrage, frappe as frappe_mod, journal as journal_mod
+from . import lexique, maj, moteur
 from . import politique as politique_mod
 from . import presse_papier
 from .raccourci import Raccourci, RaccourciInvalide
@@ -24,9 +25,11 @@ class Application:
     def __init__(self, config: dict | None = None,
                  journal: Callable[[str], None] | None = None):
         self.config = config or config_mod.charger()
-        # Le journal part sur la sortie d'erreur : « --texte » doit pouvoir
-        # etre redirige sans ramasser les messages de chargement.
-        self.journal = journal or (lambda message: print(message, file=sys.stderr))
+        # Le journal part sur la sortie d'erreur — « --texte » doit pouvoir
+        # etre redirige sans ramasser les messages de chargement — et dans le
+        # fichier, seul endroit ou l'on puisse relire ce qui s'est passe une
+        # fois l'application compilee.
+        self.journal = journal or self._consigner
         self.actif = True
         self._correcteurs: dict[str, moteur.Correcteur] = {}
         self._lexique: lexique.Lexique | None = None
@@ -50,6 +53,11 @@ class Application:
 
         self.raccourcis: list[Raccourci] = []
         self._installer_raccourcis()
+
+    @staticmethod
+    def _consigner(message: str) -> None:
+        print(message, file=sys.stderr)
+        journal_mod.ecrire(message)
 
     # -- raccourcis ---------------------------------------------------------
 
@@ -180,19 +188,39 @@ class Application:
         def _demarrer():
             try:
                 self.correcteur  # noqa: B018 — declenche le chargement
-                # La frappe ne s'ecoute qu'une fois le dictionnaire en place :
-                # un crochet clavier qui met un dixieme de seconde a repondre
-                # se sent tout de suite.
-                if self.config.get("correction_auto", True):
-                    self.ecoute.activer()
-                    self.journal("Correction au fil de la frappe active.")
             except lexique.LexiqueIntrouvable as e:
-                self.journal(str(e))
+                journal_mod.erreur("dictionnaire introuvable", e)
                 self.notifier("Dictionnaire introuvable", str(e).split("\n")[0])
-            except Exception:
-                self.journal(traceback.format_exc())
+                return
+            except Exception as e:
+                journal_mod.erreur("le dictionnaire n'a pas pu etre charge", e)
                 self.notifier("Papote indisponible",
-                              "Le dictionnaire n'a pas pu etre charge.")
+                              "Le dictionnaire n'a pas pu être chargé. "
+                              "Détails dans le journal.")
+                return
+
+            if not self.config.get("correction_auto", True):
+                return
+
+            # La frappe ne s'ecoute qu'une fois le dictionnaire en place : un
+            # crochet clavier qui met un dixieme de seconde a repondre se sent
+            # tout de suite.
+            #
+            # Et son echec n'est pas celui du dictionnaire : le crochet peut
+            # etre refuse par le systeme sans que rien d'autre soit casse. Le
+            # dire clairement evite d'envoyer chercher un probleme la ou il
+            # n'est pas — le raccourci, lui, continue de fonctionner.
+            try:
+                self.ecoute.activer()
+                self.journal("Correction au fil de la frappe active.")
+            except Exception as e:
+                journal_mod.erreur(
+                    "la correction au fil de la frappe n'a pas pu demarrer", e)
+                self.notifier(
+                    "Correction automatique indisponible",
+                    f"Le raccourci {self.config.get('raccourci', '')} reste "
+                    f"actif. Détails dans Réglages → Ouvrir le journal.",
+                )
 
         threading.Thread(target=_demarrer, daemon=True).start()
 

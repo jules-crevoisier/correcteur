@@ -48,9 +48,24 @@ les **fautes** — accents, accords, conjugaison, homonymes — et laisse le
 
 ## Installation
 
-Téléchargez **`Papote.exe`** depuis l'onglet
+Téléchargez **`Papote.msi`** depuis l'onglet
 [Releases](../../releases) — la dernière version est tout en haut — et
 double-cliquez dessus.
+
+L'installateur ne demande **aucun droit administrateur** : Papote se range
+dans votre profil. Il propose trois choses au passage, à cocher ou non :
+
+| Étape | Par défaut |
+|---|---|
+| Papote et son dictionnaire | Obligatoire, 20 Mo |
+| Lancer au démarrage de Windows | Coché |
+| Raccourci sur le bureau | Décoché |
+
+Les deux dernières se retrouvent ensuite dans les réglages de l'application :
+la case de l'installateur et celle des réglages écrivent au même endroit.
+
+Vous préférez ne rien installer ? **`Papote.exe`** est le programme seul, à
+poser où vous voulez — une clé USB, par exemple — et à lancer tel quel.
 
 Windows affichera un avertissement SmartScreen au premier lancement :
 l'exécutable n'est pas signé numériquement. *Informations complémentaires* →
@@ -133,7 +148,7 @@ l'icône. Cinq onglets :
 | **Mon dictionnaire** | Les mots à ne jamais corriger, et vos remplacements. |
 | **Vos fautes** | Ce que vous corrigez le plus, compté sur votre machine. |
 | **Applications** | Où se taire, et où hausser le ton. |
-| **Réglages** | Tout ce qui se réglait dans un fichier JSON. |
+| **Réglages** | Tout ce qui se réglait dans un fichier JSON, plus le journal des erreurs. |
 
 ## Lui apprendre vos mots
 
@@ -243,8 +258,10 @@ fois par jour. Quand il en trouve une, il la télécharge en arrière-plan et
 que vous écrivez. Remplacer un exécutable sous les doigts de quelqu'un est le
 plus sûr moyen de lui faire perdre sa phrase.
 
-Pour ne pas attendre : clic droit sur l'icône → *Redémarrer pour installer*,
-ou le bouton *Vérifier maintenant* dans les réglages.
+Dès qu'une version est prête, **un bouton « Redémarrer » apparaît** — dans les
+réglages, et en bas de la colonne de gauche quelle que soit la page où vous
+êtes. Un clic, Papote se relance, la nouvelle version prend la place. Le clic
+droit sur l'icône propose la même chose.
 
 Le téléchargement ne vient que des [Releases de ce
 dépôt](../../releases), en HTTPS, et l'empreinte SHA-256 publiée par GitHub
@@ -252,6 +269,18 @@ est vérifiée quand elle est présente. Rien d'autre n'est envoyé ni reçu : l
 requête ne contient que le numéro de version installée.
 
 Pour tout couper : décochez *Chercher les nouvelles versions automatiquement*.
+
+## Quand quelque chose ne va pas
+
+`Papote.exe` n'a pas de console : sans journal, un message d'erreur disparaît
+avec lui. Tout ce qui se passe mal est donc noté dans
+`%APPDATA%\Papote\journal.log`, avec la pile d'appels quand il y en a une.
+
+*Réglages → Quand quelque chose ne va pas* permet de l'ouvrir, de le copier
+d'un clic — pour le coller dans un rapport de bug — ou de l'effacer. Rien n'en
+sort tout seul : le fichier reste sur votre machine.
+
+En ligne de commande : `Papote.exe --journal`.
 
 ## Ce que l'outil ne touche jamais
 
@@ -401,7 +430,7 @@ Depuis les sources, remplacez `Papote.exe` par `python -m papote`.
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest tests/ -q          # ~310 tests, moins d'une seconde
+python -m pytest tests/ -q          # ~360 tests, moins d'une seconde
 python outils/evaluer.py           # la qualité du correcteur, en chiffres
 python -m papote --texte "sa va ?"
 ```
@@ -418,6 +447,16 @@ construire_exe.bat
 Le résultat est `dist\Papote.exe` : un fichier unique d'une vingtaine de
 mégaoctets, dictionnaire compris.
 
+L'installateur, lui, se construit avec [WiX](https://wixtoolset.org/) à partir
+de `installateur/papote.wxs` — c'est ce que fait GitHub à chaque envoi. Ses
+images ne sont pas versionnées : elles se redessinent à partir des icônes du
+programme.
+
+```
+python outils/images_installateur.py
+wix build installateur/papote.wxs -d Version=1.0.0 -bindpath dist -bindpath installateur -ext WixToolset.UI.wixext -culture fr-FR -out dist/Papote.msi
+```
+
 C'est aussi ce que fait GitHub à chaque envoi, sur n'importe quelle branche
 ([`.github/workflows/executable.yml`](.github/workflows/executable.yml)) :
 l'exécutable est construit sur une machine Windows, testé, puis déposé dans
@@ -432,6 +471,26 @@ main. Pour ouvrir une nouvelle série — `v1.1.x` — il suffit de changer `SER
 Le numéro est inscrit dans le code avant la compilation
 (`papote/version_compilee.py`, ignoré par git) : c'est ainsi que
 l'exécutable sait, plus tard, qu'une version plus récente est parue.
+
+### Les icônes
+
+Elles sont en pixel art, et se lisent dans le code : chaque icône est une
+grille de caractères, chaque caractère un pixel.
+
+```python
+"papote": _grille("""
+....########....
+..############..
+.####++++++####.
+.##############.
+.#.oo..oo..oo.#.
+...
+""")
+```
+
+Le rendu se fait à l'agrandissement entier, sans lissage, pour que le trait
+reste net à toutes les tailles. Rien ne dépend de Pillow côté fenêtre :
+`tkinter.PhotoImage` sait poser des pixels un par un.
 
 ### Régénérer le dictionnaire
 
@@ -459,6 +518,10 @@ Le dictionnaire français vient de [Dicollecte](https://grammalecte.net/)
 | `papote/presse_papier.py` | Capture de la sélection via le presse-papiers |
 | `papote/interface.py` | Icône dans la zone de notification |
 | `papote/fenetre.py` | Fenêtre : corriger, dictionnaire, réglages (tkinter) |
+| `papote/theme.py` | Couleurs, espacements, widgets dessinés |
+| `papote/icones.py` | Les icônes, en pixel art |
+| `papote/journal.py` | Le journal des erreurs |
+| `papote/couleurs.py` | La palette, sans dépendance |
 | `papote/frappe.py` | Correction au fil de la frappe et annulation |
 | `papote/politique.py` | Où corriger, et sur quel ton |
 | `papote/apprentissage.py` | Ce qu'il retient de vos habitudes |
@@ -470,3 +533,5 @@ Le dictionnaire français vient de [Dicollecte](https://grammalecte.net/)
 | `papote/chemins.py` | Emplacements selon le mode (sources, `.exe`) |
 | `outils/construire_lexique.py` | Fabrication des fichiers de `donnees/` |
 | `outils/evaluer.py` | Le corpus d'évaluation et son tableau de bord |
+| `outils/images_installateur.py` | L'icône et les images de l'installateur |
+| `installateur/papote.wxs` | La recette de l'installateur MSI |

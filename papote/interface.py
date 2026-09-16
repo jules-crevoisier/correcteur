@@ -9,24 +9,18 @@ import threading
 import time
 
 from . import __version__, config as config_mod
-from . import demarrage, maj
+from . import couleurs, demarrage, icones, maj
 
 
 def _icone(actif: bool = True):
-    """Dessine l'icone : un « A » sur pastille ronde, grise quand en pause."""
-    from PIL import Image, ImageDraw
-
-    taille = 64
-    image = Image.new("RGBA", (taille, taille), (0, 0, 0, 0))
-    dessin = ImageDraw.Draw(image)
-    fond = (43, 122, 222, 255) if actif else (128, 128, 128, 255)
-    dessin.ellipse([2, 2, taille - 2, taille - 2], fill=fond)
-    # Un accent aigu au-dessus du A : le propos de l'outil en un coup d'oeil.
-    dessin.line([(26, 12), (36, 6)], fill="white", width=5)
-    dessin.line([(20, 52), (32, 20)], fill="white", width=6)
-    dessin.line([(32, 20), (44, 52)], fill="white", width=6)
-    dessin.line([(25, 40), (39, 40)], fill="white", width=5)
-    return image
+    """La bulle de Papote, en pixel art. Grise quand l'outil est en pause."""
+    trait = couleurs.ACCENT if actif else couleurs.TEXTE_ETEINT
+    creux = "#0e1014" if actif else "#1a1c22"
+    return icones.image_pil(
+        "papote",
+        icones.palette(trait, creux, lumiere=couleurs.ACCENT_VIF if actif else trait),
+        taille=64,
+    )
 
 
 class InterfaceBarre:
@@ -161,6 +155,13 @@ class InterfaceBarre:
         """
         while True:
             time.sleep(self.SURVEILLANCE)
+
+            # La fenetre demande parfois qu'on se relance — apres avoir
+            # telecharge une mise a jour, par exemple.
+            if maj.redemarrage_demande() and self.icone is not None:
+                self._redemarrer(self.icone, None)
+                return
+
             empreinte = self._empreinte_config()
             if empreinte is None or empreinte == self._empreinte:
                 continue

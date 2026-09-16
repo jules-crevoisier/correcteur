@@ -15,7 +15,7 @@ import os
 import sys
 
 from . import __version__, config as config_mod
-from . import demarrage, maj
+from . import demarrage, journal, maj
 from .app import Application
 
 
@@ -87,6 +87,7 @@ def _rattacher_sortie() -> None:
 
 def main(argv: list[str] | None = None) -> int:
     brancher_sortie()
+    journal.installer()
 
     # Une version telechargee attend peut-etre d'etre mise en place. C'est la
     # premiere chose a faire : le processus courant cede alors la place au
@@ -119,6 +120,8 @@ def main(argv: list[str] | None = None) -> int:
                            help="controle l'installation et quitte")
     analyseur.add_argument("--maj", action="store_true",
                            help="cherche une nouvelle version et la telecharge")
+    analyseur.add_argument("--journal", action="store_true",
+                           help="affiche le journal des erreurs et quitte")
     analyseur.add_argument("--version", action="version", version=f"Papote {__version__}")
     args = analyseur.parse_args(argv)
 
@@ -134,6 +137,11 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.maj:
         return _mettre_a_jour()
+
+    if args.journal:
+        print(f"Journal : {journal.chemin()}\n")
+        print(journal.lire() or "(vide — aucune erreur consignee)")
+        return 0
 
     app = Application()
 
@@ -262,6 +270,7 @@ def _verifier() -> int:
         souci = True
 
     print(f"[ok] Reglages : {config_mod.chemin_config()}")
+    print(f"[ok] Journal des erreurs : {journal.chemin()}")
 
     config = config_mod.charger()
     etat = "activee" if config.get("correction_auto", True) else "desactivee"
