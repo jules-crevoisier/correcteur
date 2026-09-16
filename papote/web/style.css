@@ -828,3 +828,46 @@ input::placeholder { color: var(--texte-eteint); }
   border-color: color-mix(in srgb, var(--alerte) 55%, transparent);
   color: var(--alerte);
 }
+
+
+/* Le chemin du dossier de reglages : on doit pouvoir le lire et le copier,
+   donc une chasse fixe, et un retour a la ligne plutot qu'un debordement. */
+.chemin {
+  font-family: "Cascadia Code", "Consolas", ui-monospace, monospace;
+  font-size: 12px;
+  color: var(--texte-doux);
+  background: var(--surface-haute);
+  border: 1px solid var(--trait);
+  border-radius: var(--rayon-petit);
+  padding: 6px 9px;
+  word-break: break-all;
+  user-select: all;
+}
+
+
+/* Les trois reglages fins. Le style des champs texte s'arretait a
+   « input[type="text"] » : un nombre et une liste deroulante n'en heritaient
+   pas, et tombaient sur le dessin du systeme — blanc sur fond sombre. */
+.champ {
+  padding: 7px 11px;
+  border: 1px solid var(--trait-net);
+  border-radius: var(--rayon-petit);
+  background: var(--surface-haute);
+  color: var(--texte);
+  font: inherit;
+  font-size: 13px;
+}
+.champ:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+input.champ[type="number"] { width: 78px; text-align: right; }
+
+.champ-nombre {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  color: var(--texte-eteint);
+  font-size: 12px;
+  white-space: nowrap;
+}

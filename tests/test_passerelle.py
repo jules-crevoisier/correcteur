@@ -52,8 +52,12 @@ def test_demarrer_donne_de_quoi_dessiner_la_page(passerelle):
 def test_les_reglages_exposes_ne_contiennent_que_ce_qui_se_regle(passerelle):
     """Exposer un delai que nul ecran ne montre, c'est promettre un ecran."""
     reglages = passerelle.demarrer()["reglages"]
-    assert "delai_copie" not in reglages
+    assert "delai_collage" not in reglages
     assert "raccourci" in reglages
+    # Ces deux-la ont un ecran, desormais : Tab sert ailleurs, et une
+    # application lente a repondre au Ctrl+C fait echouer le raccourci.
+    assert "touche_prediction" in reglages
+    assert "delai_copie" in reglages
 
 
 # -- corriger ---------------------------------------------------------------

@@ -277,6 +277,71 @@
           </div>
         </div>
 
+        <!-- Trois reglages qui n'existaient que dans le fichier. Celui qui
+             en a besoin en a vraiment besoin : Tab sert deja partout dans
+             les formulaires, et une application lente a repondre au Ctrl+C
+             fait echouer le raccourci sans rien dire. -->
+        <div class="carte">
+          <h2>Réglages fins</h2>
+          <p class="aide">À ne toucher que si quelque chose ne va pas.</p>
+
+          <div class="ligne-action">
+            <div>
+              <div class="ligne-titre">Touche qui accepte la proposition</div>
+              <div class="aide">Elle n'est détournée que pendant que la bulle
+                est affichée. Ailleurs, elle garde son rôle.</div>
+            </div>
+            <select class="champ" id="touche-prediction">
+              <option value="tab">Tab</option>
+              <option value="right">Flèche droite</option>
+              <option value="end">Fin</option>
+              <option value="ctrl+space">Ctrl + Espace</option>
+            </select>
+          </div>
+
+          <div class="ligne-action">
+            <div>
+              <div class="ligne-titre">Oublier la phrase après</div>
+              <div class="aide">Passé ce silence, le curseur a pu bouger :
+                Papote repart de zéro plutôt que de corriger à l'aveugle.</div>
+            </div>
+            <span class="champ-nombre">
+              <input class="champ" id="delai-oubli" type="number"
+                     min="1" max="30" step="0.5"> s
+            </span>
+          </div>
+
+          <div class="ligne-action">
+            <div>
+              <div class="ligne-titre">Attendre le presse-papiers</div>
+              <div class="aide">À augmenter si le raccourci de correction ne
+                trouve rien dans une application lente à répondre.</div>
+            </div>
+            <span class="champ-nombre">
+              <input class="champ" id="delai-copie" type="number"
+                     min="0.1" max="3" step="0.05"> s
+            </span>
+          </div>
+        </div>
+
+        <!-- La promesse est ecrite partout : rien de ce qui est tape ne
+             quitte la machine, et rien n'en reste. Une promesse qu'on ne
+             peut pas verifier ne vaut pas grand-chose : cet encadre nomme
+             les fichiers, les mesure, et ouvre le dossier. -->
+        <div class="carte">
+          <h2>Ce que Papote garde de vous</h2>
+          <p class="aide">Rien de ce que vous tapez ne quitte cette machine :
+            aucun compte, aucun serveur, aucun fichier envoyé. Voici
+            exactement ce qui est écrit sur votre disque.</p>
+          <ul class="lignes" id="fichiers-gardes"></ul>
+          <div class="rangee">
+            <code class="chemin" id="dossier-config"></code>
+          </div>
+          <div class="rangee">
+            <button class="bouton" id="ouvrir-dossier">Ouvrir le dossier</button>
+          </div>
+        </div>
+
         <div class="carte">
           <h2>Quand quelque chose ne va pas</h2>
           <p class="aide">Papote note ici ce qui s'est mal passé. Le fichier

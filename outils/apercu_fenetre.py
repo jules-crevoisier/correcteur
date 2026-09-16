@@ -34,16 +34,12 @@ LARGEUR, HAUTEUR = 980, 700
 
 
 def _donnees() -> dict:
-    """Les reponses que la doublure sert a la page.
-
-    La page « Dicter » est montree dans son etat le plus interessant : les
-    modeles installes, une reunion deja transcrite. C'est celui qu'on veut
-    regarder quand on dessine.
-    """
     """Ce que la passerelle rendrait, sur une configuration d'exemple.
 
     L'exemple est garni : une fenetre vide est facile a trouver belle, et ne
-    dit rien de ce qu'elle devient une fois remplie.
+    dit rien de ce qu'elle devient une fois remplie. La page « Dicter » est
+    montree dans son etat le plus interessant — modeles installes, reunion
+    deja transcrite —, qui est celui qu'on veut regarder quand on dessine.
     """
     from papote import config as config_mod
     from papote.app import Application
@@ -121,6 +117,23 @@ def _donnees() -> dict:
                        "2026-09-16 14:09:40  [info]  Correction appliquée : "
                        "« sa » → « ça »\n",
         },
+        "confidentialite": {
+            "dossier": r"C:\Users\vous\AppData\Roaming\Papote",
+            "fichiers": [
+                {"nom": "config.json", "octets": 1284,
+                 "quoi": "Vos réglages. Rien de ce que vous tapez."},
+                {"nom": "apprentissage.json", "octets": 6120,
+                 "quoi": "Les corrections que vous annulez, comptées. "
+                         "Seuls les mots du dictionnaire y entrent."},
+                {"nom": "memoire.json", "octets": 20480,
+                 "quoi": "Les mots que vous employez souvent, pour la "
+                         "prédiction. Seuls les mots du dictionnaire y "
+                         "entrent."},
+                {"nom": "journal.log", "octets": 3072,
+                 "quoi": "Ce qui s'est mal passé. La règle et les "
+                         "longueurs, jamais le texte."},
+            ],
+        },
     }
 
 
@@ -136,6 +149,8 @@ DOUBLURE = """
     applications: async () => donnees.applications,
     fautes: async () => donnees.fautes,
     journal: async () => donnees.journal,
+    confidentialite: async () => donnees.confidentialite,
+    ouvrir_le_dossier: async () => rien,
     ajouter_mot: async () => rien,
     retirer_mot: async () => rien,
     ajouter_remplacement: async () => rien,

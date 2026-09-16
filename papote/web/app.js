@@ -222,7 +222,7 @@ const RAFRAICHIR = {
   fautes: chargerFautes,
   applications: chargerApplications,
   dicter: chargerDictee,
-  reglages: chargerJournal,
+  reglages: () => { chargerJournal(); chargerConfidentialite(); },
 };
 
 function afficher(cle) {
@@ -418,6 +418,67 @@ async function chargerFautes() {
   });
   sinon(liste, "Rien encore. Corrigez un peu, revenez voir.");
 }
+
+/* Les trois reglages qui n'existaient que dans le fichier.
+
+   Chacun s'enregistre des qu'il change : il n'y a pas de bouton
+   « Enregistrer » dans cette fenetre, et il n'en faut pas un ici. */
+function brancherReglagesFins() {
+  lier("#touche-prediction", "touche_prediction", (champ) => champ.value);
+  lier("#delai-oubli", "delai_oubli", (champ) => Number(champ.value));
+  lier("#delai-copie", "delai_copie", (champ) => Number(champ.value));
+}
+
+function lier(selecteur, cle, lire) {
+  const champ = $(selecteur);
+  champ.value = etat.reglages[cle];
+  champ.addEventListener("change", async () => {
+    const valeur = lire(champ);
+    // Un champ vide ou hors bornes rendrait « NaN », que Python prendrait
+    // pour un reglage valide. On remet ce qui etait la.
+    if (typeof valeur === "number" && !Number.isFinite(valeur)) {
+      champ.value = etat.reglages[cle];
+      return;
+    }
+    const reponse = repondre(await appeler("regler", cle, valeur));
+    if (reponse.erreur) champ.value = etat.reglages[cle];
+    else etat.reglages[cle] = valeur;
+  });
+}
+
+
+/* -------------------------------------------------------------------------
+   « Ce que Papote garde de vous »
+
+   La promesse est ecrite partout ; celle-ci la rend verifiable. Les
+   fichiers sont nommes, mesures, et le dossier s'ouvre d'un clic.
+   ------------------------------------------------------------------------- */
+
+async function chargerConfidentialite() {
+  const donnees = await appeler("confidentialite");
+  if (!donnees || donnees.erreur) return;
+
+  $("#dossier-config").textContent = donnees.dossier || "";
+
+  const liste = vider($("#fichiers-gardes"));
+  (donnees.fichiers || []).forEach((fichier) => {
+    const ligne = creer("li");
+    const gauche = creer("div");
+    gauche.appendChild(creer("div", "ligne-titre", fichier.nom));
+    gauche.appendChild(creer("div", "aide", fichier.quoi));
+    ligne.appendChild(gauche);
+    ligne.appendChild(creer("span", "compte", poids(fichier.octets)));
+    liste.appendChild(ligne);
+  });
+  sinon(liste, "Rien encore : Papote n'a pas eu besoin d'écrire.");
+}
+
+function poids(octets) {
+  if (octets < 1024) return octets + " o";
+  if (octets < 1024 * 1024) return Math.round(octets / 1024) + " Ko";
+  return (octets / (1024 * 1024)).toFixed(1) + " Mo";
+}
+
 
 /* -------------------------------------------------------------------------
    Page « Applications »
@@ -650,6 +711,10 @@ function brancher() {
 
   $("#annuler").addEventListener("click", annulerLaDerniere);
 
+  $("#ouvrir-dossier").addEventListener("click", async () => {
+    repondre(await appeler("ouvrir_le_dossier"));
+  });
+
   $("#vider").addEventListener("click", () => {
     if ($("#champ").value) retenirLetat();
     $("#champ").value = "";
@@ -754,6 +819,7 @@ async function demarrer() {
   });
 
   construireReglages();
+  brancherReglagesFins();
   brancher();
   brancherDictee();
   afficher("corriger");

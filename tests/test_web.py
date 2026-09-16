@@ -277,3 +277,41 @@ def test_les_entrees_de_navigation_s_enroulent(style):
     ensemble = "".join(bandeaux)
     assert "flex-wrap: wrap" in ensemble
     assert "overflow-x: auto" not in ensemble
+
+
+# -- les reglages qui n'existaient que dans le fichier ----------------------
+
+@pytest.mark.parametrize("identifiant", [
+    "touche-prediction", "delai-oubli", "delai-copie",
+])
+def test_les_reglages_fins_ont_un_ecran(page, identifiant):
+    """Exposer un reglage sans lui donner d'ecran, c'est promettre un ecran."""
+    assert f'id="{identifiant}"' in page
+
+
+def test_les_reglages_fins_sont_branches(script):
+    for cle in ("touche_prediction", "delai_oubli", "delai_copie"):
+        assert f'"{cle}"' in script, cle
+
+
+def test_un_nombre_invalide_ne_part_pas_vers_python(script):
+    """Un champ vide rend « NaN », que Python prendrait pour un reglage."""
+    assert "Number.isFinite(valeur)" in script
+
+
+# -- « Ce que Papote garde de vous » ----------------------------------------
+
+def test_l_ecran_de_confidentialite_existe(page, script):
+    """La promesse est ecrite partout ; celle-ci la rend verifiable."""
+    assert 'id="fichiers-gardes"' in page
+    assert 'id="dossier-config"' in page
+    assert "chargerConfidentialite" in script
+
+
+def test_toute_methode_de_la_passerelle_appelee_existe(script):
+    """Une methode renommee en Python laisse un bouton mort dans la page."""
+    from papote.passerelle import Passerelle
+
+    appelees = set(re.findall(r'appeler\("([^"]+)"', script))
+    manquantes = {m for m in appelees if not hasattr(Passerelle, m)}
+    assert not manquantes, f"introuvables : {sorted(manquantes)}"

@@ -32,6 +32,40 @@ from .dictee import Dictee
 from .lexique import LexiqueIntrouvable
 from .politique import PARLE, REGISTRES, SOUTENU
 
+# Ce que chaque fichier du dossier de reglages contient, dit en francais.
+# Un fichier qu'on ne sait pas decrire n'a rien a faire la.
+DESCRIPTIONS = {
+    "config.json": "Vos réglages. Rien de ce que vous tapez.",
+    "apprentissage.json": "Les corrections que vous annulez, comptées. "
+                          "Seuls les mots du dictionnaire y entrent.",
+    "memoire.json": "Les mots que vous employez souvent, pour la "
+                    "prédiction. Seuls les mots du dictionnaire y entrent.",
+    "journal.log": "Ce qui s'est mal passé. La règle et les longueurs, "
+                   "jamais le texte.",
+    "papote.verrou": "Un fichier vide, pour qu'une seule Papote tourne.",
+}
+
+
+def _fichiers_du_dossier(dossier) -> list[dict]:
+    """Les fichiers presents, avec leur taille et ce qu'ils contiennent."""
+    if dossier is None or not dossier.is_dir():
+        return []
+    trouves = []
+    for chemin in sorted(dossier.iterdir()):
+        if not chemin.is_file():
+            continue
+        try:
+            octets = chemin.stat().st_size
+        except OSError:
+            octets = 0
+        trouves.append({
+            "nom": chemin.name,
+            "octets": octets,
+            "quoi": DESCRIPTIONS.get(chemin.name, "Un fichier de travail."),
+        })
+    return trouves
+
+
 # Les pages, dans l'ordre de la colonne. Le JavaScript se contente de les
 # afficher : ajouter une page ici la fait apparaitre, sans toucher au HTML.
 PAGES = (
@@ -158,15 +192,21 @@ class Passerelle:
     def _reglages_exposes(self) -> dict:
         """Les reglages que la page manipule, et rien d'autre.
 
-        Les delais de copie et de collage n'y sont pas : personne ne les
-        regle depuis la fenetre, et les exposer serait promettre un ecran
-        qui n'existe pas.
+        « delai_collage » n'y est pas : personne ne le regle depuis la
+        fenetre, et l'exposer serait promettre un ecran qui n'existe pas.
+
+        « touche_prediction » et « delai_copie » y sont entres : la premiere
+        parce que Tab sert deja dans beaucoup d'applications et qu'on doit
+        pouvoir en changer sans editer un fichier ; le second parce qu'une
+        application lente a repondre au Ctrl+C fait echouer le raccourci de
+        correction, sans que rien ne dise pourquoi.
         """
         return {
             cle: self.config.get(cle, config_mod.DEFAUTS.get(cle))
             for cle in [i["cle"] for i in INTERRUPTEURS]
             + [r["cle"] for r in RACCOURCIS]
-            + ["registre", "delai_oubli", "position_bulle"]
+            + ["registre", "delai_oubli", "position_bulle",
+               "touche_prediction", "delai_copie"]
         }
 
     # -- page « Corriger » --------------------------------------------------
@@ -479,6 +519,43 @@ class Passerelle:
 
     def oublier_dictee(self) -> dict:
         return _sans_bruit(self.dictee.oublier, {"ok": True})
+
+    # -- ce qui est ecrit sur le disque -------------------------------------
+
+    def confidentialite(self) -> dict:
+        """Ce que Papote garde, ou, et combien il pese.
+
+        La promesse est ecrite partout — sur le site, dans l'installateur,
+        dans le README : rien de ce qui est tape ne quitte la machine, et
+        rien n'en reste. Une promesse qu'on ne peut pas verifier ne vaut
+        pas grand-chose ; cet ecran la rend verifiable. Les fichiers sont
+        nommes, mesures, et le dossier s'ouvre d'un bouton.
+        """
+        dossier = _sans_bruit(config_mod.dossier_config, None)
+        return {
+            "dossier": str(dossier) if dossier else "",
+            "fichiers": _fichiers_du_dossier(dossier),
+        }
+
+    def ouvrir_le_dossier(self) -> dict:
+        """Montre le dossier des reglages dans l'explorateur."""
+        dossier = _sans_bruit(config_mod.dossier_config, None)
+        if dossier is None:
+            return {"erreur": "Dossier introuvable."}
+        try:
+            import os
+            import subprocess
+            import sys
+
+            if os.name == "nt":
+                os.startfile(dossier)                       # noqa: S606
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", str(dossier)])    # noqa: S603,S607
+            else:
+                subprocess.Popen(["xdg-open", str(dossier)])  # noqa: S603,S607
+        except Exception as e:                              # noqa: BLE001
+            return {"erreur": f"Ouverture impossible : {e}"}
+        return {"message": "Dossier ouvert."}
 
     def journal(self) -> dict:
         return {
