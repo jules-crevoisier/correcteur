@@ -32,6 +32,20 @@ from .lexique import (
 )
 from .politique import PARLE, SOUTENU
 
+# Un mot colle plus court que cela ne vaut pas la peine d'etre coupe : la
+# coupure y serait plus souvent une coincidence qu'une intention.
+LONGUEUR_MINIMALE_COUPURE = 6
+
+# Chaque morceau doit faire au moins deux lettres. « lavion » n'est pas
+# « l avion » : c'est l'apostrophe qui manque, pas l'espace.
+LONGUEUR_MINIMALE_MORCEAU = 2
+
+# Rang au-dela duquel un morceau n'est plus assez courant pour qu'on coupe.
+# Plus large que « franchement courant » : « testé » est le 5 662e mot du
+# francais, et « commenttesté » doit bien se couper. Assez etroit pour que
+# « github » reste entier — « hub » est le 18 097e.
+RANG_MAXIMAL_MORCEAU = 9_000
+
 # Trois lettres identiques d'affilee : « ouiiii », « mdrrrr », « nooon ».
 # C'est de l'emphase volontaire, jamais une faute de frappe.
 _EMPHASE = re.compile(r"(.)\1{2,}", re.IGNORECASE)
@@ -177,6 +191,13 @@ class Correcteur:
             # « jesper » -> « j'espère » : il a aussi le droit d'avoir une
             # faute de frappe, mais alors le mot obtenu doit etre franchement
             # courant — sans quoi « subject » deviendrait « s'abject ».
+            #
+            # Et seulement si le mot entier n'a aucune graphie accentuee.
+            # « decolle » en a deux, « décolle » et « décollé » : le
+            # correcteur hesite et se tait, ce qui est juste. Laisser
+            # l'apostrophe passer derriere en faisait « d'école ».
+            if self.lexique.formes(mot.lower()):
+                continue
             frappe = self.lexique.suggestion(reste, classe_max=CLASSE_EDITION)
             if frappe is not None and self.lexique.rang(frappe) <= RANG_COURANT:
                 return mot[: len(tete)] + "'" + frappe
@@ -216,11 +237,66 @@ class Correcteur:
         if prudent:
             return None
 
+        # L'espace sautee vient avant la faute de frappe. « ilfaut » doit
+        # devenir « il faut », et non « faut » — ce que la distance d'edition
+        # proposait, en escamotant un mot au passage.
+        if not elision:
+            coupure = self._espace_manquante(mot)
+            if coupure is not None:
+                return coupure
+
         frappe = self.lexique.suggestion(
             noyau,
             classe_max=CLASSE_EDITION_DOUBLE if profond else CLASSE_EDITION,
         )
         return elision + frappe if frappe is not None else None
+
+    def _espace_manquante(self, mot: str) -> str | None:
+        """« ilfaut » -> « il faut », « commenttesté » -> « comment testé ».
+
+        L'espace est la touche la plus large du clavier, et la plus souvent
+        manquee quand on tape vite. Le mot colle n'existe jamais au
+        dictionnaire, ce qui rend la coupure sure — a trois conditions, sans
+        lesquelles « github » deviendrait « git hub » et « facebook »
+        « face book » :
+
+        1. les deux morceaux doivent etre **courants**, pas seulement connus.
+           « hub » est au dictionnaire, 18 000e ; cela ne suffit pas ;
+        2. aucun des deux ne doit etre une lettre isolee. « lavion » ne
+           devient pas « l avion » — c'est le travail de l'apostrophe ;
+        3. le mot colle doit etre assez long pour que la coupure veuille dire
+           quelque chose.
+
+        Entre plusieurs coupures possibles, on garde celle dont le morceau le
+        moins courant l'est encore le plus : c'est la plus probable.
+        """
+        if len(mot) < LONGUEUR_MINIMALE_COUPURE:
+            return None
+
+        minuscule = mot.lower()
+        # Le mot existe, a ses accents pres : « decolle » est « décolle » ou
+        # « décollé », et le correcteur se tait faute de savoir lequel. Cette
+        # hesitation dit que le mot en est un — pas qu'il en cache deux.
+        # Sans cela, « l'avion decolle » devenait « l'avion de colle ».
+        if self.lexique.formes(minuscule):
+            return None
+
+        meilleures = []
+        for i in range(LONGUEUR_MINIMALE_MORCEAU,
+                       len(mot) - LONGUEUR_MINIMALE_MORCEAU + 1):
+            gauche, droite = minuscule[:i], minuscule[i:]
+            if not (self.lexique.connait(gauche)
+                    and self.lexique.connait(droite)):
+                continue
+            rangs = (self.lexique.rang(gauche), self.lexique.rang(droite))
+            if max(rangs) > RANG_MAXIMAL_MORCEAU:
+                continue
+            meilleures.append((max(rangs), i))
+
+        if not meilleures:
+            return None
+        _rang, coupure = min(meilleures)
+        return mot[:coupure] + " " + mot[coupure:]
 
     def propositions(self, mot: str, maximum: int = 4) -> list[str]:
         """Les remplacements plausibles d'un mot inconnu, faute de certitude.

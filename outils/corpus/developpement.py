@@ -122,6 +122,13 @@ FAUTES = [
     ("on voudrrait un overlay", "on voudrait un overlay", "frappe"),
     ("un system de prédiction", "un système de prédiction", "accent"),
     ("les claviers telephone", "les claviers téléphone", "accent"),
+
+    # -- l'espace sautee : la touche la plus large du clavier
+    ("ilfaut voir", "il faut voir", "espace"),
+    ("commenttesté", "comment testé", "espace"),
+    ("bonjourtout le monde", "bonjour tout le monde", "espace"),
+    ("jevais partir", "je vais partir", "espace"),
+    ("parcontre je sais pas", "par contre je sais pas", "espace"),
 ]
 
 # Phrases correctes : elles doivent ressortir a l'identique.
@@ -257,6 +264,13 @@ INTOUCHABLES = [
     "Je me souviens très bien de ce jour-là.",
     "Il a plus de temps que moi.",
     "À plus tard !",
+    # -- mots qu'une coupure abimerait
+    "on se parle sur github",
+    "un message sur facebook",
+    "l'avion decolle dans une heure",
+    "le logiciel est portable",
+    "une pomme et une poire",
+
     # -- mots anglais courts qu'une apostrophe abimait
     "appuie sur tab pour valider",
     "le mode dev est actif",
