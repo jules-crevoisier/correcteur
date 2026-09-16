@@ -143,6 +143,10 @@ FAUTES = [
 
     # -- le moins d'inventions possible
     ("un menbre du staff", "un membre du staff", "frappe"),
+
+    # -- le determinant tranche ce que la frequence ne savait pas
+    ("les délay sont courts", "les délais sont courts", "accord"),
+    ("les bureua", "les bureaux", "frappe"),
 ]
 
 # Phrases correctes : elles doivent ressortir a l'identique.
@@ -278,6 +282,12 @@ INTOUCHABLES = [
     "Je me souviens très bien de ce jour-là.",
     "Il a plus de temps que moi.",
     "À plus tard !",
+    # -- un vrai message, ou trois fautes etaient inventees
+    "merci @ma_rion.prrx pour l'affiche",
+    "les dernières affiches sont prêtes",
+    "le délay est court",
+    "écris sur #salon-général",
+
     # -- mots que des gens ecrivent, absents du dictionnaire
     "je suis en perm cette semaine",
     "on se parle sur chanel",

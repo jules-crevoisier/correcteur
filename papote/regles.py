@@ -165,6 +165,10 @@ MOTIFS_PROTEGES = [
     r"```.*?```",               # blocs de code
     r"`[^`]+`",                 # code inline
     r"\|\|.*?\|\|",             # spoilers Discord
-    r"(?<!\w)[@#/]\w+",         # @pseudo, #salon, /commande
+    # @pseudo, #salon, /commande. Les points et tirets font partie du
+    # pseudo : « @ma_rion.prrx » est un seul nom, et s'arreter au point en
+    # faisait corriger la fin en « prix ». Le dernier caractere doit rester
+    # une lettre ou un chiffre, pour ne pas avaler le point d'une phrase.
+    r"(?<!\w)[@#/]\w(?:[\w.\-]*\w)?",
     r"\b\w*\d\w*\b",            # tout mot contenant un chiffre
 ]

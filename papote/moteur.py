@@ -222,7 +222,8 @@ class Correcteur:
                 return mot[: len(tete)] + "'" + frappe
         return None
 
-    def _orthographe(self, mot: str, profond: bool = True) -> str | None:
+    def _orthographe(self, mot: str, profond: bool = True,
+                     precedent: str = "") -> str | None:
         """Le mot correctement orthographie, s'il ne fait aucun doute.
 
         `profond` autorise la recherche a deux frappes d'ecart, qui rattrape
@@ -264,6 +265,15 @@ class Correcteur:
             if coupure is not None:
                 return coupure
 
+        # Le determinant qui precede reduit le champ des possibles. Apres
+        # « les », un adverbe n'a rien a faire : « les délay » ne peut pas
+        # etre « les delà », et « délai » — qu'aucune marge de frequence ne
+        # departageait — devient le seul candidat.
+        if precedent in grammaire.DETERMINANTS_PLURIELS or precedent == "les":
+            pluriel = self._accorder_au_pluriel(noyau)
+            if pluriel is not None:
+                return elision + pluriel
+
         # Un mot que le dictionnaire ignore mais que la liste de frequences
         # connait est un mot que des gens ecrivent : une abreviation
         # (« perm »), une marque (« chanel »), un mot anglais passe dans
@@ -281,6 +291,37 @@ class Correcteur:
             classe_max=CLASSE_EDITION_DOUBLE if profond else CLASSE_EDITION,
         )
         return elision + frappe if frappe is not None else None
+
+    def _accorder_au_pluriel(self, mot: str) -> str | None:
+        """La correction de `mot`, mise au pluriel, quand un déterminant
+        pluriel la precede.
+
+        Deux choses a la fois, et c'est ce qui la rend sure. D'abord le
+        contexte **ecarte** des candidats : apres « les », seul un mot qui a
+        un pluriel est recevable. « délay » hesitait entre « delà » (1 183e)
+        et « délai » (2 638e) — trop proches pour trancher, donc le
+        correcteur se taisait. Mais « delà » n'a pas de pluriel : il ne reste
+        qu'un candidat, et le doute disparait.
+
+        Ensuite le contexte **accorde** : ce n'est pas « délai » qu'il faut
+        ecrire apres « les », c'est « délais ».
+        """
+        recevables = []
+        for candidat in self.lexique.candidats(mot):
+            if candidat.rang == RANG_INCONNU or candidat.classe > CLASSE_EDITION:
+                continue
+            for pluriel in (candidat.mot + "s", candidat.mot + "x",
+                            candidat.mot):
+                if self.lexique.connait(pluriel) and pluriel != candidat.mot:
+                    recevables.append((candidat.rang, pluriel))
+                    break
+
+        if len(recevables) != 1:
+            # Zero : le contexte n'a rien sauve. Plusieurs : il n'a pas
+            # tranche, et ce n'est pas a lui de le faire au hasard.
+            return None
+        rang, pluriel = recevables[0]
+        return pluriel if rang <= RANG_COURANT * 2 else None
 
     def _espace_manquante(self, mot: str) -> str | None:
         """« ilfaut » -> « il faut », « commenttesté » -> « comment testé ».
@@ -394,7 +435,9 @@ class Correcteur:
                 continue
             if self._connu(jeton.texte):
                 continue
-            remplacement = self._orthographe(jeton.texte, profond)
+            remplacement = self._orthographe(
+                jeton.texte, profond, precedent=jetons[i - 1].texte.lower()
+                if i else "")
             if remplacement is None or remplacement == jeton.texte:
                 continue
             propositions.append(
