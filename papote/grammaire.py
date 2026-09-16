@@ -29,8 +29,8 @@ from typing import Callable
 
 from .lexique import ACCENTUEES, accentue as accentue_mot, sans_accents
 from .morphologie import (
-    CONJUGUES, NOMS_PLURIELS, PARTICIPES, PARTICIPES_MASCULINS, PLURIELS,
-    Morphologie,
+    CONJUGUES, IMPERATIFS, NOMS_PLURIELS, PARTICIPES, PARTICIPES_MASCULINS,
+    PLURIELS, Morphologie,
 )
 from . import confusions
 from .politique import PARLE, SOUTENU
@@ -704,8 +704,26 @@ def _apostrophe_avant_participe(ctx: Contexte, i: int):
     return appliquer_casse(ctx.brut(i), remplacement)
 
 
+def _dans_une_locution(ctx: "Contexte", i: int) -> bool:
+    """Le mot en position i fait-il partie d'une locution figee ?
+
+    « tout à fait » s'ecrit avec un accent, et la regle qui retire celui de
+    « a » derriere un sujet le lui retirait. Les deux se repondaient d'une
+    passe a l'autre, et le texte ne bougeait pas.
+    """
+    for debut in (i - 2, i - 1, i):
+        trois = (ctx.mot(debut), ctx.mot(debut + 1), ctx.mot(debut + 2))
+        if trois in COMPOSES_LONGS:
+            return True
+        if (ctx.mot(debut), ctx.mot(debut + 1)) in COMPOSES:
+            return True
+    return False
+
+
 @regle("IL_A", "apres un pronom sujet, « a » est le verbe avoir : pas d'accent")
 def _il_a(ctx: Contexte, i: int):
+    if _dans_une_locution(ctx, i):
+        return None
     if ctx.mot(i) != "à":
         return None
     if ctx.noyau(i - 1) in SUJETS_SINGULIER or ctx.elision(i) in ("c'", "ç'"):
@@ -765,7 +783,20 @@ def _a_accent(ctx: Contexte, i: int):
         return appliquer_casse(ctx.brut(i), "à")
     if ctx.mot(i + 1) in APRES_A_ACCENT_FINAL and ctx.fin_de_segment(i + 1):
         return appliquer_casse(ctx.brut(i), "à")
+    # « on se voit a Bruxelles » : devant un nom propre de lieu, « a » est
+    # la preposition. Le verbe avoir demanderait un complement d'objet, et
+    # le sujet qui l'exigerait a deja ete ecarte plus haut.
+    if _nom_propre(ctx, i + 1):
+        return appliquer_casse(ctx.brut(i), "à")
     return None
+
+
+def _nom_propre(ctx: "Contexte", i: int) -> bool:
+    """Le mot en position i n'existe-t-il qu'avec une majuscule ?"""
+    brut = ctx.brut(i)
+    if not brut:
+        return False
+    return ctx.lexique.majuscule_obligatoire(brut.lower()) is not None
 
 
 @regle("ET_EST", "apres un pronom sujet, c'est le verbe « est »")
@@ -916,6 +947,71 @@ def _c_est_s_est(ctx: Contexte, i: int):
     return appliquer_casse(ctx.brut(i), "s'est")
 
 
+@regle("LA_L_A", "« la » est un article ; devant un participe c'est « l'a »")
+def _la_l_a(ctx: Contexte, i: int):
+    """« il la vu hier » -> « il l'a vu hier ».
+
+    Un article ne precede pas un participe. Derriere un pronom sujet, « la »
+    est le pronom complement elide et « a » l'auxiliaire.
+    """
+    if ctx.mot(i) != "la" or ctx.elision(i):
+        return None
+    if ctx.mot(i - 1) not in PRONOMS_SUJETS:
+        return None
+    suivant = ctx.mot(i + 1)
+    traits = ctx.morphologie.traits(suivant)
+    # « vu » est aussi un nom — « au vu de » — et cela ne l'empeche pas
+    # d'etre un participe ici. Ce qui compte, c'est qu'il ne soit pas une
+    # forme conjuguee : « il la voit » est correct.
+    if not traits & PARTICIPES or traits & CONJUGUES:
+        return None
+    return appliquer_casse(ctx.brut(i), "l'a")
+
+
+@regle("QUELLE_QU_ELLE",
+       "« quelle » interroge sur un nom ; devant un verbe c'est « qu'elle »")
+def _quelle_qu_elle(ctx: Contexte, i: int):
+    """« je sais quelle viendra » -> « je sais qu'elle viendra ».
+
+    « quelle » est un determinant : il lui faut un nom. Devant une forme
+    conjuguee, il n'a rien a determiner, et c'est « que » suivi du pronom.
+    """
+    mot = ctx.mot(i)
+    if mot not in ("quelle", "quelles") or ctx.elision(i):
+        return None
+    suivant = ctx.mot(i + 1)
+    traits = ctx.morphologie.traits(suivant)
+    # Une forme conjuguee, et rien d'autre : « quelle chance » garde son
+    # nom, « quelle heure » aussi.
+    if not traits or not traits <= CONJUGUES:
+        return None
+    pronom = "elle" if mot == "quelle" else "elles"
+    accorde = "qu'" + pronom
+    # Le verbe doit s'accorder avec le pronom : « quelle viennent » n'est
+    # pas « qu'elle viennent ».
+    if not ctx.morphologie.est(suivant, "3p" if pronom == "elles" else "3s"):
+        return None
+    return appliquer_casse(ctx.brut(i), accorde)
+
+
+# Adjectifs qui suivent « c'est » dans la langue parlee et qu'aucun
+# determinant pluriel ne precede jamais. Contrairement a `APRES_C_EST`, qui
+# accueille aussi des determinants et des pronoms, celle-ci ne contient que
+# ce qui ne peut pas suivre « ces » : c'est ce qui permet de lire « ces
+# sur » comme « c'est sûr ». La valeur est la graphie accentuee, pour que la
+# correction se fasse d'un coup.
+ADJECTIFS_APRES_C_EST = {
+    "sur": "sûr", "sûr": "sûr", "vrai": "vrai", "faux": "faux",
+    "clair": "clair", "normal": "normal", "bon": "bon", "top": "top",
+    "cool": "cool", "genial": "génial", "génial": "génial",
+    "dommage": "dommage", "chaud": "chaud", "mort": "mort", "nul": "nul",
+    "mieux": "mieux", "pire": "pire", "possible": "possible",
+    "impossible": "impossible", "bizarre": "bizarre", "grave": "grave",
+    "marrant": "marrant", "chiant": "chiant", "dur": "dur",
+    "facile": "facile", "difficile": "difficile",
+}
+
+
 @regle("CES_C_EST", "« ces » est un determinant ; ici c'est « c'est »")
 def _ces_c_est(ctx: Contexte, i: int):
     """« ces pas grave » -> « c'est pas grave ».
@@ -930,7 +1026,17 @@ def _ces_c_est(ctx: Contexte, i: int):
     """
     if ctx.mot(i) not in ("ces", "ses") or ctx.elision(i):
         return None
-    if ctx.mot(i + 1) != "pas":
+    suivant = ctx.mot(i + 1)
+    if suivant in ADJECTIFS_APRES_C_EST:
+        # « ces dernier jours » : un nom au pluriel derriere, et « ces » est
+        # bien le determinant d'un groupe mal accorde.
+        if ctx.morphologie.est(ctx.mot(i + 2), *NOMS_PLURIELS):
+            return None
+        # Les deux mots d'un coup : sinon la regle d'accord, qui voit encore
+        # « ces », mettrait l'adjectif au pluriel.
+        adjectif = ADJECTIFS_APRES_C_EST[suivant]
+        return (appliquer_casse(ctx.brut(i), f"c'est {adjectif}"), 2)
+    if suivant != "pas":
         return None
     apres = ctx.mot(i + 2)
     # Derriere « c'est pas », ce qui suit est au singulier : « c'est pas
@@ -983,7 +1089,12 @@ def _verbe_d_interrogation_avant(ctx: "Contexte", i: int) -> bool:
                for recul in (1, 2, 3))
 
 
+# Adverbes et quantifiants derriere lesquels « la » ne determine rien :
+# « ils sont tous la », « elle est encore la ». Le mot qui suit decide
+# ensuite, comme apres un verbe — voir `_peut_suivre_un_article`.
 AVANT_LA_ACCENT = {
+    "tous", "toutes", "encore", "toujours", "déjà", "deja", "vraiment",
+    "bien", "aussi", "enfin",
     "être", "suis", "es", "est", "sommes", "êtes", "sont", "étais", "était",
     "serai", "sera", "reste", "restes", "restons", "restez", "viens",
     "vient", "venez", "arrive", "arrives", "jusque", "par", "celui",
@@ -1253,11 +1364,17 @@ def _participe_apres_auxiliaire_conjugue(ctx: Contexte, i: int):
     if ctx.elision(i) or not _auxiliaire_avant(ctx, i):
         return None
     traits = ctx.morphologie.traits(mot)
-    # Une forme conjuguee, et rien d'autre : ni nom, ni participe deja
-    # correct, ni infinitif.
-    if not traits or not traits <= CONJUGUES:
+    # Une forme conjuguee ou un imperatif, et rien d'autre : ni nom, ni
+    # participe deja correct, ni infinitif. L'imperatif compte parce qu'il
+    # ne suit jamais un auxiliaire : « je me suis fais » n'a pas d'autre
+    # lecture que « fait ».
+    if not traits or not traits <= CONJUGUES | IMPERATIFS:
         return None
-    participe = ctx.morphologie.forme(mot, PARTICIPES_MASCULINS)
+    # Le masculin singulier d'abord : c'est la forme qu'on ecrit quand rien
+    # n'accorde le participe, et demander les deux nombres a la fois ferait
+    # hesiter entre « fait » et « faits ».
+    participe = (ctx.morphologie.forme(mot, {"pms"})
+                 or ctx.morphologie.forme(mot, PARTICIPES_MASCULINS))
     if participe is None or participe == mot:
         return None
     return appliquer_casse(ctx.brut(i), participe)
@@ -1414,6 +1531,13 @@ def _accord_sujet_nominal_etre(ctx: Contexte, i: int) -> str | None:
 
 NOMBRES_PLURIELS = {"deux", "trois", "quatre", "cinq", "six", "sept", "huit",
                     "neuf", "dix", "onze", "douze", "quinze", "vingt", "cent"}
+
+# Les elements d'un nombre compose. Entre eux, le trait d'union ; la seule
+# jointure qui s'en passe est celle qui passe par « et » — « vingt et un ».
+DIZAINES = {"dix", "vingt", "trente", "quarante", "cinquante", "soixante"}
+UNITES = {"un", "une", "deux", "trois", "quatre", "cinq", "six", "sept",
+          "huit", "neuf", "dix", "onze", "douze", "treize", "quatorze",
+          "quinze", "seize"}
 
 # Mots qui ne s'accordent jamais. Plusieurs ont pourtant un pluriel au
 # dictionnaire — « les avants » d'une equipe, « les contres » au bridge — et
@@ -1632,6 +1756,10 @@ def _accord_determinant_nom(ctx: Contexte, i: int):
         return None
 
     if ctx.elision(i) or mot.endswith(("s", "x", "z")) or not ctx.connait(mot):
+        return None
+    # « cent vingt », « quatre vingt dix » : le second nombre fait partie du
+    # premier, ce n'est pas un nom a accorder.
+    if mot in NOMBRES_PLURIELS or mot in UNITES or mot in ("cent", "mille"):
         return None
 
     for pluriel in _pluriels(ctx, mot):
@@ -1999,6 +2127,21 @@ DOUBLONS_LEGITIMES = {
 }
 
 
+def _determinant_double(ctx: "Contexte", i: int) -> bool:
+    """« une une idée » : un determinant repete devant son nom.
+
+    Les nombres se repetent legitimement en enumerant — « un, un, deux » —
+    mais pas quand un nom suit : la, le second est de trop.
+    """
+    if ctx.mot(i) not in DETERMINANTS:
+        return False
+    suivant = ctx.mot(i + 2)
+    if not suivant or suivant in UNITES or suivant in NOMBRES_PLURIELS:
+        # « un un deux trois » : une enumeration, pas un determinant.
+        return False
+    return ctx.morphologie.nom(suivant)
+
+
 @regle("DOUBLON", "ce mot est écrit deux fois de suite")
 def _doublon(ctx: Contexte, i: int):
     """« je vais vais partir » — la faute de frappe la plus banale qui soit.
@@ -2010,7 +2153,9 @@ def _doublon(ctx: Contexte, i: int):
     mot = ctx.mot(i)
     if not mot or mot != ctx.mot(i + 1):
         return None
-    if mot in DOUBLONS_LEGITIMES or len(mot) < 2:
+    if len(mot) < 2:
+        return None
+    if mot in DOUBLONS_LEGITIMES and not _determinant_double(ctx, i):
         return None
     # Une ponctuation ou un retour a la ligne entre les deux : c'est voulu.
     if ctx.separateur(i) != " ":
@@ -2042,9 +2187,23 @@ COMPOSES = {
     ("ci", "dessous"): "ci-dessous",
     ("ci", "joint"): "ci-joint",
     ("week", "end"): "week-end",
+    ("week", "ends"): "week-ends",
     ("après", "midi"): "après-midi",
     ("apres", "midi"): "après-midi",
     ("avant", "hier"): "avant-hier",
+    ("aller", "retour"): "aller-retour",
+    ("allers", "retours"): "allers-retours",
+    ("porte", "monnaie"): "porte-monnaie",
+    ("arc", "en"): None,                   # « arc-en-ciel » : trois mots
+    ("grand", "mère"): "grand-mère",
+    ("grand", "père"): "grand-père",
+    ("belle", "mère"): "belle-mère",
+    ("beau", "père"): "beau-père",
+    ("self", "service"): "self-service",
+    ("quatre", "vingt"): "quatre-vingts",
+    ("quatre", "vingts"): "quatre-vingts",
+    ("sur", "place"): "sur place",         # sans trait d'union, justement
+    ("tout", "à"): None,
     ("aujourd'hui",): "aujourd'hui",
     ("quelque", "part"): "quelque part",   # sans trait d'union, justement
 }
@@ -2058,8 +2217,93 @@ COMPOSES_LONGS = {
     ("est", "ce", "que"): "est-ce que",
     ("est", "ce", "qui"): "est-ce qui",
     ("vis", "à", "vis"): "vis-à-vis",
+    ("arc", "en", "ciel"): "arc-en-ciel",
+    ("quatre", "vingt", "dix"): "quatre-vingt-dix",
+    ("quatre", "vingts", "dix"): "quatre-vingt-dix",
+    ("quatre", "vingt", "un"): "quatre-vingt-un",
+    ("tout", "à", "fait"): "tout à fait",  # sans trait d'union, justement
+    ("tout", "a", "fait"): "tout à fait",
     ("par", "ci", "par"): None,            # reserve, voir plus bas
 }
+
+
+# Les nombres composes prennent un trait d'union entre leurs elements :
+# « vingt-cinq », « quatre-vingt-dix », « dix-sept ». Les seules jointures
+# sans trait d'union sont celles qui passent par « et » — « vingt et un ».
+
+
+# Apostrophes sautees que la coupure generale ne trouve pas. Ou bien le
+# morceau de droite est trop court pour elle — « jusqua » donne « a » —, ou
+# bien le mot colle existe : « sil » est un nom (une terre ocre, 18 963e
+# mot), et le correcteur ne regarde pas les mots qu'il connait.
+COLLAGES = {
+    "jusqua": "jusqu'à",
+    "jusquà": "jusqu'à",
+    "jusquau": "jusqu'au",
+    "jusquaux": "jusqu'aux",
+    "jusquou": "jusqu'où",
+    "lorsquon": "lorsqu'on",
+    "puisquon": "puisqu'on",
+    "quoiquil": "quoiqu'il",
+    "aujourdhui": "aujourd'hui",
+}
+
+# Ceux-la sont des mots du dictionnaire : il leur faut un contexte, sans
+# quoi on abimerait le sens rare au profit du courant.
+COLLAGES_AVEC_CONTEXTE = {
+    "sil": ("s'il", {"il", "ils", "on", "elle", "vous", "te", "y"}),
+    "sils": ("s'ils", {"ont", "sont", "veulent", "peuvent", "viennent"}),
+}
+
+
+@regle("APOSTROPHE_COLLEE", "il manque une apostrophe")
+def _apostrophe_collee(ctx: Contexte, i: int):
+    """« jusqua demain » -> « jusqu'à demain », « sil te plait » -> « s'il »."""
+    mot = ctx.mot(i)
+    if mot in COLLAGES:
+        return appliquer_casse(ctx.brut(i), COLLAGES[mot])
+    if mot in COLLAGES_AVEC_CONTEXTE:
+        voulu, suivants = COLLAGES_AVEC_CONTEXTE[mot]
+        if ctx.mot(i + 1) in suivants:
+            return appliquer_casse(ctx.brut(i), voulu)
+    return None
+
+
+@regle("TRAIT_UNION_NOMBRE", "un nombre composé prend un trait d'union")
+def _trait_union_nombre(ctx: Contexte, i: int):
+    """« vingt cinq euros » -> « vingt-cinq euros ».
+
+    « vingt et un » garde ses espaces : c'est la seule jointure qui s'ecrit
+    ainsi, et le « et » la signale de lui-meme.
+    """
+    if ctx.separateur(i) != " ":
+        return None
+    dizaine, unite = ctx.mot(i), ctx.mot(i + 1)
+    if dizaine not in DIZAINES or unite not in UNITES:
+        return None
+    # « dix dix » ou « vingt vingt » : ce n'est pas un nombre compose.
+    if unite in DIZAINES and dizaine != "quatre-vingt":
+        return None
+    compose = f"{ctx.brut(i)}-{ctx.brut(i + 1)}"
+    return (compose, 2)
+
+
+@regle("TRAIT_UNION_T_EUPHONIQUE",
+       "le « t » de liaison s'attache par des traits d'union")
+def _trait_union_t_euphonique(ctx: Contexte, i: int):
+    """« va t en » -> « va-t-en », « y a t il » -> « y a-t-il ».
+
+    Ce « t » ne veut rien dire tout seul : il n'est la que pour la liaison,
+    et il ne s'ecrit jamais separe de ce qu'il relie.
+    """
+    if ctx.mot(i + 1) != "t" or ctx.separateur(i) != " " \
+            or ctx.separateur(i + 1) != " ":
+        return None
+    suivant = ctx.mot(i + 2)
+    if suivant not in ("il", "elle", "on", "en", "y"):
+        return None
+    compose = f"{ctx.brut(i)}-t-{ctx.brut(i + 2)}"
+    return (compose, 3)
 
 
 @regle("TRAIT_UNION_COMPOSE", "ce mot composé prend un trait d'union")

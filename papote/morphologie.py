@@ -61,6 +61,10 @@ SINGULIERS = frozenset({"ms", "fs", "xs", "pms", "pfs", "1s", "2s", "3s",
 CONJUGUES = frozenset({"1s", "2s", "3s", "1p", "2p", "3p"})
 
 NOMINAUX = frozenset({"ms", "mp", "fs", "fp", "xs", "xp"})
+
+# L'imperatif. Il ne suit jamais un auxiliaire, ce qui le rend utile a
+# reconnaitre : « je me suis fais » ne peut etre que « fait ».
+IMPERATIFS = frozenset({"i2s", "i1p", "i2p"})
 NOMS_PLURIELS = frozenset({"mp", "fp", "xp"})
 NOMS_SINGULIERS = frozenset({"ms", "fs", "xs"})
 
