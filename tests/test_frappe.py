@@ -518,3 +518,170 @@ def test_apres_un_long_silence_on_ne_relit_plus(correcteur, monkeypatch):
     ecoute._derniere_touche = time.monotonic() - 10.0
     ecoute._relire_si_pause()
     assert not relectures
+
+
+# -- prediction et bulle -----------------------------------------------------
+
+class BulleTemoin:
+    """Une bulle qui note ce qu'on lui demande, sans ouvrir d'ecran."""
+
+    def __init__(self):
+        self.montrees = []
+        self.cachees = 0
+        self.fermee = False
+        self.visible = False
+
+    def montrer(self, mot, propositions, touche="Tab"):
+        self.montrees.append((mot, list(propositions), touche))
+        self.visible = True
+
+    def cacher(self):
+        self.cachees += 1
+        self.visible = False
+
+    def fermer(self):
+        self.fermee = True
+
+
+@pytest.fixture
+def predicteur(lexique):
+    from papote.prediction import Predicteur
+
+    return Predicteur(lexique)
+
+
+def test_le_mot_en_cours_s_arrete_au_dernier_separateur(correcteur):
+    frappe = Frappe(correcteur)
+    taper(frappe, "mon anni")
+    assert frappe.mot_en_cours() == "anni"
+    taper(frappe, " ")
+    assert frappe.mot_en_cours() == ""
+
+
+def test_sans_predicteur_rien_n_est_propose(correcteur):
+    frappe = Frappe(correcteur)
+    taper(frappe, "mon anni")
+    assert frappe.prediction() == []
+    assert frappe.accepter_prediction() is None
+
+
+def test_la_prediction_suit_le_mot_en_cours(correcteur, predicteur):
+    frappe = Frappe(correcteur, predicteur=predicteur)
+    taper(frappe, "mon anni")
+    assert "anniversaire" in frappe.prediction()
+
+
+def test_accepter_ecrit_la_suite_et_met_a_jour_le_tampon(correcteur,
+                                                          predicteur):
+    frappe = Frappe(correcteur, predicteur=predicteur)
+    taper(frappe, "mon anni")
+    remplacement = frappe.accepter_prediction()
+    assert remplacement.effacer == 0
+    assert remplacement.ecrire == "versaire"
+    assert frappe.texte == "mon anniversaire"
+
+
+def test_la_prediction_n_efface_jamais(correcteur, predicteur):
+    """« deja » propose « déjà », mais l'accepter demanderait de reculer."""
+    frappe = Frappe(correcteur, predicteur=predicteur)
+    taper(frappe, "deja")
+    assert "déjà" in frappe.prediction()
+    assert frappe.accepter_prediction() is None
+
+
+def test_la_bulle_s_affiche_quand_il_y_a_de_quoi_proposer(correcteur,
+                                                           predicteur):
+    bulle = BulleTemoin()
+    frappe = Frappe(correcteur, predicteur=predicteur)
+    ecoute = EcouteClavier(frappe, bulle=bulle)
+    ecoute.actif = True
+
+    taper(frappe, "mon anni")
+    ecoute._proposer()
+    assert bulle.montrees
+    mot, propositions, touche = bulle.montrees[-1]
+    assert mot == "anni"
+    assert "anniversaire" in propositions
+    assert touche == "Tab"
+
+
+def test_la_bulle_disparait_quand_il_n_y_a_rien(correcteur, predicteur):
+    bulle = BulleTemoin()
+    frappe = Frappe(correcteur, predicteur=predicteur)
+    ecoute = EcouteClavier(frappe, bulle=bulle)
+    ecoute.actif = True
+
+    taper(frappe, "zz")
+    ecoute._proposer()
+    assert not bulle.montrees
+    assert bulle.cachees
+
+
+def test_accepter_depuis_le_clavier_tape_la_suite(correcteur, predicteur,
+                                                   monkeypatch):
+    bulle = BulleTemoin()
+    frappe = Frappe(correcteur, predicteur=predicteur)
+    ecoute = EcouteClavier(frappe, bulle=bulle)
+    ecoute.actif = True
+    taper(frappe, "mon anni")
+
+    tapes = []
+    monkeypatch.setattr(ecoute, "_taper_ailleurs", tapes.append)
+    ecoute._accepter_prediction()
+
+    assert tapes and tapes[0].ecrire == "versaire"
+    assert bulle.cachees, "la bulle doit disparaitre une fois acceptee"
+
+
+def test_la_touche_n_est_detournee_que_pendant_l_affichage(correcteur,
+                                                            predicteur,
+                                                            monkeypatch):
+    """L'intercepter en permanence casserait la tabulation partout."""
+    bulle = BulleTemoin()
+    frappe = Frappe(correcteur, predicteur=predicteur)
+    ecoute = EcouteClavier(frappe, bulle=bulle)
+    ecoute.actif = True
+
+    armes = []
+    monkeypatch.setattr(ecoute, "_armer_la_touche",
+                        lambda: armes.append("armee"))
+    monkeypatch.setattr(ecoute, "_desarmer_la_touche",
+                        lambda: armes.append("desarmee"))
+
+    taper(frappe, "mon anni")
+    ecoute._proposer()
+    assert armes == ["armee"]
+
+    taper(frappe, "zzzz")
+    ecoute._proposer()
+    assert armes == ["armee", "desarmee"]
+
+
+def test_une_prediction_qui_leve_ne_casse_rien(correcteur, monkeypatch):
+    """Le clavier passe avant l'agrement."""
+    class Fache:
+        def completer(self, _prefixe, maximum=3):
+            raise RuntimeError("non")
+
+        def suite(self, _prefixe):
+            raise RuntimeError("non")
+
+    bulle = BulleTemoin()
+    frappe = Frappe(correcteur, predicteur=Fache())
+    ecoute = EcouteClavier(frappe, bulle=bulle)
+    ecoute.actif = True
+    taper(frappe, "mon anni")
+
+    ecoute._proposer()          # ne doit pas lever
+    ecoute._accepter_prediction()
+    assert not bulle.montrees
+
+
+def test_la_bulle_muette_ne_fait_rien():
+    from papote.bulle import BulleMuette
+
+    muette = BulleMuette()
+    muette.montrer("anni", ["anniversaire"])
+    muette.cacher()
+    muette.fermer()
+    assert muette.visible is False

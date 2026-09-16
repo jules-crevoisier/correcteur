@@ -171,14 +171,36 @@ class Application:
         """La correction au fil de la frappe, construite au premier besoin."""
         if self._ecoute is None:
             self._ecoute = frappe_mod.EcouteClavier(
-                frappe_mod.Frappe(self.correcteur),
+                frappe_mod.Frappe(self.correcteur,
+                                  predicteur=self._predicteur()),
                 delai_oubli=self.config.get("delai_oubli", 5.0),
                 sur_correction=self._signaler_correction,
                 sur_annulation=self._signaler_annulation,
                 politique=self.politique,
                 correcteur_pour=self.correcteur_pour,
+                bulle=self._bulle(),
+                touche_prediction=self.config.get("touche_prediction", "tab"),
             )
         return self._ecoute
+
+    def _predicteur(self):
+        """Le devineur de mots, ou rien si la prediction est eteinte."""
+        if not self.config.get("prediction", True):
+            return None
+        from . import prediction
+
+        # `correcteur` a deja force le chargement du dictionnaire : le
+        # predicteur s'appuie dessus plutot que d'en ouvrir un second.
+        self.correcteur  # noqa: B018
+        return prediction.Predicteur(self._lexique)
+
+    def _bulle(self):
+        """La bulle de propositions, ou une doublure inerte."""
+        from . import bulle as bulle_mod
+
+        if not self.config.get("prediction", True):
+            return bulle_mod.BulleMuette()
+        return bulle_mod.Bulle(self.config.get("position_bulle", "bas-droite"))
 
     def prechauffer(self) -> None:
         """Charge le dictionnaire en arriere-plan, pour que la 1re correction soit rapide.

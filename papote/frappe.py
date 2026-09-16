@@ -104,8 +104,12 @@ class Frappe:
 
     def __init__(self, correcteur, longueur_max: int = 400,
                  effacement_max: int = 40,
-                 effacement_relecture: int = 90):
+                 effacement_relecture: int = 90,
+                 predicteur=None):
         self.correcteur = correcteur
+        # Facultatif : sans lui, `prediction()` ne rend rien et personne ne
+        # s'en apercoit.
+        self.predicteur = predicteur
         self.longueur_max = longueur_max
         # Au-dela, la correction porte trop loin en arriere : la rafale de
         # retours arriere serait visible, et une desynchronisation couteuse.
@@ -205,6 +209,41 @@ class Frappe:
         ))
         return Remplacement(len(efface), ecrit, efface, regles)
 
+
+    # -- prediction du mot en cours -------------------------------------------
+
+    def mot_en_cours(self) -> str:
+        """Le debut de mot que l'on est en train de taper.
+
+        Vide si le dernier caractere est un separateur : il n'y a alors aucun
+        mot en cours, et rien a proposer.
+        """
+        return self.texte[self._debut_du_mot_en_cours():]
+
+    def prediction(self) -> list[str]:
+        """Les suites possibles du mot en cours, de la plus probable aux autres.
+
+        Vide si la prediction est eteinte, ou si le debut de mot ne designe
+        rien d'assez precis.
+        """
+        if self.predicteur is None:
+            return []
+        return self.predicteur.completer(self.mot_en_cours())
+
+    def accepter_prediction(self) -> Remplacement | None:
+        """Ce qu'il faut taper pour completer le mot, si la suite s'ajoute.
+
+        La prediction n'efface jamais : elle ne fait qu'ajouter des lettres a
+        droite. Une proposition qui demanderait de revenir sur un accent deja
+        tape — « deja » vers « déjà » — s'affiche mais ne se valide pas.
+        """
+        if self.predicteur is None:
+            return None
+        suite = self.predicteur.suite(self.mot_en_cours())
+        if not suite:
+            return None
+        self.texte += suite
+        return Remplacement(0, suite, "", ("PREDICTION",))
 
     # -- relecture a la pause ------------------------------------------------
 
@@ -313,8 +352,14 @@ class EcouteClavier:
                  profondeur_annulation: int = 20,
                  politique: politique_mod.Politique | None = None,
                  application: Callable[[], str | None] | None = None,
-                 correcteur_pour: Callable[[str], object] | None = None):
+                 correcteur_pour: Callable[[str], object] | None = None,
+                 bulle=None, touche_prediction: str = "tab"):
         self.frappe = frappe
+        # Sans bulle, la prediction ne s'affiche pas et la touche de
+        # validation reste a l'application : c'est le comportement par defaut.
+        self.bulle = bulle
+        self.touche_prediction = touche_prediction
+        self._piege_prediction = None
         self.delai_oubli = delai_oubli
         self.sur_correction = sur_correction
         self.sur_annulation = sur_annulation
@@ -363,6 +408,9 @@ class EcouteClavier:
         self.actif = False
         self._arret.set()
         self._guetteur = None
+        self._retirer_la_bulle()
+        if self.bulle is not None:
+            self.bulle.fermer()
         self.frappe.oublier()
         if self._branchement is None:
             return
@@ -447,6 +495,80 @@ class EcouteClavier:
 
         if remplacement is not None:
             self._appliquer(remplacement)
+            self._proposer()
+        else:
+            self._proposer()
+
+    # -- prediction ----------------------------------------------------------
+
+    def _proposer(self) -> None:
+        """Montre ou retire la bulle selon le mot en cours.
+
+        Appelee a chaque touche : elle doit rester sans effet mesurable. La
+        prediction coute un dixieme de milliseconde, l'affichage passe par
+        une file d'attente et ne bloque pas.
+        """
+        if self.bulle is None:
+            return
+        try:
+            propositions = self.frappe.prediction()
+        except Exception:
+            propositions = []
+
+        if not propositions:
+            self._retirer_la_bulle()
+            return
+
+        self.bulle.montrer(self.frappe.mot_en_cours(), propositions,
+                           self.touche_prediction.title())
+        self._armer_la_touche()
+
+    def _armer_la_touche(self) -> None:
+        """Detourne la touche de validation, le temps que la bulle soit la.
+
+        Elle n'est detournee qu'a ce moment : l'intercepter en permanence
+        casserait la tabulation partout ailleurs, dans les formulaires comme
+        dans les editeurs.
+        """
+        if self._piege_prediction is not None:
+            return
+        try:
+            import keyboard
+
+            self._piege_prediction = keyboard.add_hotkey(
+                self.touche_prediction, self._accepter_prediction,
+                suppress=True, trigger_on_release=False)
+        except Exception:
+            # La bibliotheque refuse de detourner cette touche : la bulle
+            # reste informative, et la touche garde son role habituel.
+            self._piege_prediction = None
+
+    def _retirer_la_bulle(self) -> None:
+        if self.bulle is not None:
+            self.bulle.cacher()
+        self._desarmer_la_touche()
+
+    def _desarmer_la_touche(self) -> None:
+        if self._piege_prediction is None:
+            return
+        try:
+            import keyboard
+
+            keyboard.remove_hotkey(self._piege_prediction)
+        except Exception:
+            pass
+        self._piege_prediction = None
+
+    def _accepter_prediction(self) -> None:
+        """La touche de validation a ete pressee pendant que la bulle etait la."""
+        self._retirer_la_bulle()
+        try:
+            remplacement = self.frappe.accepter_prediction()
+        except Exception:
+            self.frappe.oublier()
+            return
+        if remplacement is not None:
+            self._taper_ailleurs(remplacement)
 
     def _traduire(self, evenement) -> str | None:
         """Le caractere reellement tape, ou None s'il n'y a rien a retenir."""
@@ -526,6 +648,7 @@ class EcouteClavier:
         self._relu = True
         remplacement = self.frappe.relire()
         if remplacement is not None:
+            self._retirer_la_bulle()
             self._appliquer(remplacement)
 
     # -- ecriture -----------------------------------------------------------

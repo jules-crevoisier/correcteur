@@ -55,6 +55,9 @@ INTERRUPTEURS = (
     {"cle": "collage_auto", "libelle": "Recoller le texte corrigé",
      "explication": "Après le raccourci, remet le texte à la place de la "
                     "sélection."},
+    {"cle": "prediction", "libelle": "Proposer la suite des mots",
+     "explication": "Une bulle dans un coin de l'écran, Tab pour "
+                    "accepter."},
     {"cle": "apprentissage", "libelle": "Retenir mes habitudes",
      "explication": "Trois annulations sur le même mot, et Papote n'y "
                     "touche plus."},
@@ -101,6 +104,12 @@ class Passerelle:
             "pages": list(PAGES),
             "interrupteurs": list(INTERRUPTEURS),
             "raccourcis": list(RACCOURCIS),
+            "positions_bulle": [
+                {"cle": "bas-droite", "nom": "Bas droite"},
+                {"cle": "bas-gauche", "nom": "Bas gauche"},
+                {"cle": "haut-droite", "nom": "Haut droite"},
+                {"cle": "haut-gauche", "nom": "Haut gauche"},
+            ],
             "registres": [
                 {"cle": PARLE, "nom": "Parlé",
                  "explication": "« j'ai pas » reste « j'ai pas »."},
@@ -131,7 +140,8 @@ class Passerelle:
         return {
             cle: self.config.get(cle, config_mod.DEFAUTS.get(cle))
             for cle in [i["cle"] for i in INTERRUPTEURS]
-            + [r["cle"] for r in RACCOURCIS] + ["registre", "delai_oubli"]
+            + [r["cle"] for r in RACCOURCIS]
+            + ["registre", "delai_oubli", "position_bulle"]
         }
 
     # -- page « Corriger » --------------------------------------------------
