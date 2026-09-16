@@ -26,7 +26,10 @@ import re
 from dataclasses import dataclass
 
 from . import grammaire, regles
-from .lexique import CLASSE_ACCENT, Lexique, sans_accents
+from .lexique import (
+    CLASSE_ACCENT, CLASSE_EDITION, CLASSE_EDITION_DOUBLE, RANG_COURANT,
+    Lexique, sans_accents,
+)
 from .politique import PARLE, SOUTENU
 
 # Trois lettres identiques d'affilee : « ouiiii », « mdrrrr », « nooon ».
@@ -161,15 +164,27 @@ class Correcteur:
             if self.lexique.connait(reste):
                 return mot[: len(tete)] + "'" + reste
             # « cetait » -> « c'était » : le morceau de droite a le droit
-            # d'avoir perdu ses accents, mais pas d'etre une faute de frappe,
-            # sans quoi « subject » deviendrait « s'abject ».
+            # d'avoir perdu ses accents.
             accentue = self.lexique.suggestion(reste, classe_max=CLASSE_ACCENT)
             if accentue is not None:
                 return mot[: len(tete)] + "'" + accentue
+
+            # « jesper » -> « j'espère » : il a aussi le droit d'avoir une
+            # faute de frappe, mais alors le mot obtenu doit etre franchement
+            # courant — sans quoi « subject » deviendrait « s'abject ».
+            frappe = self.lexique.suggestion(reste, classe_max=CLASSE_EDITION)
+            if frappe is not None and self.lexique.rang(frappe) <= RANG_COURANT:
+                return mot[: len(tete)] + "'" + frappe
         return None
 
-    def _orthographe(self, mot: str) -> str | None:
-        """Le mot correctement orthographie, s'il ne fait aucun doute."""
+    def _orthographe(self, mot: str, profond: bool = True) -> str | None:
+        """Le mot correctement orthographie, s'il ne fait aucun doute.
+
+        `profond` autorise la recherche a deux frappes d'ecart, qui rattrape
+        « jorunée » ou « bonjoru » mais coute jusqu'a deux dixiemes de seconde
+        sur un mot inconnu. On la reserve aux corrections demandees : sous les
+        doigts, une pause pareille se sentirait.
+        """
         if len(mot) < 2:
             # Une lettre isolee est une abreviation (« c pas grave »), pas un
             # mot a corriger.
@@ -196,12 +211,25 @@ class Correcteur:
         if prudent:
             return None
 
-        frappe = self.lexique.suggestion(noyau)
+        frappe = self.lexique.suggestion(
+            noyau,
+            classe_max=CLASSE_EDITION_DOUBLE if profond else CLASSE_EDITION,
+        )
         return elision + frappe if frappe is not None else None
+
+    def propositions(self, mot: str, maximum: int = 4) -> list[str]:
+        """Les remplacements plausibles d'un mot inconnu, faute de certitude.
+
+        Le correcteur ne remplace que ce dont il est sur. Quand il hesite —
+        « ourné » vaut « journée » autant que « durée » — il vaut mieux
+        montrer la courte liste que laisser la faute en place.
+        """
+        elision, noyau = grammaire.separer_clitique(mot)
+        return [elision + p for p in self.lexique.propositions(noyau, maximum)]
 
     # -- une passe ----------------------------------------------------------
 
-    def _passe(self, texte: str) -> tuple[str, list[Correction]]:
+    def _passe(self, texte: str, profond: bool = True) -> tuple[str, list[Correction]]:
         jetons = grammaire.decouper(texte)
         zones = _zones_protegees(texte)
         propositions: list[Correction] = []
@@ -254,7 +282,7 @@ class Correcteur:
                 continue
             if self._connu(jeton.texte):
                 continue
-            remplacement = self._orthographe(jeton.texte)
+            remplacement = self._orthographe(jeton.texte, profond)
             if remplacement is None or remplacement == jeton.texte:
                 continue
             propositions.append(
@@ -358,7 +386,8 @@ class Correcteur:
     # -- entree publique ----------------------------------------------------
 
     def corriger(self, texte: str, passes: int = 2,
-                 mise_en_forme: bool = True) -> tuple[str, list[Correction]]:
+                 mise_en_forme: bool = True,
+                 profond: bool = True) -> tuple[str, list[Correction]]:
         """Corrige `texte` et renvoie (texte_corrige, corrections_appliquees).
 
         Deux passes par defaut : corriger « ils on manger » en « ils ont
@@ -369,6 +398,9 @@ class Correcteur:
         final. La correction au fil de la frappe la desactive : une phrase en
         cours d'ecriture n'est pas encore finie, et lui coller un point a
         chaque espace serait insupportable.
+
+        `profond` autorise la recherche a deux frappes d'ecart. La frappe la
+        desactive egalement : elle coute trop cher pour une touche.
         """
         if not texte or not texte.strip():
             return texte, []
@@ -381,7 +413,7 @@ class Correcteur:
 
         toutes: list[Correction] = []
         for _ in range(max(1, passes)):
-            corps, corrections = self._passe(corps)
+            corps, corrections = self._passe(corps, profond)
             if not corrections:
                 break
             toutes.extend(corrections)

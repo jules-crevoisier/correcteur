@@ -12,6 +12,7 @@ from papote.lexique import (  # noqa: E402
     CLASSE_ACCENT,
     CLASSE_EDITION,
     Lexique,
+    accentue,
     squelette,
 )
 
@@ -106,3 +107,82 @@ def test_les_mots_corrects_sont_reconnus(lexique):
     for mot in ("bonjour", "gâteaux", "aujourd'hui", "être", "français",
                 "vingt-quatre".split("-")[0], "œuvre", "Paris"):
         assert lexique.connait(mot), mot
+
+
+# -- deux frappes d'ecart ----------------------------------------------------
+
+# Les trois premieres ne coutent qu'une frappe — une inversion, une lettre en
+# trop — mais elles etaient hors de portee avant que les variantes ne sachent
+# inverser deux lettres. La derniere en demande bien deux.
+DOUBLES_FAUTES = [
+    ("jorunée", "journée"),
+    ("bonjoru", "bonjour"),
+    ("mercii", "merci"),
+    ("anniverssairee", "anniversaire"),
+]
+
+
+@pytest.mark.parametrize("faute,attendu", DOUBLES_FAUTES)
+def test_deux_frappes_d_ecart(lexique, faute, attendu):
+    assert lexique.suggestion(faute) == attendu
+
+
+def test_les_mots_courts_echappent_a_la_double_edition(lexique):
+    """Sur « temp », la distance deux proposerait « même » ou « tête »."""
+    candidats = [c.mot for c in lexique.candidats("abc")]
+    assert candidats == []
+
+
+def test_un_accent_tape_ne_se_perd_pas(lexique):
+    """« pasé » devient « passé », jamais « pas » — pourtant bien plus courant."""
+    assert lexique.suggestion("pasé") == "passé"
+    assert all(accentue(c.mot) for c in lexique.candidats("pasé"))
+
+
+def test_la_frappe_ne_cherche_pas_si_loin(lexique):
+    """La recherche a deux frappes coute trop cher pour une touche."""
+    from papote.lexique import CLASSE_EDITION
+
+    assert lexique.suggestion("anniverssairee", classe_max=CLASSE_EDITION) is None
+    # ... et elle ne la paie meme pas : aucun candidat lointain n'est fabrique.
+    assert lexique.candidats("anniverssairee", CLASSE_EDITION) == []
+
+
+# -- la courte liste, quand la certitude manque -------------------------------
+
+def test_les_propositions_classent_le_mot_courant_en_tete(lexique):
+    """« ourné » : le correcteur se tait, mais il a bien « journée » en main.
+
+    « tourné » n'est qu'a une frappe, « journée » a deux — mais « journée »
+    est le 384e mot du francais et « tourné » le 3217e. Devant un humain qui
+    choisit, c'est la frequence qui doit parler la premiere.
+    """
+    assert lexique.suggestion("ourné") is None
+    assert lexique.propositions("ourné")[0] == "journée"
+
+
+def test_les_propositions_gardent_la_casse(lexique):
+    assert lexique.propositions("Ourné")[0] == "Journée"
+
+
+def test_les_propositions_ne_repetent_pas_le_mot(lexique):
+    assert "près" not in lexique.propositions("près")
+
+
+def test_un_mot_sans_voisin_ne_propose_rien(lexique):
+    assert lexique.propositions("zbeulotron") == []
+
+
+def test_un_mot_rare_ne_gagne_pas_par_defaut(lexique):
+    """« jesper » ne devient pas « jasper », meme sans concurrent.
+
+    Une lettre d'ecart suffit, mais « jasper » est le 22 000e mot du francais :
+    il est plus probable que le mot vise soit ailleurs.
+    """
+    assert lexique.suggestion("jesper") != "jasper"
+
+
+def test_une_majuscule_ne_bloque_pas_sa_jumelle(lexique):
+    """« reunion » vaut « réunion » — l'ile ne compte pas comme concurrente."""
+    assert lexique.suggestion("reunion") == "réunion"
+
