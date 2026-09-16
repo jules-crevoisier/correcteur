@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  L'installateur de Papote.
+
+  Trois partis pris :
+
+  * **Installation par utilisateur.** Papote se range dans le profil de celui
+    qui l'installe, jamais dans « Program Files ». Aucune elevation, aucune
+    fenetre bleue a valider — comme le lancement automatique, qui n'a jamais
+    demande de droits administrateur non plus.
+  * **Les etapes sont des choix.** Le raccourci du bureau et le lancement au
+    demarrage se cochent a l'installation, et se retrouvent ensuite dans les
+    reglages de l'application : l'un comme l'autre ecrivent au meme endroit.
+  * **Tout est en francais**, images comprises, fabriquees a partir des memes
+    pixels que l'icone du programme.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+
+  <Package Name="Papote"
+           Manufacturer="Papote"
+           Version="$(Version)"
+           UpgradeCode="7f3a6d52-4b1e-4c9a-9f2d-8e5c1a0b7d34"
+           Scope="perUser"
+           Language="1036"
+           Codepage="1252">
+
+    <SummaryInformation Description="Papote — le correcteur qui vous laisse parler"
+                        Manufacturer="Papote" />
+
+    <!-- Une version remplace la precedente sans laisser deux entrees dans la
+         liste des programmes installes. -->
+    <MajorUpgrade AllowSameVersionUpgrades="yes"
+                  DowngradeErrorMessage="Une version plus récente de Papote est déjà installée." />
+
+    <MediaTemplate EmbedCab="yes" />
+
+    <Icon Id="PapoteIcone" SourceFile="papote.ico" />
+    <Property Id="ARPPRODUCTICON" Value="PapoteIcone" />
+    <Property Id="ARPHELPLINK" Value="https://github.com/jules-crevoisier/correcteur" />
+    <Property Id="ARPNOREPAIR" Value="1" />
+
+    <!-- Les pages de l'assistant : nos images, notre presentation. -->
+    <WixVariable Id="WixUIBannerBmp" Value="banniere.bmp" />
+    <WixVariable Id="WixUIDialogBmp" Value="fond.bmp" />
+    <WixVariable Id="WixUILicenseRtf" Value="presentation.rtf" />
+
+    <!-- WixUI_FeatureTree : l'utilisateur choisit ce qu'il installe, sans
+         avoir a repondre a une question sur le dossier de destination. -->
+    <ui:WixUI Id="WixUI_FeatureTree" />
+
+    <Feature Id="Programme"
+             Title="Papote"
+             Description="Le correcteur et son dictionnaire français (20 Mo). Indispensable."
+             Level="1"
+             AllowAbsent="no"
+             ConfigurableDirectory="INSTALLFOLDER">
+      <ComponentGroupRef Id="Fichiers" />
+      <ComponentRef Id="RaccourciMenu" />
+    </Feature>
+
+    <Feature Id="Demarrage"
+             Title="Lancer Papote au démarrage de Windows"
+             Description="Papote se met en route avec votre session. Réversible à tout moment depuis ses réglages."
+             Level="1">
+      <ComponentRef Id="CleDemarrage" />
+    </Feature>
+
+    <Feature Id="Bureau"
+             Title="Ajouter un raccourci sur le bureau"
+             Description="Pour ouvrir la fenêtre de Papote sans passer par le menu Démarrer."
+             Level="1000">
+      <ComponentRef Id="RaccourciBureau" />
+    </Feature>
+
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="DossierProgrammes" Name="Programs">
+        <Directory Id="INSTALLFOLDER" Name="Papote" />
+      </Directory>
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="DossierMenu" Name="Papote" />
+    </StandardDirectory>
+
+    <StandardDirectory Id="DesktopFolder" />
+
+    <ComponentGroup Id="Fichiers" Directory="INSTALLFOLDER">
+      <Component Id="Executable" Guid="2c9f1b84-6d3a-4e57-8b0c-1f7a9d4e2a11">
+        <File Id="PapoteExe" Source="Papote.exe" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+
+    <Component Id="RaccourciMenu" Directory="DossierMenu"
+               Guid="5a1d7e39-8c2b-4f06-9a3e-6b8d0c5f1e77">
+      <Shortcut Id="MenuDemarrer"
+                Name="Papote"
+                Description="Le correcteur qui vous laisse parler"
+                Target="[INSTALLFOLDER]Papote.exe"
+                WorkingDirectory="INSTALLFOLDER"
+                Icon="PapoteIcone" />
+      <RemoveFolder Id="RetirerDossierMenu" Directory="DossierMenu" On="uninstall" />
+      <RegistryValue Root="HKCU" Key="Software\Papote" Name="menu"
+                     Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+
+    <Component Id="RaccourciBureau" Directory="DesktopFolder"
+               Guid="9e4c2f70-3b5a-4d18-8c6f-2a7e1b93d5c0">
+      <Shortcut Id="Bureau"
+                Name="Papote"
+                Description="Le correcteur qui vous laisse parler"
+                Target="[INSTALLFOLDER]Papote.exe"
+                WorkingDirectory="INSTALLFOLDER"
+                Icon="PapoteIcone" />
+      <RegistryValue Root="HKCU" Key="Software\Papote" Name="bureau"
+                     Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+
+    <!-- La meme entree de registre que celle que l'application ecrit
+         elle-meme : cocher la case ici ou la case dans les reglages revient
+         exactement au meme. -->
+    <Component Id="CleDemarrage" Directory="INSTALLFOLDER"
+               Guid="b6d83a15-7e49-4c2f-9d10-3f5a8c7b2e64">
+      <RegistryValue Root="HKCU"
+                     Key="Software\Microsoft\Windows\CurrentVersion\Run"
+                     Name="Papote"
+                     Type="string"
+                     Value="&quot;[INSTALLFOLDER]Papote.exe&quot;"
+                     KeyPath="yes" />
+    </Component>
+
+  </Package>
+</Wix>

@@ -9,16 +9,16 @@ import threading
 import time
 
 from . import __version__, config as config_mod
-from . import demarrage, icones, maj, theme
+from . import couleurs, demarrage, icones, maj
 
 
 def _icone(actif: bool = True):
     """La bulle de Papote, en pixel art. Grise quand l'outil est en pause."""
-    trait = theme.ACCENT if actif else theme.TEXTE_ETEINT
+    trait = couleurs.ACCENT if actif else couleurs.TEXTE_ETEINT
     creux = "#0e1014" if actif else "#1a1c22"
     return icones.image_pil(
         "papote",
-        icones.palette(trait, creux, lumiere=theme.ACCENT_VIF if actif else trait),
+        icones.palette(trait, creux, lumiere=couleurs.ACCENT_VIF if actif else trait),
         taille=64,
     )
 

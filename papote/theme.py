@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
-"""L'habillage de la fenetre : couleurs, espacements, et widgets dessines.
+"""Les widgets dessines a la main.
 
 tkinter donne des widgets gris des annees quatre-vingt-dix. Tout ce qui suit
-sert a le faire oublier : une palette sombre, une echelle d'espacement qui ne
-varie pas d'un ecran a l'autre, et quelques widgets redessines sur un canevas
-— bouton aux angles arrondis, interrupteur, entree de navigation — parce que
-c'est la seule facon d'avoir des coins ronds dans tkinter.
+sert a le faire oublier : bouton aux angles arrondis, interrupteur a bascule,
+entree de navigation — aucun n'existe chez tkinter, tous sont dessines sur un
+canevas, parce que c'est la seule facon d'avoir des coins ronds.
 
-Le reste du projet n'ecrit jamais une couleur en dur : il demande a ce module.
+La palette et les espacements vivent dans `couleurs.py`, qui ne depend de
+rien : l'icone de la barre des taches s'en sert sans charger tkinter.
 """
 
 from __future__ import annotations
@@ -17,37 +17,11 @@ from tkinter import font as tkfont
 
 from . import icones
 
-# ---------------------------------------------------------------------------
-# Couleurs
-# ---------------------------------------------------------------------------
-
-FOND = "#0e1014"          # le fond de la fenetre
-SURFACE = "#161922"       # les panneaux poses dessus
-SURFACE_HAUTE = "#1e2230" # les champs, et le survol
-BORDURE = "#272c3a"
-BORDURE_VIVE = "#39405420"
-
-TEXTE = "#e9ebf0"
-TEXTE_DOUX = "#8b93a7"
-TEXTE_ETEINT = "#5e6579"
-
-ACCENT = "#5b8cff"
-ACCENT_VIF = "#7aa2ff"
-ACCENT_SOURD = "#22305c"
-SUCCES = "#3ecf8e"
-ALERTE = "#ffb454"
-
-# ---------------------------------------------------------------------------
-# Espacements et typographie
-# ---------------------------------------------------------------------------
-
-PETIT, MOYEN, GRAND, TRES_GRAND = 4, 8, 16, 24
-
-FAMILLE = "Segoe UI"
-
-
-def police(taille: int = 10, gras: bool = False) -> tuple:
-    return (FAMILLE, taille, "bold") if gras else (FAMILLE, taille)
+from .couleurs import (  # noqa: F401 — reexportes pour les widgets
+    ACCENT, ACCENT_SOURD, ACCENT_VIF, ALERTE, BORDURE, BORDURE_VIVE, FAMILLE,
+    FOND, GRAND, MOYEN, PETIT, SUCCES, SURFACE, SURFACE_HAUTE, TEXTE,
+    TEXTE_DOUX, TEXTE_ETEINT, TRES_GRAND, police,
+)
 
 
 def _largeur_texte(texte: str, taille: int, gras: bool) -> int:

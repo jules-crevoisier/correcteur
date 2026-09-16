@@ -70,6 +70,11 @@ jobs:
             "VERSION = `"$numero`""
           )
 
+      # Les images de l'installateur et l'icone du programme sortent des
+      # memes pixels que les icones de la fenetre.
+      - name: Dessiner l'icone et les images de l'installateur
+        run: python outils/images_installateur.py
+
       - name: Compiler l'executable
         run: python -m PyInstaller --noconfirm --clean papote.spec
 
@@ -93,10 +98,32 @@ jobs:
           }
           Write-Host "sortie conforme : $sortie"
 
+      # WiX fabrique le MSI. La version lui est passee telle quelle : c'est
+      # elle qui apparait dans la liste des programmes installes.
+      - name: Installer WiX
+        run: |
+          dotnet tool install --global wix
+          wix extension add -g WixToolset.UI.wixext
+
+      - name: Construire l'installateur
+        shell: pwsh
+        run: |
+          $numero = "${{ steps.version.outputs.tag }}".TrimStart('v')
+          wix build installateur/papote.wxs `
+            -d Version=$numero `
+            -bindpath dist -bindpath installateur `
+            -ext WixToolset.UI.wixext `
+            -culture fr-FR `
+            -out dist/Papote.msi
+          if (-not (Test-Path dist/Papote.msi)) { throw "le MSI n'a pas ete produit" }
+          "{0:n1} Mo" -f ((Get-Item dist/Papote.msi).Length / 1MB)
+
       - uses: actions/upload-artifact@v4
         with:
-          name: Papote-exe
-          path: dist/Papote.exe
+          name: Papote
+          path: |
+            dist/Papote.exe
+            dist/Papote.msi
 
       - name: Publier la version
         if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
@@ -105,12 +132,18 @@ jobs:
           tag_name: ${{ steps.version.outputs.tag }}
           name: Papote ${{ steps.version.outputs.tag }}
           body: |
-            Téléchargez **Papote.exe** ci-dessous, double-cliquez : une
-            icône bleue apparaît près de l'horloge. Sélectionnez du texte
-            n'importe où, puis `Ctrl+Alt+C`.
+            **Papote.msi** installe Papote proprement : menu Démarrer,
+            désinstallation, et le choix de le lancer ou non avec Windows.
+            Aucun droit administrateur n'est demandé.
 
-            Windows affichera un avertissement SmartScreen — l'exécutable
-            n'est pas signé. *Informations complémentaires* → *Exécuter
-            quand même*.
+            **Papote.exe** est le programme seul, à lancer tel quel — pour
+            une clé USB, ou pour essayer sans rien installer.
+
+            Dans les deux cas, une icône bleue apparaît près de l'horloge :
+            écrivez, et le texte se corrige. Windows affichera un
+            avertissement SmartScreen, faute de signature :
+            *Informations complémentaires* → *Exécuter quand même*.
           generate_release_notes: true
-          files: dist/Papote.exe
+          files: |
+            dist/Papote.msi
+            dist/Papote.exe

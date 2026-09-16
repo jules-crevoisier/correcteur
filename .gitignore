@@ -5,3 +5,5 @@ build/
 dist/
 .pytest_cache/
 correcteur/version_compilee.py
+installateur/*.bmp
+installateur/*.ico

@@ -48,9 +48,24 @@ les **fautes** — accents, accords, conjugaison, homonymes — et laisse le
 
 ## Installation
 
-Téléchargez **`Papote.exe`** depuis l'onglet
+Téléchargez **`Papote.msi`** depuis l'onglet
 [Releases](../../releases) — la dernière version est tout en haut — et
 double-cliquez dessus.
+
+L'installateur ne demande **aucun droit administrateur** : Papote se range
+dans votre profil. Il propose trois choses au passage, à cocher ou non :
+
+| Étape | Par défaut |
+|---|---|
+| Papote et son dictionnaire | Obligatoire, 20 Mo |
+| Lancer au démarrage de Windows | Coché |
+| Raccourci sur le bureau | Décoché |
+
+Les deux dernières se retrouvent ensuite dans les réglages de l'application :
+la case de l'installateur et celle des réglages écrivent au même endroit.
+
+Vous préférez ne rien installer ? **`Papote.exe`** est le programme seul, à
+poser où vous voulez — une clé USB, par exemple — et à lancer tel quel.
 
 Windows affichera un avertissement SmartScreen au premier lancement :
 l'exécutable n'est pas signé numériquement. *Informations complémentaires* →
@@ -432,6 +447,16 @@ construire_exe.bat
 Le résultat est `dist\Papote.exe` : un fichier unique d'une vingtaine de
 mégaoctets, dictionnaire compris.
 
+L'installateur, lui, se construit avec [WiX](https://wixtoolset.org/) à partir
+de `installateur/papote.wxs` — c'est ce que fait GitHub à chaque envoi. Ses
+images ne sont pas versionnées : elles se redessinent à partir des icônes du
+programme.
+
+```
+python outils/images_installateur.py
+wix build installateur/papote.wxs -d Version=1.0.0 -bindpath dist -bindpath installateur -ext WixToolset.UI.wixext -culture fr-FR -out dist/Papote.msi
+```
+
 C'est aussi ce que fait GitHub à chaque envoi, sur n'importe quelle branche
 ([`.github/workflows/executable.yml`](.github/workflows/executable.yml)) :
 l'exécutable est construit sur une machine Windows, testé, puis déposé dans
@@ -496,6 +521,7 @@ Le dictionnaire français vient de [Dicollecte](https://grammalecte.net/)
 | `papote/theme.py` | Couleurs, espacements, widgets dessinés |
 | `papote/icones.py` | Les icônes, en pixel art |
 | `papote/journal.py` | Le journal des erreurs |
+| `papote/couleurs.py` | La palette, sans dépendance |
 | `papote/frappe.py` | Correction au fil de la frappe et annulation |
 | `papote/politique.py` | Où corriger, et sur quel ton |
 | `papote/apprentissage.py` | Ce qu'il retient de vos habitudes |
@@ -507,3 +533,5 @@ Le dictionnaire français vient de [Dicollecte](https://grammalecte.net/)
 | `papote/chemins.py` | Emplacements selon le mode (sources, `.exe`) |
 | `outils/construire_lexique.py` | Fabrication des fichiers de `donnees/` |
 | `outils/evaluer.py` | Le corpus d'évaluation et son tableau de bord |
+| `outils/images_installateur.py` | L'icône et les images de l'installateur |
+| `installateur/papote.wxs` | La recette de l'installateur MSI |

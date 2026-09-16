@@ -11,6 +11,10 @@ from pathlib import Path
 
 RACINE = Path(SPECPATH)
 
+# L'icone est fabriquee par « outils/images_installateur.py ». Si elle n'est
+# pas la — compilation rapide en local — PyInstaller met la sienne.
+ICONE = RACINE / "installateur" / "papote.ico"
+
 analyse = Analysis(
     ["lancement.py"],
     pathex=[str(RACINE)],
@@ -49,4 +53,5 @@ exe = EXE(
     # notification.
     console=False,
     disable_windowed_traceback=False,
+    icon=str(ICONE) if ICONE.exists() else None,
 )
