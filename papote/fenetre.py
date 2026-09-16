@@ -1,17 +1,15 @@
 # -*- coding: utf-8 -*-
 """La fenetre : corriger, apprendre, regler.
 
-Le correcteur travaille normalement sans se montrer — il corrige pendant
-qu'on ecrit. Cette fenetre sert aux trois choses qu'il ne peut pas faire tout
-seul :
+Papote travaille normalement sans se montrer — il corrige pendant qu'on
+ecrit. Cette fenetre sert aux quatre choses qu'il ne peut pas faire tout
+seul : relire un texte, lui apprendre un mot, voir ce qu'on rate le plus, et
+regler ce qu'il fait.
 
-    Corriger          relire un texte avant de l'envoyer ;
-    Mon dictionnaire  lui apprendre un mot ou une abreviation ;
-    Reglages          changer ce qu'il fait, sans editer de fichier.
-
-Elle n'utilise que tkinter, livre avec Python : rien a installer. Les onglets
-sont faits maison plutot qu'avec `ttk.Notebook`, qui suit le theme du systeme
-et jurerait au milieu du reste.
+La mise en page suit ce que font les applications d'aujourd'hui : une colonne
+de navigation a gauche, le contenu a droite, des panneaux poses sur un fond
+sombre. Les couleurs, les espacements et les widgets dessines vivent dans
+`theme.py` ; les icones, en pixel art, dans `icones.py`.
 """
 
 from __future__ import annotations
@@ -20,59 +18,21 @@ import threading
 import tkinter as tk
 
 from . import __version__, config as config_mod
-from . import demarrage, maj, politique as politique_mod, regles
-from . import relecture
-from .raccourci import MODIFICATEURS, nom_de_touche
+from . import demarrage, icones, journal as journal_mod, maj
+from . import politique as politique_mod, regles
+from . import relecture, theme
 from .lexique import LexiqueIntrouvable
 from .moteur import _normaliser_mot
+from .raccourci import MODIFICATEURS, nom_de_touche
 
-FOND = "#1e1f22"
-FOND_CHAMP = "#2b2d31"
-FOND_SURVOL = "#3a3d43"
-TEXTE = "#e6e6e6"
-TEXTE_DOUX = "#9aa0a6"
-ACCENT = "#2b7ade"
-POLICE = "Segoe UI"
-
-
-def _bouton(parent, texte, commande, principal=False, petit=False):
-    return tk.Button(
-        parent, text=texte, command=commande, relief="flat", borderwidth=0,
-        cursor="hand2",
-        bg=ACCENT if principal else FOND_CHAMP,
-        fg="white" if principal else TEXTE,
-        activebackground="#3f8ae8" if principal else FOND_SURVOL,
-        activeforeground="white" if principal else TEXTE,
-        padx=10 if petit else 18, pady=2 if petit else 6,
-        font=(POLICE, 9 if petit else 10, "bold" if principal else "normal"),
-    )
-
-
-def _liste(parent, hauteur=6):
-    return tk.Listbox(
-        parent, bg=FOND_CHAMP, fg=TEXTE, relief="flat", borderwidth=0,
-        height=hauteur, font=(POLICE, 10), selectbackground=ACCENT,
-        selectforeground="white", highlightthickness=1,
-        highlightbackground="#3a3d43", activestyle="none",
-    )
-
-
-def _champ(parent, largeur=22):
-    return tk.Entry(
-        parent, bg=FOND_CHAMP, fg=TEXTE, relief="flat", width=largeur,
-        insertbackground=TEXTE, font=(POLICE, 10), highlightthickness=1,
-        highlightbackground="#3a3d43", highlightcolor=ACCENT,
-    )
-
-
-def _titre(parent, texte):
-    return tk.Label(parent, text=texte, bg=FOND, fg=TEXTE, anchor="w",
-                    font=(POLICE, 10, "bold"))
-
-
-def _note(parent, texte, **kw):
-    return tk.Label(parent, text=texte, bg=FOND, fg=TEXTE_DOUX, anchor="w",
-                    justify="left", font=(POLICE, 9), **kw)
+# Les pages, dans l'ordre de la colonne de gauche.
+PAGES = (
+    ("Corriger", "crayon", "Collez un texte, relisez-le avant de l'envoyer."),
+    ("Mon dictionnaire", "livre", "Les mots et les tournures qui vous appartiennent."),
+    ("Vos fautes", "barres", "Ce que vous corrigez le plus, compté chez vous."),
+    ("Applications", "fenetre", "Où se taire, et où hausser le ton."),
+    ("Réglages", "reglages", "Tout ce qui se réglait dans un fichier."),
+)
 
 
 class ChampRaccourci:
@@ -82,7 +42,7 @@ class ChampRaccourci:
     attendue par la bibliotheque de raccourcis. Appuyer sur les touches, non.
     """
 
-    INVITE = "Appuyez sur la combinaison…"
+    INVITE = "Appuyez…"
 
     def __init__(self, parent, valeur: str, sur_erreur=None):
         self.valeur = valeur or ""
@@ -90,10 +50,8 @@ class ChampRaccourci:
         self.enfonces: list[str] = []
         self.capture = False
 
-        self.bouton = _bouton(parent, self._libelle(), self._capturer)
-        self.bouton.configure(width=18)
-
-    # -- affichage ----------------------------------------------------------
+        self.bouton = theme.Bouton(parent, self._libelle(), self._capturer,
+                                   petit=True, fond=theme.SURFACE)
 
     def _libelle(self) -> str:
         return self.valeur.upper() if self.valeur else "aucun"
@@ -105,25 +63,23 @@ class ChampRaccourci:
     def get(self) -> str:
         return self.valeur
 
-    # -- capture ------------------------------------------------------------
-
     def _capturer(self) -> None:
         if self.capture:
             return
         self.capture = True
         self.enfonces = []
-        self.bouton.configure(text=self.INVITE, bg=ACCENT, fg="white")
-        self.bouton.focus_set()
-        self.bouton.grab_set()
-        self.bouton.bind("<KeyPress>", self._enfoncee)
-        self.bouton.bind("<KeyRelease>", self._relachee)
+        self.bouton.configurer(texte=self.INVITE)
+        self.bouton.canevas.focus_set()
+        self.bouton.canevas.grab_set()
+        self.bouton.canevas.bind("<KeyPress>", self._enfoncee)
+        self.bouton.canevas.bind("<KeyRelease>", self._relachee)
 
     def _terminer(self) -> None:
         self.capture = False
-        self.bouton.grab_release()
-        self.bouton.unbind("<KeyPress>")
-        self.bouton.unbind("<KeyRelease>")
-        self.bouton.configure(text=self._libelle(), bg=FOND_CHAMP, fg=TEXTE)
+        self.bouton.canevas.grab_release()
+        self.bouton.canevas.unbind("<KeyPress>")
+        self.bouton.canevas.unbind("<KeyRelease>")
+        self.bouton.configurer(texte=self._libelle())
 
     def _enfoncee(self, evenement):
         touche = nom_de_touche(evenement.keysym)
@@ -131,19 +87,17 @@ class ChampRaccourci:
         if evenement.keysym == "Escape":
             self._terminer()
             return "break"
-
         if evenement.keysym in ("BackSpace", "Delete"):
             self.valeur = ""
             self._terminer()
             return "break"
-
         if touche is None:
             return "break"
 
         if touche in MODIFICATEURS:
             if touche not in self.enfonces:
                 self.enfonces.append(touche)
-            self.bouton.configure(text=("+".join(self.enfonces) + "+…").upper())
+            self.bouton.configurer(texte=("+".join(self.enfonces) + "+…").upper())
             return "break"
 
         # Une touche seule ferait un raccourci global insupportable : elle
@@ -152,7 +106,7 @@ class ChampRaccourci:
         if not self.enfonces and not touche_de_fonction:
             self.sur_erreur("Ajoutez Ctrl, Alt ou Maj — sans quoi le raccourci "
                             "partirait chaque fois que vous tapez cette touche.")
-            self.bouton.configure(text=self.INVITE)
+            self.bouton.configurer(texte=self.INVITE)
             return "break"
 
         self.valeur = "+".join(self.enfonces + [touche])
@@ -167,19 +121,23 @@ class ChampRaccourci:
 
 
 class Fenetre:
-    """Coller, corriger, apprendre, regler."""
+    """Corriger, apprendre, regler."""
+
+    LARGEUR_COLONNE = 208
 
     def __init__(self, app):
         self.app = app
         self.config = dict(app.config)
+        self.images: list = []          # les PhotoImage se perdent sans reference
+        self.pages: dict[str, tk.Frame] = {}
+        self.entrees: dict[str, theme.EntreeNavigation] = {}
+        self.maj_trouvee: maj.Version | None = None
+
         self.racine = tk.Tk()
         self.racine.title("Papote")
-        self.racine.geometry("680x520")
-        self.racine.minsize(520, 420)
-        self.racine.configure(bg=FOND)
-
-        self.pages: dict[str, tk.Frame] = {}
-        self.onglets: dict[str, tk.Button] = {}
+        self.racine.geometry("880x600")
+        self.racine.minsize(720, 520)
+        self.racine.configure(bg=theme.FOND)
 
         self._construire()
         self._afficher("Corriger")
@@ -189,41 +147,80 @@ class Fenetre:
     # -- ossature -----------------------------------------------------------
 
     def _construire(self) -> None:
-        barre = tk.Frame(self.racine, bg=FOND, padx=14, pady=10)
-        barre.pack(fill="x")
+        colonne = tk.Frame(self.racine, bg=theme.FOND,
+                           width=self.LARGEUR_COLONNE)
+        colonne.pack(side="left", fill="y")
+        colonne.pack_propagate(False)
+        self._colonne(colonne)
 
-        contenu = tk.Frame(self.racine, bg=FOND, padx=14, pady=0)
+        droite = tk.Frame(self.racine, bg=theme.FOND)
+        droite.pack(side="left", fill="both", expand=True)
+
+        self.entete = tk.Frame(droite, bg=theme.FOND, padx=theme.TRES_GRAND,
+                               pady=theme.GRAND)
+        self.entete.pack(fill="x")
+        self.titre_page = tk.Label(self.entete, text="", bg=theme.FOND,
+                                   fg=theme.TEXTE, anchor="w",
+                                   font=theme.police(15, gras=True))
+        self.titre_page.pack(fill="x")
+        self.sous_titre = theme.note(self.entete, "", fond=theme.FOND)
+        self.sous_titre.pack(fill="x", pady=(2, 0))
+
+        contenu = tk.Frame(droite, bg=theme.FOND, padx=theme.TRES_GRAND)
         contenu.pack(fill="both", expand=True)
 
-        for nom, constructeur in (
-            ("Corriger", self._page_corriger),
-            ("Mon dictionnaire", self._page_dictionnaire),
-            ("Vos fautes", self._page_fautes),
-            ("Applications", self._page_applications),
-            ("Réglages", self._page_reglages),
-        ):
-            bouton = _bouton(barre, nom, lambda n=nom: self._afficher(n))
-            bouton.pack(side="left", padx=(0, 6))
-            self.onglets[nom] = bouton
-
-            page = tk.Frame(contenu, bg=FOND, pady=4)
-            constructeur(page)
+        for nom, _icone, _sous_titre in PAGES:
+            page = tk.Frame(contenu, bg=theme.FOND)
+            getattr(self, "_page_" + _cle(nom))(page)
             self.pages[nom] = page
 
-        self.etat = _note(self.racine, "", wraplength=640)
-        self.etat.pack(fill="x", padx=14, pady=(4, 12))
+        barre = tk.Frame(droite, bg=theme.FOND, padx=theme.TRES_GRAND,
+                         pady=theme.MOYEN)
+        barre.pack(fill="x")
+        self.etat = theme.note(barre, "", fond=theme.FOND, wraplength=600)
+        self.etat.pack(fill="x")
 
         self.racine.bind("<Escape>", lambda _: self.racine.destroy())
+
+    def _colonne(self, colonne: tk.Frame) -> None:
+        marque = tk.Frame(colonne, bg=theme.FOND, padx=14, pady=18)
+        marque.pack(fill="x")
+
+        image = icones.image_tk(
+            "papote", icones.palette(theme.ACCENT, theme.FOND,
+                                     lumiere=theme.ACCENT_VIF),
+            theme.FOND, 2,
+        )
+        self.images.append(image)
+        tk.Label(marque, image=image, bg=theme.FOND, bd=0).pack(side="left")
+
+        titres = tk.Frame(marque, bg=theme.FOND)
+        titres.pack(side="left", padx=(10, 0))
+        tk.Label(titres, text="Papote", bg=theme.FOND, fg=theme.TEXTE,
+                 font=theme.police(13, gras=True), anchor="w").pack(fill="x")
+        tk.Label(titres, text=__version__, bg=theme.FOND, fg=theme.TEXTE_ETEINT,
+                 font=theme.police(8), anchor="w").pack(fill="x")
+
+        for nom, icone, _sous_titre in PAGES:
+            self.entrees[nom] = theme.EntreeNavigation(
+                colonne, nom, icone, self._afficher
+            ).pack(fill="x", padx=8, pady=1)
+
+        # Le bas de la colonne annonce une mise a jour prete, et rien d'autre.
+        self.bandeau_maj = tk.Frame(colonne, bg=theme.FOND, padx=12, pady=12)
+        self.bandeau_maj.pack(side="bottom", fill="x")
 
     def _afficher(self, nom: str) -> None:
         for autre, page in self.pages.items():
             page.pack_forget()
-            self.onglets[autre].configure(
-                bg=FOND_CHAMP, fg=TEXTE, font=(POLICE, 10)
-            )
+            self.entrees[autre].choisir(False)
         self.pages[nom].pack(fill="both", expand=True)
-        self.onglets[nom].configure(bg=ACCENT, fg="white",
-                                    font=(POLICE, 10, "bold"))
+        self.entrees[nom].choisir(True)
+
+        self.titre_page.configure(text=nom)
+        self.sous_titre.configure(
+            text=next(s for n, _i, s in PAGES if n == nom))
+
         if nom == "Mon dictionnaire":
             self._rafraichir_dictionnaire()
         elif nom == "Vos fautes":
@@ -231,8 +228,8 @@ class Fenetre:
         elif nom == "Applications":
             self._rafraichir_applications()
 
-    def _dire(self, message: str) -> None:
-        self.etat.configure(text=message)
+    def _dire(self, message: str, couleur: str | None = None) -> None:
+        self.etat.configure(text=message, fg=couleur or theme.TEXTE_DOUX)
 
     def _precharger(self) -> None:
         try:
@@ -243,28 +240,27 @@ class Fenetre:
     # -- page « Corriger » --------------------------------------------------
 
     def _page_corriger(self, page: tk.Frame) -> None:
-        _note(page, "Écrivez ou collez votre texte, puis Ctrl+Entrée."
-              ).pack(fill="x", pady=(0, 8))
+        cadre = theme.carte(page)
+        cadre.pack(fill="both", expand=True)
 
-        self.champ = tk.Text(
-            page, wrap="word", bg=FOND_CHAMP, fg=TEXTE, insertbackground=TEXTE,
-            relief="flat", padx=12, pady=10, font=(POLICE, 11), undo=True,
-            highlightthickness=1, highlightbackground="#3a3d43",
-        )
-        self.champ.pack(fill="both", expand=True)
+        self.champ = theme.texte(cadre, fond=theme.SURFACE)
+        self.champ.pack(fill="both", expand=True, padx=2, pady=2)
         self.champ.focus_set()
 
-        barre = tk.Frame(page, bg=FOND, pady=10)
+        barre = tk.Frame(page, bg=theme.FOND, pady=theme.MOYEN)
         barre.pack(fill="x")
 
-        self.bouton_corriger = _bouton(barre, "Corriger", self.corriger,
-                                       principal=True)
-        self.bouton_corriger.pack(side="left")
-        _bouton(barre, "Copier", self.copier).pack(side="left", padx=(8, 0))
+        self.bouton_corriger = theme.Bouton(
+            barre, "Corriger", self.corriger, principal=True, icone="coche"
+        ).pack(side="left")
+        theme.Bouton(barre, "Copier", self.copier).pack(side="left",
+                                                        padx=(theme.MOYEN, 0))
+        theme.note(barre, "Ctrl+Entrée", fond=theme.FOND).pack(
+            side="left", padx=(theme.MOYEN, 0))
 
         # Les mots que le dictionnaire ne connait pas s'affichent ici, chacun
         # avec son bouton : un clic et ils n'y reviendront plus.
-        self.inconnus = tk.Frame(page, bg=FOND)
+        self.inconnus = tk.Frame(page, bg=theme.FOND)
         self.inconnus.pack(fill="x")
 
         self.racine.bind("<Control-Return>", lambda _: self.corriger())
@@ -274,7 +270,7 @@ class Fenetre:
         if not texte.strip():
             return
 
-        self.bouton_corriger.configure(text="…", state="disabled")
+        self.bouton_corriger.configurer(texte="…", actif=False)
         self._dire("Correction en cours…")
 
         def travailler():
@@ -290,7 +286,7 @@ class Fenetre:
         threading.Thread(target=travailler, daemon=True).start()
 
     def _afficher_resultat(self, corrige: str, corrections: list) -> None:
-        self.bouton_corriger.configure(text="Corriger", state="normal")
+        self.bouton_corriger.configurer(texte="Corriger", actif=True)
         self.champ.delete("1.0", "end")
         self.champ.insert("1.0", corrige)
 
@@ -299,16 +295,16 @@ class Fenetre:
             if len(corrections) > 6:
                 detail += f" · (+{len(corrections) - 6})"
             pluriel = "s" if len(corrections) > 1 else ""
-            self._dire(f"{len(corrections)} correction{pluriel} : {detail}")
+            self._dire(f"{len(corrections)} correction{pluriel} : {detail}",
+                       theme.SUCCES)
         else:
-            self._dire("Aucune faute trouvée.")
+            self._dire("Aucune faute trouvée.", theme.SUCCES)
 
         self._proposer_inconnus(corrige)
 
     def _proposer_inconnus(self, texte: str) -> None:
         for enfant in self.inconnus.winfo_children():
             enfant.destroy()
-
         try:
             mots = self._mots_inconnus(texte)
         except Exception:
@@ -316,19 +312,21 @@ class Fenetre:
         if not mots:
             return
 
-        _note(self.inconnus, "Mots inconnus — cliquez pour les garder tels quels :"
-              ).pack(fill="x", pady=(2, 4))
-        ligne = tk.Frame(self.inconnus, bg=FOND)
+        theme.note(self.inconnus, "Mots inconnus — un clic les met à l'abri :",
+                   fond=theme.FOND).pack(fill="x", pady=(2, 6))
+        ligne = tk.Frame(self.inconnus, bg=theme.FOND)
         ligne.pack(fill="x")
         for mot in mots[:10]:
-            _bouton(ligne, f"+ {mot}", lambda m=mot: self._apprendre_mot(m),
-                    petit=True).pack(side="left", padx=(0, 6), pady=2)
+            theme.Bouton(ligne, f"+ {mot}", lambda m=mot: self._apprendre_mot(m),
+                         petit=True, fond=theme.FOND).pack(side="left",
+                                                           padx=(0, 6), pady=2)
 
     def _mots_inconnus(self, texte: str) -> list[str]:
         """Les mots que ni le dictionnaire ni vos listes ne connaissent."""
         from . import grammaire
 
         correcteur = self.app.correcteur
+        connus = {_normaliser_mot(m) for m in self.config.get("mots_perso", [])}
         vus, inconnus = set(), []
         for jeton in grammaire.decouper(texte):
             mot = jeton.texte
@@ -338,8 +336,7 @@ class Fenetre:
             vus.add(cle)
             if correcteur._connu(mot) or correcteur._protege(mot):
                 continue
-            if _normaliser_mot(mot) in {_normaliser_mot(m)
-                                        for m in self.config.get("mots_perso", [])}:
+            if _normaliser_mot(mot) in connus:
                 continue
             inconnus.append(mot)
         return inconnus
@@ -355,73 +352,79 @@ class Fenetre:
     def copier(self) -> None:
         self.racine.clipboard_clear()
         self.racine.clipboard_append(self.champ.get("1.0", "end-1c"))
-        self._dire("Texte copié dans le presse-papiers.")
+        self._dire("Texte copié dans le presse-papiers.", theme.SUCCES)
 
     def _echouer(self, message: str) -> None:
-        self.bouton_corriger.configure(text="Corriger", state="normal")
-        self._dire(message.split("\n")[0])
+        self.bouton_corriger.configurer(texte="Corriger", actif=True)
+        self._dire(message.split("\n")[0], theme.ALERTE)
 
     # -- page « Mon dictionnaire » ------------------------------------------
 
-    def _page_dictionnaire(self, page: tk.Frame) -> None:
-        gauche = tk.Frame(page, bg=FOND)
-        gauche.pack(side="left", fill="both", expand=True, padx=(0, 8))
-        droite = tk.Frame(page, bg=FOND)
-        droite.pack(side="left", fill="both", expand=True, padx=(8, 0))
+    def _page_mon_dictionnaire(self, page: tk.Frame) -> None:
+        gauche = theme.carte(page)
+        gauche.pack(side="left", fill="both", expand=True, padx=(0, theme.MOYEN))
+        droite = theme.carte(page)
+        droite.pack(side="left", fill="both", expand=True, padx=(theme.MOYEN, 0))
 
-        # -- mots a ne jamais corriger
-        _titre(gauche, "Mots à ne pas corriger").pack(fill="x")
-        _note(gauche, "Pseudos, jargon, noms de jeux.").pack(fill="x", pady=(0, 6))
+        dedans = tk.Frame(gauche, bg=theme.SURFACE, padx=theme.GRAND,
+                          pady=theme.GRAND)
+        dedans.pack(fill="both", expand=True)
+        theme.titre(dedans, "Mots à ne pas corriger").pack(fill="x")
+        theme.note(dedans, "Pseudos, jargon, noms de jeux.").pack(
+            fill="x", pady=(2, theme.MOYEN))
 
-        self.liste_mots = _liste(gauche, hauteur=9)
+        self.liste_mots = theme.liste(dedans, hauteur=9)
         self.liste_mots.pack(fill="both", expand=True)
 
-        saisie = tk.Frame(gauche, bg=FOND, pady=6)
+        saisie = tk.Frame(dedans, bg=theme.SURFACE, pady=theme.MOYEN)
         saisie.pack(fill="x")
-        self.saisie_mot = _champ(saisie, largeur=16)
-        self.saisie_mot.pack(side="left", fill="x", expand=True, ipady=4)
+        self.saisie_mot = theme.entree(saisie, largeur=14)
+        self.saisie_mot.pack(side="left", fill="x", expand=True, ipady=5)
         self.saisie_mot.bind("<Return>", lambda _: self._ajouter_mot())
-        _bouton(saisie, "Ajouter", self._ajouter_mot, petit=True).pack(
-            side="left", padx=(6, 0))
-        _bouton(saisie, "Retirer", self._retirer_mot, petit=True).pack(
-            side="left", padx=(6, 0))
+        theme.Bouton(saisie, "Ajouter", self._ajouter_mot, petit=True,
+                     fond=theme.SURFACE).pack(side="left", padx=(6, 0))
+        theme.Bouton(saisie, "Retirer", self._retirer_mot, petit=True,
+                     fond=theme.SURFACE).pack(side="left", padx=(6, 0))
 
-        self.retablis = tk.Frame(gauche, bg=FOND)
+        self.retablis = tk.Frame(dedans, bg=theme.SURFACE)
         self.retablis.pack(fill="x")
 
-        # -- remplacements maison
-        _titre(droite, "Mes remplacements").pack(fill="x")
-        _note(droite, "« ptetre » → « peut-être ». Passent avant tout le reste, "
-                      "et servent aussi d'abréviations."
-              ).pack(fill="x", pady=(0, 6))
+        dedans = tk.Frame(droite, bg=theme.SURFACE, padx=theme.GRAND,
+                          pady=theme.GRAND)
+        dedans.pack(fill="both", expand=True)
+        theme.titre(dedans, "Mes remplacements").pack(fill="x")
+        theme.note(dedans, "« ptetre » → « peut-être ». Ils passent avant tout "
+                           "le reste, et servent aussi d'abréviations.",
+                   wraplength=320).pack(fill="x", pady=(2, theme.MOYEN))
 
-        self.liste_remplacements = _liste(droite, hauteur=9)
+        self.liste_remplacements = theme.liste(dedans, hauteur=9)
         self.liste_remplacements.pack(fill="both", expand=True)
 
-        saisie = tk.Frame(droite, bg=FOND, pady=6)
+        saisie = tk.Frame(dedans, bg=theme.SURFACE, pady=theme.MOYEN)
         saisie.pack(fill="x")
-        self.saisie_de = _champ(saisie, largeur=10)
-        self.saisie_de.pack(side="left", fill="x", expand=True, ipady=4)
-        tk.Label(saisie, text="→", bg=FOND, fg=TEXTE_DOUX).pack(side="left", padx=4)
-        self.saisie_vers = _champ(saisie, largeur=10)
-        self.saisie_vers.pack(side="left", fill="x", expand=True, ipady=4)
+        self.saisie_de = theme.entree(saisie, largeur=8)
+        self.saisie_de.pack(side="left", fill="x", expand=True, ipady=5)
+        tk.Label(saisie, text="→", bg=theme.SURFACE, fg=theme.TEXTE_DOUX,
+                 font=theme.police(11)).pack(side="left", padx=6)
+        self.saisie_vers = theme.entree(saisie, largeur=8)
+        self.saisie_vers.pack(side="left", fill="x", expand=True, ipady=5)
         self.saisie_vers.bind("<Return>", lambda _: self._ajouter_remplacement())
 
-        boutons = tk.Frame(droite, bg=FOND)
+        boutons = tk.Frame(dedans, bg=theme.SURFACE)
         boutons.pack(fill="x")
-        _bouton(boutons, "Ajouter", self._ajouter_remplacement, petit=True).pack(
-            side="left")
-        _bouton(boutons, "Retirer", self._retirer_remplacement, petit=True).pack(
-            side="left", padx=(6, 0))
+        theme.Bouton(boutons, "Ajouter", self._ajouter_remplacement, petit=True,
+                     fond=theme.SURFACE).pack(side="left")
+        theme.Bouton(boutons, "Retirer", self._retirer_remplacement, petit=True,
+                     fond=theme.SURFACE).pack(side="left", padx=(6, 0))
 
     def _rafraichir_dictionnaire(self) -> None:
         self.liste_mots.delete(0, "end")
         for mot in sorted(self.config.get("mots_perso", []), key=str.lower):
-            self.liste_mots.insert("end", mot)
+            self.liste_mots.insert("end", f"  {mot}")
 
         self.liste_remplacements.delete(0, "end")
         for de, vers in sorted(self.config.get("remplacements_perso", {}).items()):
-            self.liste_remplacements.insert("end", f"{de}  →  {vers}")
+            self.liste_remplacements.insert("end", f"  {de}  →  {vers}")
 
         for enfant in self.retablis.winfo_children():
             enfant.destroy()
@@ -430,13 +433,14 @@ class Fenetre:
                         if m.lower() not in connus]
         if not propositions:
             return
-        _note(self.retablis, "Vous avez rétabli ces mots à la main :"
-              ).pack(fill="x", pady=(6, 4))
-        ligne = tk.Frame(self.retablis, bg=FOND)
+        theme.note(self.retablis, "Vous avez rétabli ces mots à la main :").pack(
+            fill="x", pady=(theme.MOYEN, theme.PETIT))
+        ligne = tk.Frame(self.retablis, bg=theme.SURFACE)
         ligne.pack(fill="x")
-        for mot in propositions[-8:]:
-            _bouton(ligne, f"+ {mot}", lambda m=mot: self._ajouter_mot(m),
-                    petit=True).pack(side="left", padx=(0, 6), pady=2)
+        for mot in propositions[-6:]:
+            theme.Bouton(ligne, f"+ {mot}", lambda m=mot: self._ajouter_mot(m),
+                         petit=True, fond=theme.SURFACE).pack(side="left",
+                                                              padx=(0, 6), pady=2)
 
     def _ajouter_mot(self, mot: str | None = None) -> None:
         mot = (mot if mot is not None else self.saisie_mot.get()).strip()
@@ -453,11 +457,9 @@ class Fenetre:
         self._rafraichir_dictionnaire()
 
     def _retirer_mot(self) -> None:
-        selection = self.liste_mots.curselection()
-        if not selection:
-            self._dire("Choisissez d'abord un mot dans la liste.")
+        mot = self._choisi(self.liste_mots, "un mot")
+        if mot is None:
             return
-        mot = self.liste_mots.get(selection[0])
         self.config["mots_perso"] = [
             m for m in self.config.get("mots_perso", []) if m != mot
         ]
@@ -482,36 +484,47 @@ class Fenetre:
         self._rafraichir_dictionnaire()
 
     def _retirer_remplacement(self) -> None:
-        selection = self.liste_remplacements.curselection()
-        if not selection:
-            self._dire("Choisissez d'abord une ligne dans la liste.")
+        ligne = self._choisi(self.liste_remplacements, "une ligne")
+        if ligne is None:
             return
-        de = self.liste_remplacements.get(selection[0]).split("  →  ")[0]
+        de = ligne.split("  →  ")[0]
         remplacements = dict(self.config.get("remplacements_perso", {}))
         remplacements.pop(de, None)
         self.config["remplacements_perso"] = remplacements
         self._enregistrer(f"« {de} » retiré.")
         self._rafraichir_dictionnaire()
 
+    def _choisi(self, liste: tk.Listbox, quoi: str) -> str | None:
+        selection = liste.curselection()
+        if not selection:
+            self._dire(f"Choisissez d'abord {quoi} dans la liste.")
+            return None
+        return liste.get(selection[0]).strip()
+
     # -- page « Vos fautes » ------------------------------------------------
 
-    def _page_fautes(self, page: tk.Frame) -> None:
-        _titre(page, "Ce que vous corrigez le plus").pack(fill="x")
-        _note(page, "Compté sur votre machine, et nulle part ailleurs. "
-                    "Choisissez une ligne pour ne plus la corriger."
-              ).pack(fill="x", pady=(0, 6))
+    def _page_vos_fautes(self, page: tk.Frame) -> None:
+        cadre = theme.carte(page)
+        cadre.pack(fill="both", expand=True)
+        dedans = tk.Frame(cadre, bg=theme.SURFACE, padx=theme.GRAND,
+                          pady=theme.GRAND)
+        dedans.pack(fill="both", expand=True)
 
-        self.liste_fautes = _liste(page, hauteur=12)
+        theme.titre(dedans, "Ce que vous corrigez le plus").pack(fill="x")
+        theme.note(dedans, "Compté sur votre machine, et nulle part ailleurs.").pack(
+            fill="x", pady=(2, theme.MOYEN))
+
+        self.liste_fautes = theme.liste(dedans, hauteur=12)
         self.liste_fautes.pack(fill="both", expand=True)
 
-        barre = tk.Frame(page, bg=FOND, pady=8)
+        barre = tk.Frame(dedans, bg=theme.SURFACE, pady=theme.MOYEN)
         barre.pack(fill="x")
-        _bouton(barre, "Ne plus corriger ça", self._ignorer_faute,
-                petit=True).pack(side="left")
-        _bouton(barre, "Effacer l'historique", self._effacer_historique,
-                petit=True).pack(side="left", padx=(6, 0))
+        theme.Bouton(barre, "Ne plus corriger ça", self._ignorer_faute,
+                     petit=True, fond=theme.SURFACE).pack(side="left")
+        theme.Bouton(barre, "Effacer l'historique", self._effacer_historique,
+                     petit=True, fond=theme.SURFACE).pack(side="left", padx=(6, 0))
 
-        self.cadre_regles = tk.Frame(page, bg=FOND)
+        self.cadre_regles = tk.Frame(dedans, bg=theme.SURFACE)
         self.cadre_regles.pack(fill="x")
 
     def _rafraichir_fautes(self) -> None:
@@ -521,14 +534,14 @@ class Fenetre:
         fautes = journal.fautes_frequentes(30) if journal is not None else []
         if not fautes:
             self.liste_fautes.insert(
-                "end", "Rien encore — Papote vous regarde écrire.")
+                "end", "  Rien encore — Papote vous regarde écrire.")
         for faute, compte in fautes:
-            fois = "fois" if compte > 1 else "fois"
-            self.liste_fautes.insert("end", f"{compte:>4} {fois}   {faute}")
+            self.liste_fautes.insert("end", f"  {compte:>4} ×   {faute}")
 
         if journal is not None:
-            self._dire(f"{journal.total_corrections()} corrections appliquées "
-                       f"depuis l'installation.")
+            total = journal.total_corrections()
+            self._dire(f"{total} correction{'s' if total > 1 else ''} appliquée"
+                       f"{'s' if total > 1 else ''} depuis l'installation.")
 
         for enfant in self.cadre_regles.winfo_children():
             enfant.destroy()
@@ -536,24 +549,21 @@ class Fenetre:
                       if self.config.get("regles_optionnelles", {}).get(r, True)]
         if not contestees:
             return
-        _note(self.cadre_regles,
-              "Vous annulez souvent ces règles — cliquez pour les éteindre :"
-              ).pack(fill="x", pady=(8, 4))
-        ligne = tk.Frame(self.cadre_regles, bg=FOND)
+        theme.note(self.cadre_regles,
+                   "Vous annulez souvent ces règles — un clic les éteint :").pack(
+            fill="x", pady=(theme.MOYEN, theme.PETIT))
+        ligne = tk.Frame(self.cadre_regles, bg=theme.SURFACE)
         ligne.pack(fill="x")
         for nom in dict.fromkeys(contestees):
-            _bouton(ligne, f"✕ {nom}", lambda n=nom: self._eteindre_regle(n),
-                    petit=True).pack(side="left", padx=(0, 6), pady=2)
+            theme.Bouton(ligne, f"✕ {nom}", lambda n=nom: self._eteindre_regle(n),
+                         petit=True, fond=theme.SURFACE).pack(side="left",
+                                                              padx=(0, 6), pady=2)
 
     def _ignorer_faute(self) -> None:
-        selection = self.liste_fautes.curselection()
-        if not selection:
-            self._dire("Choisissez d'abord une ligne dans la liste.")
+        ligne = self._choisi(self.liste_fautes, "une ligne")
+        if ligne is None or "→" not in ligne:
             return
-        ligne = self.liste_fautes.get(selection[0])
-        if "→" not in ligne:
-            return
-        mot = ligne.split("fois", 1)[-1].split("→")[0].strip()
+        mot = ligne.split("×", 1)[-1].split("→")[0].strip()
         if mot:
             self._ajouter_mot(mot)
             self._rafraichir_fautes()
@@ -562,8 +572,8 @@ class Fenetre:
         regles_actives = dict(self.config.get("regles_optionnelles", {}))
         regles_actives[nom] = False
         self.config["regles_optionnelles"] = regles_actives
-        if nom in self.cases:
-            self.cases[nom].set(False)
+        if nom in self.bascules:
+            self.bascules[nom].set(False)
         self._enregistrer(f"La règle {nom} est éteinte.")
         self._rafraichir_fautes()
 
@@ -574,66 +584,72 @@ class Fenetre:
         journal.vider()
         self.app.enregistrer_habitudes()
         self._rafraichir_fautes()
-        self._dire("Historique effacé.")
+        self._dire("Historique effacé.", theme.SUCCES)
 
     # -- page « Applications » ----------------------------------------------
 
     def _page_applications(self, page: tk.Frame) -> None:
-        gauche = tk.Frame(page, bg=FOND)
-        gauche.pack(side="left", fill="both", expand=True, padx=(0, 8))
-        droite = tk.Frame(page, bg=FOND)
-        droite.pack(side="left", fill="both", expand=True, padx=(8, 0))
+        gauche = theme.carte(page)
+        gauche.pack(side="left", fill="both", expand=True, padx=(0, theme.MOYEN))
+        droite = theme.carte(page)
+        droite.pack(side="left", fill="both", expand=True, padx=(theme.MOYEN, 0))
 
-        _titre(gauche, "Ne rien corriger ici").pack(fill="x")
-        _note(gauche, "Terminaux, éditeurs de code, jeux : la correction "
-                      "automatique y fait plus de mal que de bien."
-              ).pack(fill="x", pady=(0, 6))
+        dedans = tk.Frame(gauche, bg=theme.SURFACE, padx=theme.GRAND,
+                          pady=theme.GRAND)
+        dedans.pack(fill="both", expand=True)
+        theme.titre(dedans, "Ne rien corriger ici").pack(fill="x")
+        theme.note(dedans, "Terminaux, éditeurs de code, jeux : la correction "
+                           "automatique y fait plus de mal que de bien.",
+                   wraplength=320).pack(fill="x", pady=(2, theme.MOYEN))
 
-        self.liste_applications = _liste(gauche, hauteur=11)
+        self.liste_applications = theme.liste(dedans, hauteur=10)
         self.liste_applications.pack(fill="both", expand=True)
 
-        saisie = tk.Frame(gauche, bg=FOND, pady=6)
+        saisie = tk.Frame(dedans, bg=theme.SURFACE, pady=theme.MOYEN)
         saisie.pack(fill="x")
-        self.saisie_application = _champ(saisie, largeur=16)
-        self.saisie_application.pack(side="left", fill="x", expand=True, ipady=4)
+        self.saisie_application = theme.entree(saisie, largeur=14)
+        self.saisie_application.pack(side="left", fill="x", expand=True, ipady=5)
         self.saisie_application.bind("<Return>", lambda _: self._exclure())
-        _bouton(saisie, "Ajouter", self._exclure, petit=True).pack(
-            side="left", padx=(6, 0))
-        _bouton(saisie, "Retirer", self._reintegrer, petit=True).pack(
-            side="left", padx=(6, 0))
+        theme.Bouton(saisie, "Ajouter", self._exclure, petit=True,
+                     fond=theme.SURFACE).pack(side="left", padx=(6, 0))
+        theme.Bouton(saisie, "Retirer", self._reintegrer, petit=True,
+                     fond=theme.SURFACE).pack(side="left", padx=(6, 0))
+        theme.note(dedans, "Le nom du programme : discord.exe, code.exe…").pack(
+            fill="x")
 
-        _note(gauche, "Le nom du programme, tel qu'il apparaît dans le "
-                      "gestionnaire des tâches : discord.exe, code.exe…"
-              ).pack(fill="x")
+        dedans = tk.Frame(droite, bg=theme.SURFACE, padx=theme.GRAND,
+                          pady=theme.GRAND)
+        dedans.pack(fill="both", expand=True)
+        theme.titre(dedans, "Registre par application").pack(fill="x")
+        theme.note(dedans, "« soutenu » remet les « ne » de négation et déplie "
+                           "les abréviations. Pratique pour Outlook, pas pour "
+                           "Discord.", wraplength=320).pack(
+            fill="x", pady=(2, theme.MOYEN))
 
-        _titre(droite, "Registre par application").pack(fill="x")
-        _note(droite, "« soutenu » remet les « ne » de négation et déplie les "
-                      "abréviations. Pratique pour Outlook, pas pour Discord."
-              ).pack(fill="x", pady=(0, 6))
-
-        self.liste_registres = _liste(droite, hauteur=11)
+        self.liste_registres = theme.liste(dedans, hauteur=10)
         self.liste_registres.pack(fill="both", expand=True)
 
-        saisie = tk.Frame(droite, bg=FOND, pady=6)
+        saisie = tk.Frame(dedans, bg=theme.SURFACE, pady=theme.MOYEN)
         saisie.pack(fill="x")
-        self.saisie_registre_app = _champ(saisie, largeur=14)
-        self.saisie_registre_app.pack(side="left", fill="x", expand=True, ipady=4)
-        _bouton(saisie, "→ soutenu",
-                lambda: self._registre_application(politique_mod.SOUTENU),
-                petit=True).pack(side="left", padx=(6, 0))
-        _bouton(saisie, "Retirer", self._retirer_registre_application,
-                petit=True).pack(side="left", padx=(6, 0))
+        self.saisie_registre_app = theme.entree(saisie, largeur=12)
+        self.saisie_registre_app.pack(side="left", fill="x", expand=True, ipady=5)
+        theme.Bouton(saisie, "→ soutenu",
+                     lambda: self._registre_application(politique_mod.SOUTENU),
+                     petit=True, fond=theme.SURFACE).pack(side="left", padx=(6, 0))
+        theme.Bouton(saisie, "Retirer", self._retirer_registre_application,
+                     petit=True, fond=theme.SURFACE).pack(side="left", padx=(6, 0))
 
     def _rafraichir_applications(self) -> None:
         self.liste_applications.delete(0, "end")
-        for nom in sorted(self.config.get("applications_exclues", []), key=str.lower):
-            self.liste_applications.insert("end", nom)
+        for nom in sorted(self.config.get("applications_exclues", []),
+                          key=str.lower):
+            self.liste_applications.insert("end", f"  {nom}")
 
         self.liste_registres.delete(0, "end")
         for nom, registre in sorted(
             self.config.get("registre_par_application", {}).items()
         ):
-            self.liste_registres.insert("end", f"{nom}  →  {registre}")
+            self.liste_registres.insert("end", f"  {nom}  →  {registre}")
 
     def _exclure(self) -> None:
         nom = self.saisie_application.get().strip().lower()
@@ -648,11 +664,9 @@ class Fenetre:
         self._rafraichir_applications()
 
     def _reintegrer(self) -> None:
-        selection = self.liste_applications.curselection()
-        if not selection:
-            self._dire("Choisissez d'abord une application dans la liste.")
+        nom = self._choisi(self.liste_applications, "une application")
+        if nom is None:
             return
-        nom = self.liste_applications.get(selection[0])
         self.config["applications_exclues"] = [
             a for a in self.config.get("applications_exclues", []) if a != nom
         ]
@@ -672,11 +686,10 @@ class Fenetre:
         self._rafraichir_applications()
 
     def _retirer_registre_application(self) -> None:
-        selection = self.liste_registres.curselection()
-        if not selection:
-            self._dire("Choisissez d'abord une ligne dans la liste.")
+        ligne = self._choisi(self.liste_registres, "une ligne")
+        if ligne is None:
             return
-        nom = self.liste_registres.get(selection[0]).split("  →  ")[0]
+        nom = ligne.split("  →  ")[0]
         registres = dict(self.config.get("registre_par_application", {}))
         registres.pop(nom, None)
         self.config["registre_par_application"] = registres
@@ -686,49 +699,41 @@ class Fenetre:
     # -- page « Réglages » --------------------------------------------------
 
     def _page_reglages(self, page: tk.Frame) -> None:
-        self.cases: dict[str, tk.BooleanVar] = {}
-
-        def case(parent, cle, libelle, explication, valeur):
-            variable = tk.BooleanVar(value=bool(valeur))
-            self.cases[cle] = variable
-            tk.Checkbutton(
-                parent, text=libelle, variable=variable, bg=FOND, fg=TEXTE,
-                selectcolor=FOND_CHAMP, activebackground=FOND,
-                activeforeground=TEXTE, anchor="w", font=(POLICE, 10),
-                highlightthickness=0, borderwidth=0, cursor="hand2",
-            ).pack(fill="x", pady=(6, 0))
-            _note(parent, "    " + explication).pack(fill="x")
-
+        self.bascules: dict[str, theme.Interrupteur] = {}
         regles_actives = self.config.get("regles_optionnelles", {})
 
-        case(page, "correction_auto", "Corriger pendant que j'écris",
-             "Le texte se corrige tout seul, sans raccourci. "
-             f"{self.config.get('raccourci_annuler', 'ctrl+alt+z')} annule la dernière correction.",
-             self.config.get("correction_auto", True))
-        case(page, "collage_auto", "Recoller le texte corrigé automatiquement",
-             "Sinon le texte corrigé est seulement mis dans le presse-papiers.",
-             self.config.get("collage_auto", True))
-        case(page, "notifications", "Afficher les notifications",
-             "Le résumé des corrections près de l'horloge.",
-             self.config.get("notifications", True))
-        case(page, "apprentissage", "Apprendre de mes annulations",
-             "Une correction annulée trois fois sur le même mot, et il ne la "
-             "proposera plus.",
-             self.config.get("apprentissage", True))
-        case(page, "TYPOGRAPHIE", "Typographie française",
-             "« … », guillemets « », espaces insécables. Correct, mais mal "
-             "rendu par certaines applications.",
-             regles_actives.get("TYPOGRAPHIE", False))
-        case(page, "MAJUSCULE_PHRASE", "Mettre une majuscule en début de phrase",
-             "Désactivé d'origine : beaucoup de gens tiennent au tout-minuscules.",
-             regles_actives.get("MAJUSCULE_PHRASE", False))
-        case(page, "PONCTUATION_POINT", "Ajouter le point final manquant",
-             "Désactivé d'origine, pour la même raison.",
-             regles_actives.get("PONCTUATION_POINT", False))
+        colonne = tk.Frame(page, bg=theme.FOND)
+        colonne.pack(fill="both", expand=True)
 
-        registre = tk.Frame(page, bg=FOND, pady=10)
-        registre.pack(fill="x")
-        _titre(registre, "Registre par défaut").pack(fill="x")
+        comportement = self._section(colonne, "Ce qu'il fait")
+        for cle, libelle, explication, valeur in (
+            ("correction_auto", "Corriger pendant que j'écris",
+             "Sans raccourci, dans n'importe quelle application.",
+             self.config.get("correction_auto", True)),
+            ("apprentissage", "Apprendre de mes annulations",
+             "Une correction annulée trois fois, et il n'y revient plus.",
+             self.config.get("apprentissage", True)),
+            ("collage_auto", "Recoller le texte corrigé",
+             "Sinon il se contente du presse-papiers.",
+             self.config.get("collage_auto", True)),
+            ("notifications", "Afficher les notifications",
+             "Le résumé des corrections près de l'horloge.",
+             self.config.get("notifications", True)),
+        ):
+            self._ligne_bascule(comportement, cle, libelle, explication, valeur)
+
+        style = self._section(colonne, "Comment il écrit")
+        for cle, libelle, explication in (
+            ("TYPOGRAPHIE", "Typographie française",
+             "« … », guillemets « », espaces insécables."),
+            ("MAJUSCULE_PHRASE", "Majuscule en début de phrase",
+             "Éteint d'origine : beaucoup tiennent au tout-minuscules."),
+            ("PONCTUATION_POINT", "Point final manquant",
+             "Éteint d'origine, pour la même raison."),
+        ):
+            self._ligne_bascule(style, cle, libelle, explication,
+                                regles_actives.get(cle, False))
+
         self.choix_registre = tk.StringVar(
             value=self.config.get("registre", politique_mod.PARLE))
         for valeur, libelle in (
@@ -736,20 +741,17 @@ class Fenetre:
             (politique_mod.SOUTENU, "Soutenu — « je n'ai pas compris »"),
         ):
             tk.Radiobutton(
-                registre, text=libelle, value=valeur, variable=self.choix_registre,
-                bg=FOND, fg=TEXTE, selectcolor=FOND_CHAMP, activebackground=FOND,
-                activeforeground=TEXTE, anchor="w", font=(POLICE, 10),
-                highlightthickness=0, borderwidth=0, cursor="hand2",
-            ).pack(fill="x")
+                style, text=libelle, value=valeur, variable=self.choix_registre,
+                bg=theme.SURFACE, fg=theme.TEXTE, selectcolor=theme.SURFACE_HAUTE,
+                activebackground=theme.SURFACE, activeforeground=theme.TEXTE,
+                anchor="w", font=theme.police(10), highlightthickness=0,
+                borderwidth=0, cursor="hand2",
+            ).pack(fill="x", padx=theme.GRAND, pady=(0, 2))
 
-        raccourcis = tk.Frame(page, bg=FOND, pady=12)
-        raccourcis.pack(fill="x")
-
-        _titre(raccourcis, "Raccourcis").pack(fill="x")
-        _note(raccourcis, "Cliquez, puis appuyez sur la combinaison voulue. "
-                          "Échap annule, Retour arrière supprime le raccourci."
-              ).pack(fill="x", pady=(0, 6))
-
+        raccourcis = self._section(colonne, "Raccourcis")
+        theme.note(raccourcis, "Cliquez, puis appuyez sur la combinaison. "
+                               "Échap annule, Retour arrière l'efface.").pack(
+            fill="x", padx=theme.GRAND, pady=(0, theme.MOYEN))
         self.champs_raccourcis = {}
         for cle, libelle in (
             ("raccourci", "Corriger la sélection"),
@@ -757,58 +759,113 @@ class Fenetre:
             ("raccourci_relecture", "Relire avant de corriger"),
             ("raccourci_fenetre", "Ouvrir la fenêtre"),
         ):
-            ligne = tk.Frame(raccourcis, bg=FOND)
-            ligne.pack(fill="x", pady=2)
-            tk.Label(ligne, text=libelle, bg=FOND, fg=TEXTE, width=28,
-                     anchor="w", font=(POLICE, 10)).pack(side="left")
+            ligne = tk.Frame(raccourcis, bg=theme.SURFACE)
+            ligne.pack(fill="x", padx=theme.GRAND, pady=2)
+            tk.Label(ligne, text=libelle, bg=theme.SURFACE, fg=theme.TEXTE,
+                     width=30, anchor="w", font=theme.police(10)).pack(side="left")
             self.champs_raccourcis[cle] = ChampRaccourci(
                 ligne, self.config.get(cle, ""), sur_erreur=self._dire
             ).pack(side="left")
 
         if demarrage.disponible():
-            self.case_demarrage = tk.BooleanVar(value=demarrage.actif())
-            tk.Checkbutton(
-                page, text="Lancer au démarrage de Windows",
-                variable=self.case_demarrage, command=self._basculer_demarrage,
-                bg=FOND, fg=TEXTE, selectcolor=FOND_CHAMP, activebackground=FOND,
-                activeforeground=TEXTE, anchor="w", font=(POLICE, 10),
-                highlightthickness=0, borderwidth=0, cursor="hand2",
-            ).pack(fill="x", pady=(10, 0))
+            systeme = self._section(colonne, "Windows")
+            self.bascule_demarrage = self._ligne_interrupteur(
+                systeme, "Lancer au démarrage de Windows",
+                "Sans droits administrateur, et réversible.",
+                demarrage.actif(), self._basculer_demarrage,
+            )
 
-        self._section_maj(page)
+        self._section_maj(colonne)
+        self._section_journal(colonne)
 
-        barre = tk.Frame(page, bg=FOND, pady=12)
+        barre = tk.Frame(colonne, bg=theme.FOND, pady=theme.GRAND)
         barre.pack(fill="x")
-        _bouton(barre, "Enregistrer", self._enregistrer_reglages,
-                principal=True).pack(side="left")
-        _note(page, f"Fichier de réglages : {config_mod.chemin_config()}"
-              ).pack(fill="x")
+        theme.Bouton(barre, "Enregistrer", self._enregistrer_reglages,
+                     principal=True, icone="coche", fond=theme.FOND).pack(side="left")
+        theme.note(barre, f"Fichier : {config_mod.chemin_config()}",
+                   fond=theme.FOND).pack(side="left", padx=(theme.GRAND, 0))
 
-    def _section_maj(self, page: tk.Frame) -> None:
-        cadre = tk.Frame(page, bg=FOND, pady=8)
-        cadre.pack(fill="x")
+    def _section(self, parent, titre: str) -> tk.Frame:
+        cadre = theme.carte(parent)
+        cadre.pack(fill="x", pady=(0, theme.MOYEN))
+        theme.titre(cadre, titre).pack(fill="x", padx=theme.GRAND,
+                                       pady=(theme.GRAND, theme.MOYEN))
+        return cadre
 
-        _titre(cadre, f"Mises à jour — version {__version__}").pack(fill="x")
+    def _ligne_interrupteur(self, parent, libelle: str, explication: str,
+                            valeur: bool, commande=None) -> theme.Interrupteur:
+        ligne = tk.Frame(parent, bg=theme.SURFACE)
+        ligne.pack(fill="x", padx=theme.GRAND, pady=(0, theme.MOYEN))
 
-        if not maj.compilee():
-            _note(cadre, "Lancé depuis les sources : « git pull » fait le travail."
-                  ).pack(fill="x")
+        textes = tk.Frame(ligne, bg=theme.SURFACE)
+        textes.pack(side="left", fill="x", expand=True)
+        tk.Label(textes, text=libelle, bg=theme.SURFACE, fg=theme.TEXTE,
+                 anchor="w", font=theme.police(10)).pack(fill="x")
+        theme.note(textes, explication, wraplength=420).pack(fill="x")
+
+        bascule = theme.Interrupteur(ligne, valeur, commande)
+        bascule.pack(side="right", padx=(theme.MOYEN, 0))
+        return bascule
+
+    def _ligne_bascule(self, parent, cle: str, libelle: str, explication: str,
+                       valeur: bool) -> None:
+        self.bascules[cle] = self._ligne_interrupteur(parent, libelle,
+                                                      explication, valeur)
+
+    def _basculer_demarrage(self) -> None:
+        try:
+            actif = demarrage.basculer()
+        except OSError as e:
+            self._dire(f"Impossible : {e}", theme.ALERTE)
+            return
+        self.bascule_demarrage.set(actif)
+        self._dire("Papote se lancera avec Windows." if actif
+                   else "Papote ne se lancera plus avec Windows.", theme.SUCCES)
+
+    # -- mises a jour -------------------------------------------------------
+
+    def _section_maj(self, parent) -> None:
+        cadre = self._section(parent, f"Mises à jour — version {__version__}")
+        self.cadre_maj = tk.Frame(cadre, bg=theme.SURFACE)
+        self.cadre_maj.pack(fill="x", padx=theme.GRAND, pady=(0, theme.GRAND))
+
+        if maj.compilee():
+            self.bascules["verifier_maj"] = self._ligne_interrupteur(
+                cadre, "Chercher les nouvelles versions automatiquement",
+                "Téléchargées en arrière-plan, installées au redémarrage.",
+                self.config.get("verifier_maj", True),
+            )
+
+        # Le cadre existe meme lance depuis les sources : une fenetre dont la
+        # moitie des attributs n'existent qu'a la compilation se casse ailleurs.
+        self.boutons_maj = tk.Frame(self.cadre_maj, bg=theme.SURFACE)
+        self.boutons_maj.pack(fill="x")
+        self._dessiner_boutons_maj()
+
+    def _dessiner_boutons_maj(self) -> None:
+        for enfant in self.boutons_maj.winfo_children():
+            enfant.destroy()
+
+        if not maj.compilee() and self.maj_trouvee is None:
+            theme.note(self.boutons_maj,
+                       "Lancé depuis les sources : « git pull » fait le travail."
+                       ).pack(fill="x")
             return
 
-        self.case_maj = tk.BooleanVar(value=self.config.get("verifier_maj", True))
-        tk.Checkbutton(
-            cadre, text="Chercher les nouvelles versions automatiquement",
-            variable=self.case_maj, bg=FOND, fg=TEXTE, selectcolor=FOND_CHAMP,
-            activebackground=FOND, activeforeground=TEXTE, anchor="w",
-            font=(POLICE, 10), highlightthickness=0, borderwidth=0,
-            cursor="hand2",
-        ).pack(fill="x")
-        _note(cadre, "    La nouvelle version est téléchargée en arrière-plan "
-                     "et prend la place de l'ancienne au démarrage suivant."
-              ).pack(fill="x")
+        if self.maj_trouvee is not None or maj.en_attente() is not None:
+            version = self.maj_trouvee
+            libelle = (f"Redémarrer pour installer {version}" if version
+                       else "Redémarrer pour installer la mise à jour")
+            theme.Bouton(self.boutons_maj, libelle, self._redemarrer,
+                         principal=True, icone="telecharger",
+                         fond=theme.SURFACE).pack(side="left")
+            theme.note(self.boutons_maj,
+                       "Papote se relance : rien de ce que vous écrivez n'est perdu."
+                       ).pack(side="left", padx=(theme.MOYEN, 0))
+            return
 
-        _bouton(cadre, "Vérifier maintenant", self._verifier_maj,
-                petit=True).pack(anchor="w", pady=(6, 0))
+        theme.Bouton(self.boutons_maj, "Vérifier maintenant", self._verifier_maj,
+                     petit=True, fond=theme.SURFACE).pack(side="left")
 
     def _verifier_maj(self) -> None:
         self._dire("Recherche d'une nouvelle version…")
@@ -817,74 +874,135 @@ class Fenetre:
             try:
                 version = maj.disponible()
             except maj.MiseAJourImpossible as e:
-                self.racine.after(0, self._dire, f"Vérification impossible : {e}")
+                self.racine.after(0, self._dire, f"Vérification impossible : {e}",
+                                  theme.ALERTE)
                 return
             if version is None:
-                self.racine.after(0, self._dire, "Vous êtes déjà à jour.")
+                self.racine.after(0, self._dire, "Vous êtes déjà à jour.",
+                                  theme.SUCCES)
                 return
             try:
                 maj.installer_maintenant(version)
             except maj.MiseAJourImpossible as e:
-                self.racine.after(0, self._dire, f"Téléchargement impossible : {e}")
+                self.racine.after(0, self._dire, f"Téléchargement impossible : {e}",
+                                  theme.ALERTE)
                 return
-            self.racine.after(
-                0, self._dire,
-                f"Version {version} téléchargée : elle s'installera au "
-                f"prochain démarrage du correcteur.",
-            )
+            self.racine.after(0, self._maj_prete, version)
 
         threading.Thread(target=travailler, daemon=True).start()
 
-    def _basculer_demarrage(self) -> None:
+    def _maj_prete(self, version) -> None:
+        self.maj_trouvee = version
+        self._dessiner_boutons_maj()
+        self._annoncer_maj(version)
+        self._dire(f"Version {version} téléchargée.", theme.SUCCES)
+
+    def _annoncer_maj(self, version) -> None:
+        """Rappelle la mise a jour en bas de la colonne, quelle que soit la page."""
+        for enfant in self.bandeau_maj.winfo_children():
+            enfant.destroy()
+        tk.Label(self.bandeau_maj, text=f"Version {version} prête",
+                 bg=theme.FOND, fg=theme.SUCCES, anchor="w",
+                 font=theme.police(9, gras=True)).pack(fill="x", pady=(0, 6))
+        theme.Bouton(self.bandeau_maj, "Redémarrer", self._redemarrer,
+                     principal=True, petit=True, fond=theme.FOND).pack(fill="x")
+
+    def _redemarrer(self) -> None:
+        """Demande a Papote de se relancer : la mise a jour prend alors sa place."""
         try:
-            actif = demarrage.basculer()
+            maj.demander_redemarrage()
         except OSError as e:
-            self._dire(f"Impossible de modifier le démarrage automatique : {e}")
+            self._dire(f"Impossible : {e}", theme.ALERTE)
             return
-        self.case_demarrage.set(actif)
-        self._dire("Le correcteur se lancera avec Windows." if actif
-                   else "Le correcteur ne se lancera plus avec Windows.")
+        self._dire("Papote redémarre… Cette fenêtre peut être fermée.",
+                   theme.SUCCES)
+
+    # -- journal ------------------------------------------------------------
+
+    def _section_journal(self, parent) -> None:
+        cadre = self._section(parent, "Quand quelque chose ne va pas")
+        dedans = tk.Frame(cadre, bg=theme.SURFACE)
+        dedans.pack(fill="x", padx=theme.GRAND, pady=(0, theme.GRAND))
+
+        theme.note(dedans, "Papote note ici ce qui s'est mal passé. Rien n'en "
+                           "sort : le fichier reste sur votre machine.",
+                   wraplength=520).pack(fill="x", pady=(0, theme.MOYEN))
+
+        boutons = tk.Frame(dedans, bg=theme.SURFACE)
+        boutons.pack(fill="x")
+        theme.Bouton(boutons, "Ouvrir le journal", self._ouvrir_journal,
+                     petit=True, fond=theme.SURFACE).pack(side="left")
+        theme.Bouton(boutons, "Copier", self._copier_journal, petit=True,
+                     fond=theme.SURFACE).pack(side="left", padx=(6, 0))
+        theme.Bouton(boutons, "Effacer", self._effacer_journal, petit=True,
+                     fond=theme.SURFACE).pack(side="left", padx=(6, 0))
+
+    def _ouvrir_journal(self) -> None:
+        chemin = journal_mod.chemin()
+        if not chemin.exists():
+            self._dire("Rien à signaler : le journal est vide.", theme.SUCCES)
+            return
+        try:
+            _ouvrir_fichier(chemin)
+        except OSError as e:
+            self._dire(f"Ouverture impossible : {e}", theme.ALERTE)
+            return
+        self._dire(f"Journal ouvert : {chemin}")
+
+    def _copier_journal(self) -> None:
+        contenu = journal_mod.lire()
+        if not contenu:
+            self._dire("Rien à signaler : le journal est vide.", theme.SUCCES)
+            return
+        self.racine.clipboard_clear()
+        self.racine.clipboard_append(contenu)
+        self._dire("Journal copié — vous pouvez le coller quelque part.",
+                   theme.SUCCES)
+
+    def _effacer_journal(self) -> None:
+        journal_mod.vider()
+        self._dire("Journal effacé.", theme.SUCCES)
+
+    # -- enregistrement -----------------------------------------------------
 
     def _enregistrer_reglages(self) -> None:
         for cle in ("correction_auto", "collage_auto", "notifications",
                     "apprentissage"):
-            self.config[cle] = self.cases[cle].get()
+            self.config[cle] = self.bascules[cle].get()
         self.config["regles_optionnelles"] = {
-            nom: self.cases[nom].get() for nom in regles.REGLES_OPTIONNELLES
+            nom: self.bascules[nom].get() for nom in regles.REGLES_OPTIONNELLES
         }
         self.config["registre"] = self.choix_registre.get()
+        if "verifier_maj" in self.bascules:
+            self.config["verifier_maj"] = self.bascules["verifier_maj"].get()
 
         choisis = {cle: champ.get() for cle, champ in self.champs_raccourcis.items()}
         occupes = [valeur for valeur in choisis.values() if valeur]
         if len(set(occupes)) != len(occupes):
-            self._dire("Deux raccourcis ne peuvent pas être identiques.")
+            self._dire("Deux raccourcis ne peuvent pas être identiques.",
+                       theme.ALERTE)
             return
         if not choisis["raccourci"]:
-            self._dire("Le raccourci de correction ne peut pas être supprimé.")
+            self._dire("Le raccourci de correction ne peut pas être supprimé.",
+                       theme.ALERTE)
             return
         self.config.update(choisis)
 
-        if hasattr(self, "case_maj"):
-            self.config["verifier_maj"] = self.case_maj.get()
-
         self._enregistrer("Réglages enregistrés.")
-
-    # -- enregistrement -----------------------------------------------------
 
     def _enregistrer(self, message: str) -> None:
         """Ecrit les reglages et previent l'application qui tourne."""
         try:
             config_mod.sauvegarder(self.config)
         except OSError as e:
-            self._dire(f"Impossible d'enregistrer : {e}")
+            self._dire(f"Impossible d'enregistrer : {e}", theme.ALERTE)
             return
         try:
             self.app.recharger(dict(self.config))
         except Exception:
-            # L'icone de la barre des taches relira le fichier de son cote ;
-            # ne pas pouvoir recharger ici n'est pas une raison d'alerter.
+            # L'icone de la barre des taches relira le fichier de son cote.
             pass
-        self._dire(message)
+        self._dire(message, theme.SUCCES)
 
     # -- boucle -------------------------------------------------------------
 
@@ -892,136 +1010,22 @@ class Fenetre:
         self.racine.mainloop()
 
 
-class FenetreRelecture:
-    """Montre ce qui va changer, et laisse choisir.
+def _ouvrir_fichier(chemin) -> None:
+    """Confie le fichier au systeme, qui sait avec quoi l'ouvrir."""
+    import os
+    import subprocess
+    import sys as systeme
 
-    La correction automatique convient au quotidien ; pour un message qui
-    compte, on veut regarder avant. Chaque changement se decoche, l'apercu
-    suit, et le resultat part dans le presse-papiers — a coller soi-meme,
-    plutot que de parier sur la fenetre qui reprendra le focus.
-    """
+    if os.name == "nt":
+        os.startfile(chemin)  # noqa: S606
+    elif systeme.platform == "darwin":
+        subprocess.Popen(["open", str(chemin)])
+    else:
+        subprocess.Popen(["xdg-open", str(chemin)])
 
-    def __init__(self, app, texte: str):
-        self.app = app
-        self.original = texte
-        self.corrige = texte
-        self.changements: list[relecture.Changement] = []
 
-        self.racine = tk.Tk()
-        self.racine.title("Papote — relecture")
-        self.racine.geometry("640x520")
-        self.racine.minsize(480, 380)
-        self.racine.configure(bg=FOND)
-        self._construire()
-
-        threading.Thread(target=self._corriger, daemon=True).start()
-
-    def _construire(self) -> None:
-        cadre = tk.Frame(self.racine, bg=FOND, padx=16, pady=14)
-        cadre.pack(fill="both", expand=True)
-
-        _titre(cadre, "Ce que Papote propose").pack(fill="x")
-        _note(cadre, "Décochez ce que vous ne voulez pas."
-              ).pack(fill="x", pady=(0, 8))
-
-        # Une liste de changements peut etre longue : elle defile.
-        conteneur = tk.Frame(cadre, bg=FOND_CHAMP, highlightthickness=1,
-                             highlightbackground="#3a3d43")
-        conteneur.pack(fill="both", expand=True)
-
-        self.toile = tk.Canvas(conteneur, bg=FOND_CHAMP, highlightthickness=0,
-                               height=160)
-        ascenseur = tk.Scrollbar(conteneur, orient="vertical",
-                                 command=self.toile.yview)
-        self.liste = tk.Frame(self.toile, bg=FOND_CHAMP)
-
-        self.liste.bind(
-            "<Configure>",
-            lambda _: self.toile.configure(scrollregion=self.toile.bbox("all")),
-        )
-        self.toile.create_window((0, 0), window=self.liste, anchor="nw")
-        self.toile.configure(yscrollcommand=ascenseur.set)
-        self.toile.pack(side="left", fill="both", expand=True)
-        ascenseur.pack(side="right", fill="y")
-
-        _note(cadre, "Aperçu").pack(fill="x", pady=(10, 4))
-        self.apercu = tk.Text(
-            cadre, wrap="word", bg=FOND_CHAMP, fg=TEXTE, relief="flat",
-            padx=12, pady=10, font=(POLICE, 11), height=6,
-            highlightthickness=1, highlightbackground="#3a3d43",
-        )
-        self.apercu.pack(fill="both", expand=True)
-
-        barre = tk.Frame(cadre, bg=FOND, pady=10)
-        barre.pack(fill="x")
-        _bouton(barre, "Copier le résultat", self._copier,
-                principal=True).pack(side="left")
-        _bouton(barre, "Tout accepter", lambda: self._tout(True)).pack(
-            side="left", padx=(8, 0))
-        _bouton(barre, "Tout refuser", lambda: self._tout(False)).pack(
-            side="left", padx=(8, 0))
-
-        self.etat = _note(cadre, "Correction en cours…", wraplength=600)
-        self.etat.pack(fill="x")
-
-        self.racine.bind("<Escape>", lambda _: self.racine.destroy())
-
-    # -- correction ---------------------------------------------------------
-
-    def _corriger(self) -> None:
-        try:
-            corrige, _ = self.app.corriger_texte(self.original)
-        except Exception as e:
-            self.racine.after(0, lambda: self.etat.configure(
-                text=f"La correction a échoué : {e}"))
-            return
-        self.racine.after(0, self._afficher, corrige)
-
-    def _afficher(self, corrige: str) -> None:
-        self.corrige = corrige
-        self.changements = relecture.changements(self.original, corrige)
-        self.cases = []
-
-        for enfant in self.liste.winfo_children():
-            enfant.destroy()
-
-        if not self.changements:
-            self.etat.configure(text="Aucune correction à proposer.")
-            _note(self.liste, "  Rien à signaler.").pack(fill="x", pady=6)
-        else:
-            pluriel = "s" if len(self.changements) > 1 else ""
-            self.etat.configure(
-                text=f"{len(self.changements)} correction{pluriel} proposée{pluriel}.")
-            for changement in self.changements:
-                variable = tk.BooleanVar(value=True)
-                self.cases.append(variable)
-                tk.Checkbutton(
-                    self.liste, text=f"  {changement}", variable=variable,
-                    command=self._rafraichir, bg=FOND_CHAMP, fg=TEXTE,
-                    selectcolor=FOND, activebackground=FOND_CHAMP,
-                    activeforeground=TEXTE, anchor="w", font=(POLICE, 10),
-                    highlightthickness=0, borderwidth=0, cursor="hand2",
-                ).pack(fill="x", padx=6, pady=1)
-
-        self._rafraichir()
-
-    def _rafraichir(self) -> None:
-        for changement, variable in zip(self.changements, self.cases):
-            changement.accepte = bool(variable.get())
-        texte = relecture.composer(self.original, self.corrige, self.changements)
-        self.apercu.delete("1.0", "end")
-        self.apercu.insert("1.0", texte)
-
-    def _tout(self, accepte: bool) -> None:
-        for variable in self.cases:
-            variable.set(accepte)
-        self._rafraichir()
-
-    def _copier(self) -> None:
-        self.racine.clipboard_clear()
-        self.racine.clipboard_append(self.apercu.get("1.0", "end-1c"))
-        self.etat.configure(
-            text="Copié. Revenez à votre message et collez avec Ctrl+V.")
-
-    def lancer(self) -> None:
-        self.racine.mainloop()
+def _cle(nom: str) -> str:
+    """« Mon dictionnaire » -> « mon_dictionnaire », pour nommer les methodes."""
+    sans_accents = (nom.lower().replace("é", "e").replace("è", "e")
+                    .replace("ê", "e").replace("à", "a").replace("ç", "c"))
+    return sans_accents.replace(" ", "_").replace("'", "_")

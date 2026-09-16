@@ -7,7 +7,7 @@ import json
 import os
 from pathlib import Path
 
-from . import politique
+from . import politique, regles
 
 DEFAUTS = {
     # -- correction au fil de la frappe -------------------------------------
@@ -60,11 +60,10 @@ DEFAUTS = {
     # -- le reste -----------------------------------------------------------
     # Affiche une notification resumant les corrections appliquees.
     "notifications": True,
-    # Regles desactivees par defaut que l'on peut reactiver ici.
-    "regles_optionnelles": {
-        "MAJUSCULE_PHRASE": False,
-        "PONCTUATION_POINT": False,
-    },
+    # Regles desactivees par defaut que l'on peut reactiver ici. La liste
+    # vient de « regles.py » : la dupliquer ici, c'etait la laisser diverger,
+    # et perdre en silence tout reglage portant sur une regle plus recente.
+    "regles_optionnelles": dict(regles.REGLES_OPTIONNELLES),
     # Delais en secondes. A augmenter si une application est lente a repondre.
     "delai_copie": 0.35,
     "delai_collage": 0.08,

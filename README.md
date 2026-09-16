@@ -133,7 +133,7 @@ l'icône. Cinq onglets :
 | **Mon dictionnaire** | Les mots à ne jamais corriger, et vos remplacements. |
 | **Vos fautes** | Ce que vous corrigez le plus, compté sur votre machine. |
 | **Applications** | Où se taire, et où hausser le ton. |
-| **Réglages** | Tout ce qui se réglait dans un fichier JSON. |
+| **Réglages** | Tout ce qui se réglait dans un fichier JSON, plus le journal des erreurs. |
 
 ## Lui apprendre vos mots
 
@@ -243,8 +243,10 @@ fois par jour. Quand il en trouve une, il la télécharge en arrière-plan et
 que vous écrivez. Remplacer un exécutable sous les doigts de quelqu'un est le
 plus sûr moyen de lui faire perdre sa phrase.
 
-Pour ne pas attendre : clic droit sur l'icône → *Redémarrer pour installer*,
-ou le bouton *Vérifier maintenant* dans les réglages.
+Dès qu'une version est prête, **un bouton « Redémarrer » apparaît** — dans les
+réglages, et en bas de la colonne de gauche quelle que soit la page où vous
+êtes. Un clic, Papote se relance, la nouvelle version prend la place. Le clic
+droit sur l'icône propose la même chose.
 
 Le téléchargement ne vient que des [Releases de ce
 dépôt](../../releases), en HTTPS, et l'empreinte SHA-256 publiée par GitHub
@@ -252,6 +254,18 @@ est vérifiée quand elle est présente. Rien d'autre n'est envoyé ni reçu : l
 requête ne contient que le numéro de version installée.
 
 Pour tout couper : décochez *Chercher les nouvelles versions automatiquement*.
+
+## Quand quelque chose ne va pas
+
+`Papote.exe` n'a pas de console : sans journal, un message d'erreur disparaît
+avec lui. Tout ce qui se passe mal est donc noté dans
+`%APPDATA%\Papote\journal.log`, avec la pile d'appels quand il y en a une.
+
+*Réglages → Quand quelque chose ne va pas* permet de l'ouvrir, de le copier
+d'un clic — pour le coller dans un rapport de bug — ou de l'effacer. Rien n'en
+sort tout seul : le fichier reste sur votre machine.
+
+En ligne de commande : `Papote.exe --journal`.
 
 ## Ce que l'outil ne touche jamais
 
@@ -401,7 +415,7 @@ Depuis les sources, remplacez `Papote.exe` par `python -m papote`.
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest tests/ -q          # ~310 tests, moins d'une seconde
+python -m pytest tests/ -q          # ~360 tests, moins d'une seconde
 python outils/evaluer.py           # la qualité du correcteur, en chiffres
 python -m papote --texte "sa va ?"
 ```
@@ -433,6 +447,26 @@ Le numéro est inscrit dans le code avant la compilation
 (`papote/version_compilee.py`, ignoré par git) : c'est ainsi que
 l'exécutable sait, plus tard, qu'une version plus récente est parue.
 
+### Les icônes
+
+Elles sont en pixel art, et se lisent dans le code : chaque icône est une
+grille de caractères, chaque caractère un pixel.
+
+```python
+"papote": _grille("""
+....########....
+..############..
+.####++++++####.
+.##############.
+.#.oo..oo..oo.#.
+...
+""")
+```
+
+Le rendu se fait à l'agrandissement entier, sans lissage, pour que le trait
+reste net à toutes les tailles. Rien ne dépend de Pillow côté fenêtre :
+`tkinter.PhotoImage` sait poser des pixels un par un.
+
 ### Régénérer le dictionnaire
 
 Les fichiers de `donnees/` sont livrés prêts à l'emploi. Ils ne se
@@ -459,6 +493,9 @@ Le dictionnaire français vient de [Dicollecte](https://grammalecte.net/)
 | `papote/presse_papier.py` | Capture de la sélection via le presse-papiers |
 | `papote/interface.py` | Icône dans la zone de notification |
 | `papote/fenetre.py` | Fenêtre : corriger, dictionnaire, réglages (tkinter) |
+| `papote/theme.py` | Couleurs, espacements, widgets dessinés |
+| `papote/icones.py` | Les icônes, en pixel art |
+| `papote/journal.py` | Le journal des erreurs |
 | `papote/frappe.py` | Correction au fil de la frappe et annulation |
 | `papote/politique.py` | Où corriger, et sur quel ton |
 | `papote/apprentissage.py` | Ce qu'il retient de vos habitudes |
