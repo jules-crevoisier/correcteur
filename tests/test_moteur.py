@@ -228,3 +228,42 @@ def test_un_mot_trop_court_ne_se_coupe_pas(correcteur):
     """Sur quatre lettres, la coupure est plus souvent une coïncidence."""
     for mot in ("cela", "sont", "dont"):
         assert correcteur.corriger(mot)[0] == mot
+
+
+# -- le moins d'inventions possible ------------------------------------------
+
+def test_une_lettre_suffit_avant_d_inventer_une_apostrophe(correcteur):
+    """« menbre » est « membre » — une lettre. Il devenait « m'entre » :
+    une apostrophe *et* une lettre."""
+    assert correcteur.corriger("un menbre du staff")[0] == "un membre du staff"
+    assert correcteur.corriger("les menbres")[0] == "les membres"
+
+
+def test_l_apostrophe_garde_les_cas_qu_elle_seule_repare(correcteur):
+    """Le garde-fou ne doit pas emporter ce qui marchait."""
+    assert correcteur.corriger("jesper que oui")[0] == "j'espère que oui"
+    assert correcteur.corriger("cetait bien")[0] == "c'était bien"
+    assert correcteur.corriger("daccord jarrive")[0] == "d'accord j'arrive"
+
+
+# -- un mot que des gens ecrivent n'est pas une faute de frappe ---------------
+
+@pytest.mark.parametrize("mot", ["perm", "chanel", "facebook", "cool", "mail"])
+def test_un_mot_de_la_liste_de_frequences_reste_intact(correcteur, mot):
+    """« perm » devenait « père ». Le dictionnaire l'ignore, mais la liste de
+    fréquences le connaît : c'est un mot que des gens écrivent — une
+    abréviation, une marque, un mot anglais passé dans l'usage."""
+    assert correcteur.corriger(f"je pense à {mot}")[0] == f"je pense à {mot}"
+
+
+@pytest.mark.parametrize("faute,attendu", [
+    ("un anniverssaire", "un anniversaire"),
+    ("c'est un exmple", "c'est un exemple"),
+    ("je vais au bureua", "je vais au bureau"),
+    ("un menbre", "un membre"),
+])
+def test_les_vraies_fautes_de_frappe_restent_corrigees(correcteur, faute,
+                                                        attendu):
+    """La séparation est nette : aucune faute de frappe ne figure dans la
+    liste de fréquences, et tous les mots réels y sont."""
+    assert correcteur.corriger(faute)[0] == attendu
