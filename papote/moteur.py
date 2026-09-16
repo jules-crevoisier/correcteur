@@ -28,7 +28,7 @@ from dataclasses import dataclass
 from . import grammaire, regles
 from .lexique import (
     CLASSE_ACCENT, CLASSE_EDITION, CLASSE_EDITION_DOUBLE, RANG_COURANT,
-    Lexique, sans_accents,
+    RANG_INCONNU, Lexique, sans_accents,
 )
 from .politique import PARLE, SOUTENU
 
@@ -211,6 +211,12 @@ class Correcteur:
             # l'apostrophe passer derriere en faisait « d'école ».
             if self.lexique.formes(mot.lower()):
                 continue
+            # Ni si une simple lettre suffit a reparer le mot. « menbre »
+            # est « membre » — une lettre — et devenait « m'entre », une
+            # apostrophe *et* une lettre. Le moins d'inventions possible.
+            if self.lexique.suggestion(mot.lower(),
+                                       classe_max=CLASSE_EDITION) is not None:
+                return None
             frappe = self.lexique.suggestion(reste, classe_max=CLASSE_EDITION)
             if frappe is not None and self.lexique.rang(frappe) <= RANG_COURANT:
                 return mot[: len(tete)] + "'" + frappe
@@ -257,6 +263,18 @@ class Correcteur:
             coupure = self._espace_manquante(mot)
             if coupure is not None:
                 return coupure
+
+        # Un mot que le dictionnaire ignore mais que la liste de frequences
+        # connait est un mot que des gens ecrivent : une abreviation
+        # (« perm »), une marque (« chanel »), un mot anglais passe dans
+        # l'usage (« cool », « mail »). Ce n'est pas une faute de frappe, et
+        # « perm » ne doit pas devenir « père ».
+        #
+        # La separation est nette : aucune des fautes de frappe du corpus n'y
+        # figure, et tous ces mots-la y sont. La fenetre continue de les
+        # proposer ; c'est la correction automatique qui s'abstient.
+        if self.lexique.rang(noyau) != RANG_INCONNU:
+            return None
 
         frappe = self.lexique.suggestion(
             noyau,

@@ -140,6 +140,9 @@ FAUTES = [
     ("trop de chanel par pole", "trop de chanel par pôle", "accent"),
     ("la moitie des gens", "la moitié des gens", "accent"),
     ("voila le resultat", "voilà le résultat", "accent"),
+
+    # -- le moins d'inventions possible
+    ("un menbre du staff", "un membre du staff", "frappe"),
 ]
 
 # Phrases correctes : elles doivent ressortir a l'identique.
@@ -275,6 +278,12 @@ INTOUCHABLES = [
     "Je me souviens très bien de ce jour-là.",
     "Il a plus de temps que moi.",
     "À plus tard !",
+    # -- mots que des gens ecrivent, absents du dictionnaire
+    "je suis en perm cette semaine",
+    "on se parle sur chanel",
+    "c'est cool comme endroit",
+    "je t'envoie un mail",
+
     # -- mots sans accent qu'un sujet protege
     "il prive son fils de sortie",
     "tu cites un exemple connu",
