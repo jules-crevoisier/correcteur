@@ -258,3 +258,22 @@ def test_l_application_courante_se_propose_d_un_clic(page, script):
     assert 'id="courante-exclusion"' in page
     assert 'id="courante-registre"' in page
     assert "proposerLapplicationCourante" in script
+
+
+# -- la fenetre a sa propre taille minimale ---------------------------------
+
+def test_les_entrees_de_navigation_s_enroulent(style):
+    """A 560 px — le minimum de la fenetre —, la colonne passe en bandeau.
+
+    Les entrees debordaient : « overflow-x: auto » promet un defilement
+    qu'aucune molette ne declenche horizontalement ici, et « Dicter » comme
+    « Réglages » etaient hors d'atteinte.
+    """
+    # Les commentaires sont retires : celui qui explique le correctif nomme
+    # justement la declaration qu'on ne veut plus voir.
+    regles = re.sub(r"/\*.*?\*/", "", style, flags=re.S)
+    bandeaux = regles.split("@media (max-width: 720px) {")[1:]
+    assert bandeaux, "la fenetre n'a plus de mode bandeau"
+    ensemble = "".join(bandeaux)
+    assert "flex-wrap: wrap" in ensemble
+    assert "overflow-x: auto" not in ensemble
