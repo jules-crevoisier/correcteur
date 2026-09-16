@@ -59,3 +59,34 @@ def test_la_version_trouvee_par_l_icone_elle_meme_prime(barre, monkeypatch):
     monkeypatch.setattr(maj, "en_attente", lambda: None)
     barre.app.maj_prete = maj.Version("v8.8.8", "https://exemple/Papote.exe")
     assert "v8.8.8" in barre._libelle_maj()
+
+
+def test_le_redemarrage_relance_avec_un_environnement_propre(barre, monkeypatch):
+    """Sans cela, le Papote relance s'arrete sur « Failed to start embedded
+    python interpreter » — c'est ce qui cassait l'installation des mises a jour."""
+    import papote.interface as interface
+
+    monkeypatch.setenv("_MEIPASS2", r"C:\Temp\_MEI00002a102")
+    lancements = []
+    monkeypatch.setattr(
+        interface.subprocess, "Popen",
+        lambda commande, **options: lancements.append((commande, options)),
+    )
+
+    # « arreter » decroche les raccourcis clavier, ce qui demande un vrai
+    # clavier : ce n'est pas ce qu'on eprouve ici.
+    monkeypatch.setattr(barre.app, "arreter", lambda: None)
+
+    class FausseIcone:
+        arrete = False
+
+        def stop(self):
+            self.arrete = True
+
+    icone = FausseIcone()
+    barre._redemarrer(icone, None)
+
+    assert icone.arrete
+    _commande, options = lancements[0]
+    assert "_MEIPASS2" not in options["env"]
+

@@ -92,7 +92,9 @@ class Application:
         commande = ([sys.executable] if getattr(sys, "frozen", False)
                     else [sys.executable, "-m", "papote"])
         try:
-            subprocess.Popen(commande + list(arguments))
+            # L'environnement doit etre deballe : voir « environnement_de_relance ».
+            subprocess.Popen(commande + list(arguments),
+                             env=maj.environnement_de_relance())
             return True
         except OSError as e:
             self.notifier("Fenêtre", f"Ouverture impossible : {e}")

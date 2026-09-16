@@ -207,3 +207,44 @@ def test_un_numero_illisible_ne_casse_rien(github, installe):
     assert maj.numero_en_attente() is None
     assert maj.en_attente() is not None
 
+
+# -- relancer un programme fige ---------------------------------------------
+
+def test_l_environnement_de_relance_est_deballe(monkeypatch):
+    """Le lanceur de PyInstaller ne doit pas suivre le nouveau processus.
+
+    Il note dans l'environnement ou il a deballe l'executable. Transmises
+    telles quelles, ces variables font croire au nouveau Papote qu'il est le
+    second etage d'un demarrage deja fait : il cherche ses fichiers dans le
+    dossier temporaire de l'ancien et s'arrete sur « Failed to start embedded
+    python interpreter ».
+    """
+    monkeypatch.setenv("_MEIPASS2", r"C:\Temp\_MEI00002a102")
+    monkeypatch.setenv("_PYI_ARCHIVE_FILE", r"C:\Papote\Papote.exe")
+    monkeypatch.setenv("_PYI_PARENT_PROCESS_LEVEL", "1")
+    monkeypatch.setenv("PATH", "/usr/bin")
+
+    propre = maj.environnement_de_relance()
+
+    assert "_MEIPASS2" not in propre
+    assert not [nom for nom in propre if nom.startswith("_PYI")]
+    # Tout le reste doit passer : le nouveau Papote a besoin du meme
+    # environnement que l'ancien.
+    assert propre["PATH"] == "/usr/bin"
+
+
+def test_la_mise_en_place_relance_avec_un_environnement_propre(installe, tmp_path,
+                                                               monkeypatch):
+    """C'est ici que le defaut se voyait : la mise a jour ne demarrait pas."""
+    monkeypatch.setenv("_MEIPASS2", r"C:\Temp\_MEI00002a102")
+    lancements = []
+    monkeypatch.setattr(
+        maj.subprocess, "Popen",
+        lambda commande, **options: lancements.append((commande, options)),
+    )
+    (tmp_path / maj.NOUVEAU).write_bytes(b"MZ nouvel executable")
+
+    assert maj.appliquer() is True
+    _commande, options = lancements[0]
+    assert "_MEIPASS2" not in options["env"]
+

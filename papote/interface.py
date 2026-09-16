@@ -66,7 +66,8 @@ class InterfaceBarre:
         commande = ([sys.executable] if getattr(sys, "frozen", False)
                     else [sys.executable, "-m", "papote"])
         try:
-            subprocess.Popen(commande)
+            # L'environnement doit etre deballe : voir « environnement_de_relance ».
+            subprocess.Popen(commande, env=maj.environnement_de_relance())
         except OSError as e:
             self.notifier("Redémarrage", f"Impossible : {e}")
             return
