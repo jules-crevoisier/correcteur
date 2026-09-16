@@ -178,3 +178,32 @@ def test_un_echec_de_mise_en_place_laisse_l_executable_intact(installe, tmp_path
     assert maj.appliquer() is False
     assert installe.exists()
     assert installe.read_bytes() == b"MZ ancien executable"
+
+
+# -- le numero de la version telechargee ------------------------------------
+
+def test_le_numero_telecharge_est_note_a_cote(github, installe):
+    """L'icone et la fenetre sont deux processus : le numero passe par un fichier."""
+    version = maj.disponible()
+    maj.installer_maintenant(version)
+    assert maj.numero_en_attente() == version.numero
+
+
+def test_sans_mise_a_jour_en_attente_il_n_y_a_pas_de_numero(installe):
+    assert maj.numero_en_attente() is None
+
+
+def test_le_numero_disparait_avec_le_menage(github, installe):
+    maj.installer_maintenant(maj.disponible())
+    maj.en_attente().unlink()
+    maj.nettoyer()
+    assert not (installe.parent / maj.NUMERO).exists()
+
+
+def test_un_numero_illisible_ne_casse_rien(github, installe):
+    """Le numero n'est qu'un confort : son absence ne bloque pas le redemarrage."""
+    maj.installer_maintenant(maj.disponible())
+    (installe.parent / maj.NUMERO).write_text("", encoding="utf-8")
+    assert maj.numero_en_attente() is None
+    assert maj.en_attente() is not None
+

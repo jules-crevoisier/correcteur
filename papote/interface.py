@@ -72,9 +72,26 @@ class InterfaceBarre:
             return
         icone.stop()
 
-    def _libelle_maj(self) -> str:
+    def _maj_en_attente(self) -> str | None:
+        """Le numero de la version telechargee, d'ou qu'elle vienne.
+
+        La fenetre est un autre processus : quand c'est elle qui a fait le
+        telechargement, `app.maj_prete` reste vide ici. Le fichier depose a
+        cote de l'executable, lui, est visible des deux cotes — sans quoi le
+        menu proposait encore de chercher une mise a jour deja prete.
+        """
         if self.app.maj_prete is not None:
-            return f"Redémarrer pour installer la version {self.app.maj_prete}"
+            return str(self.app.maj_prete)
+        if maj.en_attente() is None:
+            return None
+        return maj.numero_en_attente() or ""
+
+    def _libelle_maj(self) -> str:
+        numero = self._maj_en_attente()
+        if numero:
+            return f"Redémarrer pour installer la version {numero}"
+        if numero is not None:
+            return "Redémarrer pour installer la mise à jour"
         return f"Rechercher une mise à jour (version {__version__})"
 
     def _basculer_correction_auto(self, icone, _element) -> None:
@@ -195,7 +212,7 @@ class InterfaceBarre:
                 lambda _: self._libelle_maj(),
                 lambda icone, element: (
                     self._redemarrer(icone, element)
-                    if self.app.maj_prete is not None
+                    if self._maj_en_attente() is not None
                     else self._chercher_maj(icone, element)
                 ),
                 visible=maj.compilee(),

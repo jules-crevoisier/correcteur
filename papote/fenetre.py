@@ -144,6 +144,11 @@ class Fenetre:
         self._construire()
         self._afficher("Corriger")
 
+        # Une mise a jour peut avoir ete telechargee en arriere-plan avant
+        # meme que la fenetre ne s'ouvre : elle doit se proposer tout de
+        # suite, sans qu'il faille aller la chercher dans les reglages.
+        self._annoncer_si_prete()
+
         threading.Thread(target=self._precharger, daemon=True).start()
 
     # -- ossature -----------------------------------------------------------
@@ -894,7 +899,7 @@ class Fenetre:
             return
 
         if self.maj_trouvee is not None or maj.en_attente() is not None:
-            version = self.maj_trouvee
+            version = self.maj_trouvee or maj.numero_en_attente()
             libelle = (f"Redémarrer pour installer {version}" if version
                        else "Redémarrer pour installer la mise à jour")
             theme.Bouton(self.boutons_maj, libelle, self._redemarrer,
@@ -922,6 +927,10 @@ class Fenetre:
                 self.racine.after(0, self._dire, "Vous êtes déjà à jour.",
                                   theme.SUCCES)
                 return
+            # Vingt megaoctets par une connexion ordinaire, cela se compte en
+            # secondes : sans un mot, on croit la recherche bloquee.
+            self.racine.after(0, self._dire,
+                              f"Téléchargement de la version {version}…")
             try:
                 maj.installer_maintenant(version)
             except maj.MiseAJourImpossible as e:
@@ -938,15 +947,49 @@ class Fenetre:
         self._annoncer_maj(version)
         self._dire(f"Version {version} téléchargée.", theme.SUCCES)
 
+    def _annoncer_si_prete(self) -> None:
+        """Propose le redemarrage si une version attend deja, d'ou qu'elle vienne.
+
+        Le telechargement se fait souvent dans l'autre processus, celui de
+        l'icone : la fenetre ne l'apprend qu'en regardant a cote de
+        l'executable.
+        """
+        try:
+            if maj.en_attente() is None:
+                return
+            numero = maj.numero_en_attente()
+        except Exception:
+            return
+        self._annoncer_maj(numero)
+
     def _annoncer_maj(self, version) -> None:
-        """Rappelle la mise a jour en bas de la colonne, quelle que soit la page."""
+        """Propose le redemarrage en bas de la colonne, quelle que soit la page.
+
+        Telecharger sans le dire ne sert a rien : tant que Papote ne s'est pas
+        relance, c'est l'ancienne version qui corrige. La proposition reste
+        donc visible sur toutes les pages, et ne part que si on la renvoie.
+        """
         for enfant in self.bandeau_maj.winfo_children():
             enfant.destroy()
-        tk.Label(self.bandeau_maj, text=f"Version {version} prête",
+        titre = f"Version {version} prête" if version else "Mise à jour prête"
+        tk.Label(self.bandeau_maj, text=titre,
                  bg=theme.FOND, fg=theme.SUCCES, anchor="w",
-                 font=theme.police(9, gras=True)).pack(fill="x", pady=(0, 6))
-        theme.Bouton(self.bandeau_maj, "Redémarrer", self._redemarrer,
-                     principal=True, petit=True, fond=theme.FOND).pack(fill="x")
+                 font=theme.police(9, gras=True)).pack(fill="x")
+        theme.note(self.bandeau_maj,
+                   "Redémarrez pour l'installer. Rien n'est perdu.",
+                   fond=theme.FOND).pack(fill="x", pady=(2, 6))
+        theme.Bouton(self.bandeau_maj, "Redémarrer maintenant", self._redemarrer,
+                     principal=True, petit=True, icone="telecharger",
+                     fond=theme.FOND).pack(fill="x")
+        theme.Bouton(self.bandeau_maj, "Plus tard", self._remettre_maj,
+                     petit=True, fond=theme.FOND).pack(fill="x", pady=(4, 0))
+
+    def _remettre_maj(self) -> None:
+        """Renvoie la proposition : elle reste dans « Réglages », et au redemarrage."""
+        for enfant in self.bandeau_maj.winfo_children():
+            enfant.destroy()
+        self._dire("La mise à jour s'installera au prochain démarrage.",
+                   theme.TEXTE_DOUX)
 
     def _redemarrer(self) -> None:
         """Demande a Papote de se relancer : la mise a jour prend alors sa place."""

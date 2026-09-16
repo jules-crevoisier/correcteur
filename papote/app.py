@@ -481,7 +481,9 @@ class Application:
         self.maj_prete = version
         self.notifier(
             f"Version {version} téléchargée",
-            "Elle prendra la place de l'actuelle au prochain démarrage.",
+            "Cliquez l'icône Papote près de l'horloge pour redémarrer et "
+            "l'installer maintenant — sinon, elle attendra le prochain "
+            "démarrage.",
         )
         return version
 
