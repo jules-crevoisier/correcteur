@@ -41,6 +41,23 @@ def fenetre(application):
     return Fenetre(application)
 
 
+def corriger_et_attendre(fenetre, texte: str) -> None:
+    """Tape un texte, lance la correction, attend qu'elle revienne.
+
+    La fenetre corrige dans un fil pour ne pas se figer ; le test doit donc
+    l'attendre, comme le ferait un utilisateur.
+    """
+    import time
+
+    fenetre.champ.insert("1.0", texte)
+    fenetre.corriger()
+    for _ in range(200):
+        if fenetre.bouton_corriger.actif:
+            return
+        time.sleep(0.02)
+    raise AssertionError("la correction n'est jamais revenue")
+
+
 # -- construction ------------------------------------------------------------
 
 def test_la_fenetre_s_ouvre_sur_la_correction(fenetre):
@@ -70,8 +87,7 @@ def test_chaque_page_a_sa_methode():
 # -- corriger ----------------------------------------------------------------
 
 def test_corriger_remplace_le_texte(fenetre):
-    fenetre.champ.insert("1.0", "je sais pas si sa va")
-    fenetre.corriger()
+    corriger_et_attendre(fenetre, "je sais pas si sa va")
     assert fenetre.champ.get("1.0") == "je sais pas si ça va"
     assert "correction" in fenetre.etat.options["text"]
 
@@ -82,9 +98,26 @@ def test_corriger_sur_un_texte_vide_ne_fait_rien(fenetre):
 
 
 def test_les_mots_inconnus_sont_proposes(fenetre):
-    fenetre.champ.insert("1.0", "un zbeulotron est passé")
-    fenetre.corriger()
+    corriger_et_attendre(fenetre, "un zbeulotron est passé")
     assert fenetre.inconnus.winfo_children(), "aucun mot inconnu propose"
+
+
+def test_un_mot_incertain_montre_ses_remplacements(fenetre):
+    """« ourné » n'est pas corrige tout seul, mais il est propose."""
+    corriger_et_attendre(fenetre, "une bonne ourné")
+    assert "journée" in fenetre._propositions("ourné")
+
+
+def test_cliquer_une_proposition_remplace_le_mot(fenetre):
+    corriger_et_attendre(fenetre, "une bonne ourné")
+    fenetre._remplacer_mot("ourné", "journée")
+    assert fenetre.champ.get("1.0") == "une bonne journée"
+
+
+def test_un_remplacement_ne_touche_pas_les_mots_qui_le_contiennent(fenetre):
+    fenetre.champ.insert("1.0", "ourné et retourné")
+    fenetre._remplacer_mot("ourné", "journée")
+    assert fenetre.champ.get("1.0") == "journée et retourné"
 
 
 def test_copier_met_le_texte_dans_le_presse_papiers(fenetre):

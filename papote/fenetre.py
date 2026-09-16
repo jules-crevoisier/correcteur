@@ -14,6 +14,7 @@ sombre. Les couleurs, les espacements et les widgets dessines vivent dans
 
 from __future__ import annotations
 
+import re
 import threading
 import tkinter as tk
 
@@ -135,8 +136,9 @@ class Fenetre:
 
         self.racine = tk.Tk()
         self.racine.title("Papote")
-        self.racine.geometry("880x600")
-        self.racine.minsize(720, 520)
+        self.racine.geometry("940x660")
+        # Tout defile : la fenetre peut donc devenir petite sans rien cacher.
+        self.racine.minsize(540, 420)
         self.racine.configure(bg=theme.FOND)
 
         self._construire()
@@ -170,14 +172,22 @@ class Fenetre:
         contenu.pack(fill="both", expand=True)
 
         for nom, _icone, _sous_titre in PAGES:
-            page = tk.Frame(contenu, bg=theme.FOND)
-            getattr(self, "_page_" + _cle(nom))(page)
-            self.pages[nom] = page
+            construire = getattr(self, "_page_" + _cle(nom))
+            if nom == "Corriger":
+                # La zone de texte occupe toute la hauteur : la faire defiler
+                # reviendrait a lui donner la taille de son contenu.
+                page = tk.Frame(contenu, bg=theme.FOND)
+                construire(page)
+                self.pages[nom] = page
+            else:
+                zone = theme.Defilement(contenu)
+                construire(zone.interieur)
+                self.pages[nom] = zone.exterieur
 
         barre = tk.Frame(droite, bg=theme.FOND, padx=theme.TRES_GRAND,
                          pady=theme.MOYEN)
         barre.pack(fill="x")
-        self.etat = theme.note(barre, "", fond=theme.FOND, wraplength=600)
+        self.etat = theme.note(barre, "", fond=theme.FOND)
         self.etat.pack(fill="x")
 
         self.racine.bind("<Escape>", lambda _: self.racine.destroy())
@@ -303,6 +313,13 @@ class Fenetre:
         self._proposer_inconnus(corrige)
 
     def _proposer_inconnus(self, texte: str) -> None:
+        """Une ligne par mot inconnu : ce qu'on aurait mis a la place, et
+        le bouton pour dire qu'il n'y avait rien a mettre.
+
+        Le correcteur ne remplace que ce dont il est sur — « ourné » vaut
+        « journée » autant que « durée », alors il n'y touche pas. Plutot que
+        de laisser la faute sans rien dire, on montre ici ce qu'il a trouve.
+        """
         for enfant in self.inconnus.winfo_children():
             enfant.destroy()
         try:
@@ -312,14 +329,44 @@ class Fenetre:
         if not mots:
             return
 
-        theme.note(self.inconnus, "Mots inconnus — un clic les met à l'abri :",
+        theme.note(self.inconnus,
+                   "Mots inconnus — cliquez le bon, ou gardez le vôtre :",
                    fond=theme.FOND).pack(fill="x", pady=(2, 6))
-        ligne = tk.Frame(self.inconnus, bg=theme.FOND)
-        ligne.pack(fill="x")
+
         for mot in mots[:10]:
-            theme.Bouton(ligne, f"+ {mot}", lambda m=mot: self._apprendre_mot(m),
+            ligne = tk.Frame(self.inconnus, bg=theme.FOND)
+            ligne.pack(fill="x", pady=1)
+            theme.note(ligne, f"{mot} →", fond=theme.FOND).pack(
+                side="left", padx=(0, 6))
+            for remplacement in self._propositions(mot):
+                theme.Bouton(
+                    ligne, remplacement,
+                    lambda m=mot, r=remplacement: self._remplacer_mot(m, r),
+                    petit=True, fond=theme.FOND,
+                ).pack(side="left", padx=(0, 4), pady=1)
+            theme.Bouton(ligne, f"garder « {mot} »",
+                         lambda m=mot: self._apprendre_mot(m),
                          petit=True, fond=theme.FOND).pack(side="left",
-                                                           padx=(0, 6), pady=2)
+                                                           padx=(4, 0), pady=1)
+
+    def _propositions(self, mot: str) -> list[str]:
+        """Ce que le correcteur aurait propose, sans en etre assez sur."""
+        try:
+            return self.app.correcteur.propositions(mot, maximum=3)
+        except Exception:
+            return []
+
+    def _remplacer_mot(self, mot: str, remplacement: str) -> None:
+        """Remplace le mot partout dans le texte, mot entier seulement."""
+        texte = self.champ.get("1.0", "end-1c")
+        motif = re.compile(rf"(?<!\w){re.escape(mot)}(?!\w)")
+        nouveau, nombre = motif.subn(remplacement.replace("\\", "\\\\"), texte)
+        if not nombre:
+            return
+        self.champ.delete("1.0", "end")
+        self.champ.insert("1.0", nouveau)
+        self._dire(f"« {mot} » remplacé par « {remplacement} ».", theme.SUCCES)
+        self._proposer_inconnus(nouveau)
 
     def _mots_inconnus(self, texte: str) -> list[str]:
         """Les mots que ni le dictionnaire ni vos listes ne connaissent."""
@@ -361,14 +408,11 @@ class Fenetre:
     # -- page « Mon dictionnaire » ------------------------------------------
 
     def _page_mon_dictionnaire(self, page: tk.Frame) -> None:
-        gauche = theme.carte(page)
-        gauche.pack(side="left", fill="both", expand=True, padx=(0, theme.MOYEN))
-        droite = theme.carte(page)
-        droite.pack(side="left", fill="both", expand=True, padx=(theme.MOYEN, 0))
+        colonnes = theme.Colonnes(page).pack(fill="both", expand=True)
+        gauche, droite = self._carte(colonnes.ajouter()), \
+            self._carte(colonnes.ajouter())
 
-        dedans = tk.Frame(gauche, bg=theme.SURFACE, padx=theme.GRAND,
-                          pady=theme.GRAND)
-        dedans.pack(fill="both", expand=True)
+        dedans = gauche
         theme.titre(dedans, "Mots à ne pas corriger").pack(fill="x")
         theme.note(dedans, "Pseudos, jargon, noms de jeux.").pack(
             fill="x", pady=(2, theme.MOYEN))
@@ -389,13 +433,10 @@ class Fenetre:
         self.retablis = tk.Frame(dedans, bg=theme.SURFACE)
         self.retablis.pack(fill="x")
 
-        dedans = tk.Frame(droite, bg=theme.SURFACE, padx=theme.GRAND,
-                          pady=theme.GRAND)
-        dedans.pack(fill="both", expand=True)
+        dedans = droite
         theme.titre(dedans, "Mes remplacements").pack(fill="x")
         theme.note(dedans, "« ptetre » → « peut-être ». Ils passent avant tout "
-                           "le reste, et servent aussi d'abréviations.",
-                   wraplength=320).pack(fill="x", pady=(2, theme.MOYEN))
+                           "le reste, et servent aussi d'abréviations.").pack(fill="x", pady=(2, theme.MOYEN))
 
         self.liste_remplacements = theme.liste(dedans, hauteur=9)
         self.liste_remplacements.pack(fill="both", expand=True)
@@ -504,12 +545,7 @@ class Fenetre:
     # -- page « Vos fautes » ------------------------------------------------
 
     def _page_vos_fautes(self, page: tk.Frame) -> None:
-        cadre = theme.carte(page)
-        cadre.pack(fill="both", expand=True)
-        dedans = tk.Frame(cadre, bg=theme.SURFACE, padx=theme.GRAND,
-                          pady=theme.GRAND)
-        dedans.pack(fill="both", expand=True)
-
+        dedans = self._carte(page)
         theme.titre(dedans, "Ce que vous corrigez le plus").pack(fill="x")
         theme.note(dedans, "Compté sur votre machine, et nulle part ailleurs.").pack(
             fill="x", pady=(2, theme.MOYEN))
@@ -589,18 +625,14 @@ class Fenetre:
     # -- page « Applications » ----------------------------------------------
 
     def _page_applications(self, page: tk.Frame) -> None:
-        gauche = theme.carte(page)
-        gauche.pack(side="left", fill="both", expand=True, padx=(0, theme.MOYEN))
-        droite = theme.carte(page)
-        droite.pack(side="left", fill="both", expand=True, padx=(theme.MOYEN, 0))
+        colonnes = theme.Colonnes(page).pack(fill="both", expand=True)
+        gauche, droite = self._carte(colonnes.ajouter()), \
+            self._carte(colonnes.ajouter())
 
-        dedans = tk.Frame(gauche, bg=theme.SURFACE, padx=theme.GRAND,
-                          pady=theme.GRAND)
-        dedans.pack(fill="both", expand=True)
+        dedans = gauche
         theme.titre(dedans, "Ne rien corriger ici").pack(fill="x")
         theme.note(dedans, "Terminaux, éditeurs de code, jeux : la correction "
-                           "automatique y fait plus de mal que de bien.",
-                   wraplength=320).pack(fill="x", pady=(2, theme.MOYEN))
+                           "automatique y fait plus de mal que de bien.").pack(fill="x", pady=(2, theme.MOYEN))
 
         self.liste_applications = theme.liste(dedans, hauteur=10)
         self.liste_applications.pack(fill="both", expand=True)
@@ -617,13 +649,11 @@ class Fenetre:
         theme.note(dedans, "Le nom du programme : discord.exe, code.exe…").pack(
             fill="x")
 
-        dedans = tk.Frame(droite, bg=theme.SURFACE, padx=theme.GRAND,
-                          pady=theme.GRAND)
-        dedans.pack(fill="both", expand=True)
+        dedans = droite
         theme.titre(dedans, "Registre par application").pack(fill="x")
         theme.note(dedans, "« soutenu » remet les « ne » de négation et déplie "
                            "les abréviations. Pratique pour Outlook, pas pour "
-                           "Discord.", wraplength=320).pack(
+                           "Discord.").pack(
             fill="x", pady=(2, theme.MOYEN))
 
         self.liste_registres = theme.liste(dedans, hauteur=10)
@@ -734,19 +764,21 @@ class Fenetre:
             self._ligne_bascule(style, cle, libelle, explication,
                                 regles_actives.get(cle, False))
 
-        self.choix_registre = tk.StringVar(
-            value=self.config.get("registre", politique_mod.PARLE))
-        for valeur, libelle in (
-            (politique_mod.PARLE, "Parlé — « j'ai pas compris » reste tel quel"),
-            (politique_mod.SOUTENU, "Soutenu — « je n'ai pas compris »"),
-        ):
-            tk.Radiobutton(
-                style, text=libelle, value=valeur, variable=self.choix_registre,
-                bg=theme.SURFACE, fg=theme.TEXTE, selectcolor=theme.SURFACE_HAUTE,
-                activebackground=theme.SURFACE, activeforeground=theme.TEXTE,
-                anchor="w", font=theme.police(10), highlightthickness=0,
-                borderwidth=0, cursor="hand2",
-            ).pack(fill="x", padx=theme.GRAND, pady=(0, 2))
+        ligne = tk.Frame(style, bg=theme.SURFACE)
+        ligne.pack(fill="x", padx=theme.GRAND, pady=(0, theme.GRAND))
+        textes = tk.Frame(ligne, bg=theme.SURFACE)
+        textes.pack(fill="x")
+        tk.Label(textes, text="Registre par défaut", bg=theme.SURFACE,
+                 fg=theme.TEXTE, anchor="w",
+                 font=theme.police(10)).pack(fill="x")
+        theme.note(textes, "« Parlé » laisse « j'ai pas compris » tel quel ; "
+                           "« soutenu » en fait « je n'ai pas compris »."
+                   ).pack(fill="x", pady=(0, theme.MOYEN))
+        self.choix_registre = theme.Segments(
+            ligne,
+            [(politique_mod.PARLE, "Parlé"), (politique_mod.SOUTENU, "Soutenu")],
+            self.config.get("registre", politique_mod.PARLE),
+        ).pack(anchor="w")
 
         raccourcis = self._section(colonne, "Raccourcis")
         theme.note(raccourcis, "Cliquez, puis appuyez sur la combinaison. "
@@ -785,6 +817,15 @@ class Fenetre:
         theme.note(barre, f"Fichier : {config_mod.chemin_config()}",
                    fond=theme.FOND).pack(side="left", padx=(theme.GRAND, 0))
 
+    def _carte(self, parent) -> tk.Frame:
+        """Un panneau, et son interieur convenablement espace."""
+        cadre = theme.carte(parent)
+        cadre.pack(fill="both", expand=True)
+        dedans = tk.Frame(cadre, bg=theme.SURFACE, padx=theme.GRAND,
+                          pady=theme.GRAND)
+        dedans.pack(fill="both", expand=True)
+        return dedans
+
     def _section(self, parent, titre: str) -> tk.Frame:
         cadre = theme.carte(parent)
         cadre.pack(fill="x", pady=(0, theme.MOYEN))
@@ -801,7 +842,7 @@ class Fenetre:
         textes.pack(side="left", fill="x", expand=True)
         tk.Label(textes, text=libelle, bg=theme.SURFACE, fg=theme.TEXTE,
                  anchor="w", font=theme.police(10)).pack(fill="x")
-        theme.note(textes, explication, wraplength=420).pack(fill="x")
+        theme.note(textes, explication).pack(fill="x")
 
         bascule = theme.Interrupteur(ligne, valeur, commande)
         bascule.pack(side="right", padx=(theme.MOYEN, 0))
@@ -925,8 +966,7 @@ class Fenetre:
         dedans.pack(fill="x", padx=theme.GRAND, pady=(0, theme.GRAND))
 
         theme.note(dedans, "Papote note ici ce qui s'est mal passé. Rien n'en "
-                           "sort : le fichier reste sur votre machine.",
-                   wraplength=520).pack(fill="x", pady=(0, theme.MOYEN))
+                           "sort : le fichier reste sur votre machine.").pack(fill="x", pady=(0, theme.MOYEN))
 
         boutons = tk.Frame(dedans, bg=theme.SURFACE)
         boutons.pack(fill="x")

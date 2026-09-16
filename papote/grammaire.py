@@ -27,6 +27,7 @@ import re
 from dataclasses import dataclass
 from typing import Callable
 
+from .lexique import sans_accents
 from .politique import PARLE, SOUTENU
 
 # ---------------------------------------------------------------------------
@@ -80,10 +81,14 @@ PRONOMS_INTERCALES = {"me", "te", "se", "le", "la", "les", "lui", "leur",
                       "y", "en", "nous", "vous"}
 
 # Sujets a la 3e personne du singulier : devant eux, « et » est un « est ».
+# Compares sans leurs accents : a la premiere passe, « ça » peut encore
+# s'ecrire « ca », et le sujet ne doit pas passer inapercu pour autant.
 SUJETS_SINGULIER = {
     "il", "elle", "on", "ça", "ce", "qui", "celui", "celle", "chacun",
     "quelqu'un", "personne", "tout", "ceci", "cela",
 }
+
+SUJETS_SINGULIER_NUS = {sans_accents(mot) for mot in SUJETS_SINGULIER}
 
 PRONOMS_PLURIEL = {"ils", "elles"}
 
@@ -559,6 +564,13 @@ APOSTROPHES_AVANT_PARTICIPE = {
     "ma": "m'a", "ta": "t'a", "mas": "m'as", "tas": "t'as", "la": "l'a",
 }
 
+# L'auxiliaire s'accorde avec le sujet, et le sujet n'est pas toujours la.
+#
+#     ta passé une bonne journée   ->  t'as   (c'est « tu » qui manque)
+#     il ta dit quoi               ->  t'a    (le sujet est « il »)
+#     tu ma dit que                ->  m'as   (le sujet est « tu »)
+#     ça ma pris deux heures       ->  m'a    (le sujet est « ça »)
+
 PRONOMS_AVANT_L_A = {"me", "te", "se", "nous", "vous", "lui", "leur"}
 
 DETERMINANTS = {"un", "une", "le", "la", "les", "ce", "cet", "des", "du",
@@ -578,9 +590,16 @@ def _apostrophe_avant_participe(ctx: Contexte, i: int):
     # pronom complement, ou « il me la dit » ne peut etre que « me l'a dit ».
     if ctx.mot(i) == "la" and ctx.mot(i - 1) not in PRONOMS_AVANT_L_A:
         return None
-    if ctx.est_participe(ctx.noyau(i + 1)):
-        return appliquer_casse(ctx.brut(i), remplacement)
-    return None
+    if not ctx.est_participe(ctx.noyau(i + 1)):
+        return None
+
+    precedent = sans_accents(ctx.noyau(i - 1))
+    if ctx.mot(i) == "ta" and precedent not in SUJETS_SINGULIER_NUS:
+        remplacement = "t'as"
+    elif ctx.mot(i) == "ma" and precedent == "tu":
+        remplacement = "m'as"
+
+    return appliquer_casse(ctx.brut(i), remplacement)
 
 
 @regle("IL_A", "apres un pronom sujet, « a » est le verbe avoir : pas d'accent")

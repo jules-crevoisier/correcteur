@@ -254,9 +254,31 @@ def titre(parent, texte: str, fond: str = SURFACE) -> tk.Label:
                     font=police(11, gras=True))
 
 
-def note(parent, texte: str, fond: str = SURFACE, **options) -> tk.Label:
-    return tk.Label(parent, text=texte, bg=fond, fg=TEXTE_DOUX, anchor="w",
-                    justify="left", font=police(9), **options)
+def note(parent, texte: str, fond: str = SURFACE,
+         wraplength: int | None = None, **options) -> tk.Label:
+    """Un texte secondaire, qui se replie a la largeur qu'on lui laisse.
+
+    Une longueur de repli fixe donne une colonne de texte qui deborde des
+    qu'on retrecit la fenetre, ou qui laisse la moitie de la place vide des
+    qu'on l'agrandit. Suivre la largeur reelle coute une liaison.
+    """
+    etiquette = tk.Label(parent, text=texte, bg=fond, fg=TEXTE_DOUX, anchor="w",
+                         justify="left", font=police(9), **options)
+    if wraplength is not None:
+        etiquette.configure(wraplength=wraplength)
+        return etiquette
+
+    dernier = {"largeur": 0}
+
+    def replier(evenement):
+        utile = max(180, evenement.width - 4)
+        # Redimensionner a chaque pixel relancerait l'evenement sans fin.
+        if abs(utile - dernier["largeur"]) > 8:
+            dernier["largeur"] = utile
+            etiquette.configure(wraplength=utile)
+
+    etiquette.bind("<Configure>", replier)
+    return etiquette
 
 
 def entree(parent, largeur: int = 20, fond: str = SURFACE_HAUTE) -> tk.Entry:
@@ -279,3 +301,247 @@ def texte(parent, hauteur: int | None = None, fond: str = SURFACE_HAUTE) -> tk.T
                    insertbackground=ACCENT, padx=14, pady=12, font=police(11),
                    undo=True, highlightthickness=1, highlightbackground=BORDURE,
                    highlightcolor=BORDURE, **options)
+
+
+class BarreDefilement:
+    """Une barre de defilement fine, dessinee.
+
+    Celle de tkinter a l'apparence que Windows lui donne : grise, large, et
+    parfaitement deplacee au milieu d'un fond sombre. Celle-ci n'est qu'un
+    rectangle arrondi qui suit la vue, s'attrape a la souris, et disparait
+    quand il n'y a rien a faire defiler.
+    """
+
+    LARGEUR = 10
+    EPAISSEUR = 6
+
+    def __init__(self, parent, commande, fond: str = FOND):
+        self.commande = commande          # yview de la toile
+        self.debut, self.fin = 0.0, 1.0
+        self.saisie = None
+
+        self.canevas = tk.Canvas(parent, width=self.LARGEUR, bg=fond,
+                                 highlightthickness=0)
+        self.curseur = rectangle_arrondi(self.canevas, 2, 0, self.EPAISSEUR + 2,
+                                         10, 3, fill=BORDURE, outline="")
+
+        self.canevas.bind("<Configure>", lambda _e: self._dessiner())
+        self.canevas.bind("<Button-1>", self._attraper)
+        self.canevas.bind("<B1-Motion>", self._trainer)
+        self.canevas.bind("<ButtonRelease-1>", self._lacher)
+        self.canevas.bind("<Enter>",
+                          lambda _e: self.canevas.itemconfigure(self.curseur,
+                                                                fill=TEXTE_ETEINT))
+        self.canevas.bind("<Leave>",
+                          lambda _e: self.canevas.itemconfigure(self.curseur,
+                                                                fill=BORDURE))
+
+    # -- suivi de la vue ----------------------------------------------------
+
+    def set(self, debut, fin) -> None:
+        """Appelee par la toile a chaque deplacement."""
+        self.debut, self.fin = float(debut), float(fin)
+        self._dessiner()
+
+    def utile(self) -> bool:
+        """Y a-t-il seulement quelque chose a faire defiler ?"""
+        return (self.fin - self.debut) < 0.999
+
+    def _hauteur(self) -> int:
+        try:
+            return max(1, self.canevas.winfo_height())
+        except tk.TclError:
+            return 1
+
+    def _dessiner(self) -> None:
+        hauteur = self._hauteur()
+        haut = int(self.debut * hauteur)
+        bas = max(haut + 24, int(self.fin * hauteur))
+        self.canevas.coords(self.curseur, 2, haut, self.EPAISSEUR + 2, bas)
+        self.canevas.itemconfigure(self.curseur,
+                                   state="normal" if self.utile() else "hidden")
+
+    # -- souris -------------------------------------------------------------
+
+    def _position(self, evenement) -> float:
+        return max(0.0, min(1.0, evenement.y / self._hauteur()))
+
+    def _attraper(self, evenement) -> None:
+        self.saisie = self._position(evenement) - self.debut
+        self._trainer(evenement)
+
+    def _trainer(self, evenement) -> None:
+        if self.saisie is None:
+            return
+        self.commande("moveto", max(0.0, self._position(evenement) - self.saisie))
+
+    def _lacher(self, _evenement) -> None:
+        self.saisie = None
+
+    def pack(self, **options):
+        self.canevas.pack(**options)
+        return self
+
+
+class Defilement:
+    """Une zone qui defile — ce que tkinter ne sait pas faire tout seul.
+
+    Une fenetre plus petite que son contenu doit rester utilisable : sans
+    cela, la moitie des reglages est inaccessible sur un petit ecran, ou des
+    que Windows agrandit les polices. Le contenu prend toujours la largeur
+    disponible, ce qui laisse les textes se replier proprement.
+    """
+
+    def __init__(self, parent, fond: str = FOND):
+        self.exterieur = tk.Frame(parent, bg=fond)
+
+        self.toile = tk.Canvas(self.exterieur, bg=fond, highlightthickness=0)
+        self.barre = BarreDefilement(self.exterieur, self._defiler, fond)
+        self.toile.configure(yscrollcommand=self.barre.set)
+
+        self.barre.pack(side="right", fill="y")
+        self.toile.pack(side="left", fill="both", expand=True)
+
+        self.interieur = tk.Frame(self.toile, bg=fond)
+        self.fenetre = self.toile.create_window((0, 0), window=self.interieur,
+                                                anchor="nw")
+
+        self.interieur.bind("<Configure>", self._contenu_a_change)
+        self.toile.bind("<Configure>", self._zone_a_change)
+        # La molette n'agit que sur la zone survolee : deux zones qui defilent
+        # en meme temps sont plus desagreables qu'aucune.
+        self.toile.bind("<Enter>", self._ecouter_molette)
+        self.toile.bind("<Leave>", self._oublier_molette)
+
+    def _defiler(self, *arguments) -> None:
+        self.toile.yview(*arguments)
+
+    def _contenu_a_change(self, _evenement) -> None:
+        self.toile.configure(scrollregion=self.toile.bbox("all"))
+
+    def _zone_a_change(self, evenement) -> None:
+        # Le contenu epouse la largeur : c'est ce qui rend les textes
+        # repliables et la fenetre redimensionnable.
+        self.toile.itemconfigure(self.fenetre, width=evenement.width)
+
+    def _ecouter_molette(self, _evenement) -> None:
+        self.toile.bind_all("<MouseWheel>", self._molette)
+        self.toile.bind_all("<Button-4>", self._molette)
+        self.toile.bind_all("<Button-5>", self._molette)
+
+    def _oublier_molette(self, _evenement) -> None:
+        for evenement in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
+            self.toile.unbind_all(evenement)
+
+    def _molette(self, evenement) -> None:
+        if not self.barre.utile():
+            return
+        # Windows envoie un « delta » de 120 par cran ; X11, deux boutons.
+        if getattr(evenement, "num", None) == 4:
+            crans = -1
+        elif getattr(evenement, "num", None) == 5:
+            crans = 1
+        else:
+            crans = -int(getattr(evenement, "delta", 0) / 120) or 0
+        if crans:
+            self.toile.yview_scroll(crans, "units")
+
+    def pack(self, **options):
+        self.exterieur.pack(**options)
+        return self
+
+
+class Colonnes:
+    """Deux panneaux cote a cote, empiles des que la fenetre se retrecit.
+
+    C'est tout ce que veut dire « responsive » ici : en dessous d'un certain
+    nombre de pixels, deux colonnes de trois centimetres ne servent plus a
+    personne.
+    """
+
+    SEUIL = 720
+
+    def __init__(self, parent, fond: str = FOND, seuil: int | None = None):
+        self.cadre = tk.Frame(parent, bg=fond)
+        self.panneaux: list[tk.Frame] = []
+        self.seuil = seuil if seuil is not None else self.SEUIL
+        self.cote_a_cote: bool | None = None
+        self.cadre.bind("<Configure>", self._sur_mesure)
+
+    def ajouter(self) -> tk.Frame:
+        panneau = tk.Frame(self.cadre, bg=self.cadre.cget("bg"))
+        self.panneaux.append(panneau)
+        return panneau
+
+    def disposer(self, cote_a_cote: bool) -> None:
+        if cote_a_cote == self.cote_a_cote:
+            return
+        self.cote_a_cote = cote_a_cote
+        for indice, panneau in enumerate(self.panneaux):
+            panneau.pack_forget()
+            if cote_a_cote:
+                panneau.pack(side="left", fill="both", expand=True,
+                             padx=(0, MOYEN) if indice == 0 else (MOYEN, 0))
+            else:
+                panneau.pack(side="top", fill="both", expand=True,
+                             pady=(0, MOYEN) if indice == 0 else (MOYEN, 0))
+
+    def _sur_mesure(self, evenement) -> None:
+        self.disposer(evenement.width >= self.seuil)
+
+    def pack(self, **options):
+        self.cadre.pack(**options)
+        self.disposer(True)
+        return self
+
+
+class Segments:
+    """Un choix entre deux ou trois options, d'un seul tenant.
+
+    Remplace les boutons radio de tkinter, qui portent l'apparence de Windows
+    et jurent au milieu de widgets dessines.
+    """
+
+    HAUTEUR = 32
+
+    def __init__(self, parent, options: list[tuple[str, str]], valeur: str,
+                 commande=None, fond: str = SURFACE):
+        self.options = options
+        self.valeur = valeur
+        self.commande = commande
+        self.boutons: dict[str, Bouton] = {}
+
+        self.cadre = tk.Frame(parent, bg=fond)
+        for cle, libelle in options:
+            bouton = Bouton(self.cadre, libelle,
+                            lambda c=cle: self.choisir(c), fond=fond)
+            bouton.pack(side="left", padx=(0, PETIT))
+            self.boutons[cle] = bouton
+        self._peindre()
+
+    def _peindre(self) -> None:
+        for cle, bouton in self.boutons.items():
+            choisi = cle == self.valeur
+            bouton.repos = ACCENT if choisi else SURFACE_HAUTE
+            bouton.survol = ACCENT_VIF if choisi else BORDURE
+            bouton.couleur_texte = "white" if choisi else TEXTE_DOUX
+            bouton.canevas.itemconfigure(bouton.forme, fill=bouton.repos)
+            bouton.canevas.itemconfigure(bouton.etiquette,
+                                         fill=bouton.couleur_texte)
+
+    def choisir(self, cle: str) -> None:
+        self.valeur = cle
+        self._peindre()
+        if self.commande is not None:
+            self.commande(cle)
+
+    def get(self) -> str:
+        return self.valeur
+
+    def set(self, valeur: str) -> None:
+        self.valeur = valeur
+        self._peindre()
+
+    def pack(self, **options):
+        self.cadre.pack(**options)
+        return self

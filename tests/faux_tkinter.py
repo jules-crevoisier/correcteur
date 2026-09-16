@@ -53,6 +53,14 @@ class Widget:
     def grab_set(self): pass
     def grab_release(self): pass
 
+    def bind_all(self, evenement, fonction, *_a): self.liaisons[evenement] = fonction
+    def unbind_all(self, evenement): self.liaisons.pop(evenement, None)
+
+    # Les dimensions : la doublure n'a pas d'ecran, elle repond ce qu'on lui
+    # a dit — ce qui suffit a eprouver la logique de disposition.
+    def winfo_width(self): return self.options.get("width", 800)
+    def winfo_height(self): return self.options.get("height", 600)
+
     def declencher(self, evenement, donnees=None):
         """Simule un evenement : c'est ainsi que les tests cliquent."""
         fonction = self.liaisons.get(evenement)
@@ -112,6 +120,7 @@ class Canvas(Widget):
     def __init__(self, parent=None, **options):
         super().__init__(parent, **options)
         self.objets: dict[int, dict] = {}
+        self.vues: list = []
         self._compteur = 0
 
     def _ajouter(self, genre, **options):
@@ -140,7 +149,10 @@ class Canvas(Widget):
 
     def coords(self, _identifiant, *_valeurs): pass
     def bbox(self, *_a): return (0, 0, 10, 10)
-    def yview(self, *_a): pass
+
+    def yview(self, *arguments): self.vues.append(arguments)
+
+    def yview_scroll(self, crans, _unite): self.vues.append(("scroll", crans))
 
 
 class PhotoImage:

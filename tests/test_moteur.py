@@ -171,3 +171,20 @@ def test_la_typographie_epargne_les_liens(lexique):
 def test_la_typographie_epargne_le_code(lexique):
     texte = "tape `ls -l | grep x?` pour voir"
     assert typographe(lexique).corriger(texte)[0] == texte
+
+
+def test_une_apostrophe_oubliee_supporte_une_faute_de_frappe(correcteur):
+    """« jesper » -> « j'espère » : l'apostrophe manque, et le e aussi."""
+    assert correcteur.corriger("jesper que oui")[0].startswith("j'espère")
+
+
+def test_l_apostrophe_n_invente_pas_de_mot_rare(correcteur):
+    """« subject » ne devient pas « s'abject » : « abject » est trop rare."""
+    assert "s'abject" not in correcteur.corriger("le subject du jour")[0]
+
+
+def test_les_mots_incertains_sont_proposes_sans_etre_imposes(correcteur):
+    """« ourné » reste en place, mais le correcteur sait quoi offrir."""
+    assert "ourné" in correcteur.corriger("une bonne ourné")[0]
+    assert correcteur.propositions("ourné")[0] == "journée"
+

@@ -167,8 +167,11 @@ class Frappe:
         if not corps.strip():
             return None
 
-        # Pas de majuscule ni de point final : la phrase n'est pas finie.
-        corrige, corrections = self.correcteur.corriger(corps, mise_en_forme=False)
+        # Ni majuscule ni point final — la phrase n'est pas finie — et pas de
+        # recherche a deux frappes d'ecart : elle coute deux dixiemes de
+        # seconde sur un mot inconnu, ce qui se sentirait sous les doigts.
+        corrige, corrections = self.correcteur.corriger(
+            corps, mise_en_forme=False, profond=False)
         if corrige == corps or not corrections:
             return None
 
