@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<!--
+  La fenetre de Papote.
+
+  Rien n'est dessine ici : la page se construit au chargement, a partir de ce
+  que `passerelle.demarrer()` lui rend. Ajouter une page ou un interrupteur se
+  fait donc en Python, dans `passerelle.py`, et non en modifiant ce fichier —
+  un libelle et son reglage qui vivent dans deux fichiers finissent toujours
+  par se separer.
+
+  Ce qui reste ici, ce sont les formes : la colonne, l'en-tete, la zone de
+  travail, et les gabarits que le JavaScript recopie.
+-->
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Papote</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="cadre" id="cadre">
+
+  <!-- ================= la colonne ================= -->
+  <aside class="rail">
+    <div class="marque">
+      <span class="marque-logo" id="marque-logo"></span>
+      <span class="marque-texte">
+        <strong>Papote</strong>
+        <small id="version"></small>
+      </span>
+    </div>
+
+    <nav id="nav" aria-label="Pages"></nav>
+
+    <div class="rail-pied">
+      <div class="annonce" id="annonce-maj" hidden>
+        <div class="annonce-titre" id="annonce-titre"></div>
+        <p class="annonce-texte">Redémarrez pour l'installer. Rien n'est perdu.</p>
+        <button class="bouton principal etroit" id="maj-redemarrer">
+          Redémarrer maintenant
+        </button>
+        <button class="bouton discret etroit" id="maj-plus-tard">Plus tard</button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ================= la zone de travail ================= -->
+  <main>
+    <header class="entete">
+      <h1 id="titre-page"></h1>
+      <p id="soustitre-page"></p>
+    </header>
+
+    <div class="defile" id="defile">
+
+      <!-- ---------- Corriger ---------- -->
+      <section class="page" data-page="corriger">
+        <div class="editeur">
+          <textarea id="champ" spellcheck="false"
+                    placeholder="Collez ou écrivez votre texte…"></textarea>
+          <div class="editeur-barre">
+            <button class="bouton principal" id="corriger">
+              Corriger
+              <kbd>Ctrl ↵</kbd>
+            </button>
+            <button class="bouton" id="copier">Copier</button>
+            <button class="bouton discret" id="vider">Effacer</button>
+            <span class="pousse"></span>
+            <span class="compteur" id="compteur"></span>
+          </div>
+        </div>
+
+        <div id="corrections" class="corrections" hidden></div>
+        <div id="inconnus" class="inconnus" hidden></div>
+      </section>
+
+      <!-- ---------- Mon dictionnaire ---------- -->
+      <section class="page" data-page="dictionnaire">
+        <div class="colonnes">
+          <div class="carte">
+            <h2>Mots à ne jamais corriger</h2>
+            <p class="aide">Pseudos, jargon, noms de jeux : ce que Papote
+              prendrait pour une faute.</p>
+            <form class="saisie" id="forme-mot">
+              <input id="mot" placeholder="un mot" autocomplete="off">
+              <button class="bouton" type="submit">Ajouter</button>
+            </form>
+            <ul class="jetons" id="mots"></ul>
+          </div>
+
+          <div class="carte">
+            <h2>Remplacements</h2>
+            <p class="aide">Ce que vous tapez, et ce que ça doit devenir.
+              Ils passent avant tout le reste.</p>
+            <form class="saisie" id="forme-remplacement">
+              <input id="remplacement-de" placeholder="ptetre" autocomplete="off">
+              <span class="fleche">→</span>
+              <input id="remplacement-vers" placeholder="peut-être"
+                     autocomplete="off">
+              <button class="bouton" type="submit">Ajouter</button>
+            </form>
+            <ul class="lignes" id="remplacements"></ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- ---------- Vos fautes ---------- -->
+      <section class="page" data-page="fautes">
+        <div class="carte">
+          <div class="total" id="total-corrections"></div>
+          <p class="aide">Tout est compté chez vous, dans un fichier que vous
+            pouvez vider. Rien n'est envoyé nulle part.</p>
+        </div>
+        <div class="carte">
+          <h2>Ce que vous corrigez le plus</h2>
+          <ul class="barres" id="frequentes"></ul>
+          <button class="bouton discret" id="effacer-historique">
+            Effacer l'historique
+          </button>
+        </div>
+      </section>
+
+      <!-- ---------- Applications ---------- -->
+      <section class="page" data-page="applications">
+        <div class="colonnes">
+          <div class="carte">
+            <h2>Où se taire</h2>
+            <p class="aide">Papote ne corrigera rien dans ces applications.
+              Les terminaux et les éditeurs de code y sont déjà.</p>
+            <form class="saisie" id="forme-exclusion">
+              <input id="exclusion" placeholder="jeu.exe" autocomplete="off">
+              <button class="bouton" type="submit">Exclure</button>
+            </form>
+            <ul class="jetons" id="exclues"></ul>
+          </div>
+
+          <div class="carte">
+            <h2>Où hausser le ton</h2>
+            <p class="aide">Le registre soutenu remet les « ne » de négation
+              et déplie les abréviations.</p>
+            <form class="saisie" id="forme-registre">
+              <input id="registre-application" placeholder="outlook.exe"
+                     autocomplete="off">
+              <button class="bouton" type="submit">Soutenu ici</button>
+            </form>
+            <ul class="lignes" id="registres-application"></ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- ---------- Réglages ---------- -->
+      <section class="page" data-page="reglages">
+        <div class="carte">
+          <h2>Comment Papote se comporte</h2>
+          <div id="interrupteurs"></div>
+        </div>
+
+        <div class="carte">
+          <h2>Le ton par défaut</h2>
+          <div class="segments" id="registre"></div>
+        </div>
+
+        <div class="carte">
+          <h2>Raccourcis</h2>
+          <p class="aide">Cliquez, puis appuyez sur la combinaison voulue.</p>
+          <div id="raccourcis"></div>
+        </div>
+
+        <div class="carte">
+          <h2>Règles supplémentaires</h2>
+          <p class="aide">Éteintes par défaut : correctes, mais toutes les
+            applications ne les rendent pas bien.</p>
+          <div id="regles"></div>
+        </div>
+
+        <div class="carte" id="carte-demarrage" hidden>
+          <h2>Au démarrage de Windows</h2>
+          <div id="demarrage"></div>
+        </div>
+
+        <div class="carte">
+          <h2>Mises à jour</h2>
+          <div class="ligne-action">
+            <div>
+              <div class="ligne-titre" id="maj-etat"></div>
+              <div class="aide" id="maj-detail"></div>
+            </div>
+            <button class="bouton" id="verifier-maj">Vérifier maintenant</button>
+          </div>
+        </div>
+
+        <div class="carte">
+          <h2>Quand quelque chose ne va pas</h2>
+          <p class="aide">Papote note ici ce qui s'est mal passé. Le fichier
+            reste sur votre machine.</p>
+          <pre class="journal" id="journal"></pre>
+          <div class="rangee">
+            <button class="bouton" id="copier-journal">Copier le journal</button>
+            <button class="bouton discret" id="vider-journal">Vider</button>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="app.js"></script>
+</body>
+</html>

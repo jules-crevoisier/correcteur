@@ -27,8 +27,14 @@ analyse = Analysis(
         (str(RACINE / "donnees" / "lexique_fr.txt.gz"), "donnees"),
         (str(RACINE / "donnees" / "frequences_fr.txt.gz"), "donnees"),
         (str(RACINE / "donnees" / "LICENCES.md"), "donnees"),
+        # La fenetre est une page web : elle voyage avec le reste.
+        (str(RACINE / "papote" / "web"), "papote/web"),
     ],
-    hiddenimports=["pystray._win32"],
+    # « webview » choisit son moteur au moment de demarrer, par un import
+    # calcule que PyInstaller ne sait pas suivre : sans cette ligne, la
+    # fenetre se replierait sur l'ancienne une fois compilee.
+    hiddenimports=["pystray._win32", "webview.platforms.edgechromium",
+                   "clr_loader", "pythonnet"],
     hookspath=[],
     runtime_hooks=[],
     excludes=["numpy", "pandas", "matplotlib", "PySide6", "PyQt5", "test"],

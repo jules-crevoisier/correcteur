@@ -43,3 +43,28 @@ def dossier_donnees() -> Path:
     # Aucun trouve : renvoyer le chemin attendu produit un message d'erreur
     # plus parlant que l'echec d'une recherche silencieuse.
     return candidats[-1]
+
+
+def dossier_web() -> Path:
+    """Dossier de la page qui sert de fenetre.
+
+    Meme recherche que pour le lexique, aux memes trois endroits : la page
+    voyage avec l'application, deballee dans un dossier temporaire par
+    PyInstaller ou posee a cote des sources.
+    """
+    candidats = []
+
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        candidats.append(Path(meipass) / "papote" / "web")
+
+    racine = racine_application()
+    candidats.append(racine / "papote" / "web")
+    candidats.append(racine / "_internal" / "papote" / "web")
+    # Depuis les sources, `papote/` est le dossier de ce fichier.
+    candidats.append(Path(__file__).resolve().parent / "web")
+
+    for candidat in candidats:
+        if (candidat / "index.html").is_file():
+            return candidat
+    return candidats[-1]
