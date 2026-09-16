@@ -134,6 +134,12 @@ FAUTES = [
     ("qeu est ce que tu fais", "que est-ce que tu fais", "frappe"),
     ("aps de souci", "pas de souci", "frappe"),
     ("jai dse soucis", "j'ai des soucis", "frappe"),
+
+    # -- l'accent oublie sur un mot qui existe quand meme
+    ("au niveaux du server actuel", "au niveau du server actuel", "accord"),
+    ("trop de chanel par pole", "trop de chanel par pôle", "accent"),
+    ("la moitie des gens", "la moitié des gens", "accent"),
+    ("voila le resultat", "voilà le résultat", "accent"),
 ]
 
 # Phrases correctes : elles doivent ressortir a l'identique.
@@ -269,6 +275,13 @@ INTOUCHABLES = [
     "Je me souviens très bien de ce jour-là.",
     "Il a plus de temps que moi.",
     "À plus tard !",
+    # -- mots sans accent qu'un sujet protege
+    "il prive son fils de sortie",
+    "tu cites un exemple connu",
+    "on publie demain matin",
+    "elles sont reparties tôt",
+    "du cote de chez moi",
+
     # -- trois lettres que rien ne doit toucher
     "le mode dev est actif",
     "git pull puis npm run build",

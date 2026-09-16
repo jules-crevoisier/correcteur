@@ -27,7 +27,7 @@ import re
 from dataclasses import dataclass
 from typing import Callable
 
-from .lexique import sans_accents
+from .lexique import ACCENTUEES, accentue as accentue_mot, sans_accents
 from . import confusions
 from .politique import PARLE, SOUTENU
 
@@ -1524,3 +1524,136 @@ def _trait_union_imperatif(ctx: Contexte, i: int):
     if verbe == "va" and pronom == "y":
         return (appliquer_casse(ctx.brut(i), "vas-y"), 2)
     return (appliquer_casse(ctx.brut(i), f"{ctx.brut(i)}-{pronom}"), 2)
+
+
+# ---------------------------------------------------------------------------
+# L'accent oublie sur un mot qui existe quand meme
+#
+# « pole » est au dictionnaire — c'est la « pole position » — mais « pôle »
+# est trois fois plus employe. Le correcteur ne regardant que les mots
+# absents du dictionnaire, il passait son chemin. Ils sont soixante-seize
+# dans ce cas : moitie/moitié, comite/comité, foret/forêt, voila/voilà.
+#
+# La difficulte est que beaucoup sont aussi des verbes conjugues : « il
+# prive », « tu cites », « on publie ». Un sujet devant, et l'on ne touche a
+# rien.
+# ---------------------------------------------------------------------------
+
+# Ecart de frequence exige entre la graphie sans accent et celle avec.
+ECART_ACCENT_OUBLIE = 3
+
+# En dessous, le mot est trop court pour que la statistique dise quelque
+# chose.
+LONGUEUR_MINIMALE_ACCENT_OUBLIE = 4
+
+# Ce qui annonce un verbe : apres eux, une forme sans accent est a sa place.
+AVANT_UN_VERBE = (PRONOMS_SUJETS
+                  | {"qui", "ne", "n'", "ça", "ce", "on", "y", "en",
+                     "j'", "s'", "m'", "t'", "c'", "qu'", "me", "te", "se",
+                     "lui", "leur", "nous", "vous"})
+
+# « le », « la », « les » sont ambigus : article devant un nom (« la moitié »),
+# pronom devant un verbe (« il la prive »). C'est ce qui les precede qui
+# tranche.
+ARTICLES_AMBIGUS = {"le", "la", "les", "l'"}
+
+
+def _annonce_un_verbe(ctx: "Contexte", i: int) -> bool:
+    """Ce qui precede le mot i en fait-il un verbe conjugue ?"""
+    precedent = ctx.elision(i - 1) or ctx.mot(i - 1)
+    if precedent in AVANT_UN_VERBE:
+        return True
+    if precedent in ARTICLES_AMBIGUS:
+        # « il la prive » est un verbe ; « la moitié » est un nom. Un sujet
+        # avant l'article, et c'est un pronom complement.
+        avant = ctx.elision(i - 2) or ctx.mot(i - 2)
+        return avant in AVANT_UN_VERBE or avant in PRONOMS_SUJETS
+    return False
+
+
+@regle("ACCENT_OUBLIE", "ce mot existe, mais il lui manque son accent")
+def _accent_oublie(ctx: Contexte, i: int):
+    """« au pole nord » -> « au pôle nord », « la moitie » -> « la moitié »."""
+    mot = ctx.mot(i)
+    if (len(mot) < LONGUEUR_MINIMALE_ACCENT_OUBLIE or ctx.elision(i)
+            or not mot.isalpha() or mot != mot.lower()):
+        return None
+    if any(c in ACCENTUEES for c in mot):
+        return None
+
+    # Un sujet ou un pronom devant : c'est un verbe, et il est bien ecrit.
+    if _annonce_un_verbe(ctx, i):
+        return None
+
+    # Un auxiliaire devant : c'est un participe, et deux participes se
+    # ressemblent trop pour qu'on choisisse. « elles sont reparties » veut
+    # dire qu'elles sont parties de nouveau, pas qu'on les a réparties.
+    if _auxiliaire_avant(ctx, i):
+        return None
+
+    # Il faut une seule graphie accentuee : « cote » en a trois — « côte »,
+    # « côté », « coté » — et rien ne dit laquelle.
+    accentuees = [f for f in ctx.lexique.formes(mot)
+                  if f.islower() and f != mot and accentue_mot(f)]
+    if len(accentuees) != 1:
+        return None
+
+    avec = accentuees[0]
+    rang_sans = ctx.lexique.rang(mot)
+    rang_avec = ctx.lexique.rang(avec)
+    if rang_avec * ECART_ACCENT_OUBLIE > rang_sans:
+        return None
+    return appliquer_casse(ctx.brut(i), avec)
+
+
+# ---------------------------------------------------------------------------
+# Un determinant singulier veut un nom singulier
+# ---------------------------------------------------------------------------
+
+DETERMINANTS_SINGULIERS = {
+    "le", "la", "un", "une", "ce", "cet", "cette", "au", "du",
+    "mon", "ma", "ton", "ta", "son", "sa", "notre", "votre", "leur",
+    "chaque", "aucun", "aucune", "quel", "quelle",
+}
+
+# Ces noms se terminent par « s » ou « x » au singulier : leur retirer la
+# derniere lettre en ferait autre chose, ou rien du tout.
+INVARIABLES_EN_S = {
+    "temps", "fois", "prix", "corps", "pays", "bras", "cours", "mois",
+    "poids", "univers", "succes", "succès", "proces", "procès", "repas",
+    "puis", "depuis", "plus", "moins", "jamais", "toujours", "alors",
+    "tous", "vous", "nous", "sens", "fils", "gaz", "choix", "voix",
+    "croix", "noix", "prix", "taux", "faux", "roux", "doux", "vieux",
+    "mieux", "ceux", "eux", "yeux", "cheveux", "jeux", "lieux", "dieux",
+    "genoux", "bijoux", "travaux", "journaux", "vitraux",
+}
+
+
+@regle("ACCORD_DETERMINANT_SINGULIER",
+       "après un déterminant singulier, le nom reste au singulier")
+def _accord_determinant_singulier(ctx: Contexte, i: int):
+    """« au niveaux » -> « au niveau », « une choses » -> « une chose »."""
+    mot = ctx.mot(i)
+    if ctx.elision(i) or not mot.endswith(("s", "x")) or len(mot) < 4:
+        return None
+    if mot in INVARIABLES_EN_S or mot in MOTS_INVARIABLES:
+        return None
+    if ctx.mot(i - 1) not in DETERMINANTS_SINGULIERS:
+        return None
+
+    # Un pronom sujet juste avant le determinant : ce n'en est pas un.
+    # « elles son parties » n'est pas « elles son partie » — c'est « sont »
+    # qu'il fallait lire, et une autre regle s'en charge.
+    if ctx.mot(i - 2) in PRONOMS_SUJETS:
+        return None
+
+    singulier = mot[:-1]
+    if not ctx.connait(singulier):
+        return None
+    # Le singulier doit etre la forme courante : « le temps » n'est pas
+    # « le temp », et « un bus » n'est pas « un bu ».
+    rang_pluriel = ctx.lexique.rang(mot)
+    rang_singulier = ctx.lexique.rang(singulier)
+    if rang_singulier >= rang_pluriel:
+        return None
+    return appliquer_casse(ctx.brut(i), singulier)
