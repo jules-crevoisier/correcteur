@@ -108,6 +108,44 @@ FAUTES = [
     ("ils sont national", "ils sont nationaux", "accord"),
     ("un chevaux blanc", "un cheval blanc", "accord"),
 
+    # -- mots composes, nombres, et le « t » de liaison
+    ("on part le week end", "on part le week-end", "trait-union"),
+    ("un aller retour", "un aller-retour", "trait-union"),
+    ("trente huit degrés", "trente-huit degrés", "trait-union"),
+    ("dix sept ans", "dix-sept ans", "trait-union"),
+    ("quatre vingt dix", "quatre-vingt-dix", "trait-union"),
+    ("allez vous en", "allez-vous-en", "trait-union"),
+    ("y a t il quelqu'un", "y a-t-il quelqu'un", "trait-union"),
+    ("ma grand mere", "ma grand-mère", "trait-union"),
+    ("tout a fait d'accord", "tout à fait d'accord", "trait-union"),
+
+    # -- apostrophes que la coupure generale n'atteint pas
+    ("jusqua ce soir", "jusqu'à ce soir", "apostrophe"),
+    ("jusquou tu vas", "jusqu'où tu vas", "apostrophe"),
+    ("sil vous plait repondez", "s'il vous plaît répondez", "apostrophe"),
+    ("aujourdhui il pleut", "aujourd'hui il pleut", "apostrophe"),
+    ("lorsquon arrive", "lorsqu'on arrive", "apostrophe"),
+
+    # -- des mots proteges qui n'etaient que du francais sans accent
+    ("mon frere est la", "mon frère est là", "accent"),
+    ("carrement pas", "carrément pas", "accent"),
+    ("tu as hate de partir", "tu as hâte de partir", "accent"),
+
+    # -- noms propres : le dictionnaire n'en connait qu'une graphie
+    ("je rentre en france demain", "je rentre en France demain", "majuscule"),
+    ("je pars en italie", "je pars en Italie", "majuscule"),
+    ("on passe par lyon", "on passe par Lyon", "majuscule"),
+    ("on se voit a bruxelles", "on se voit à Bruxelles", "majuscule"),
+
+    # -- homophones, deuxieme serie
+    ("je sais quelle viendra", "je sais qu'elle viendra", "homophone"),
+    ("il pense quelle a raison", "il pense qu'elle a raison", "homophone"),
+    ("il la vu hier", "il l'a vu hier", "homophone"),
+    ("je me suis fais avoir", "je me suis fait avoir", "homophone"),
+    ("ils sont tous la", "ils sont tous là", "homophone"),
+    ("ca ces sur", "ça c'est sûr", "homophone"),
+    ("c est une une idee", "c'est une idée", "doublon"),
+
     # -- accord en genre. Le dictionnaire ne dit pas le genre des noms :
     #    il vient de la phrase elle-meme, d'une terminaison sure, ou d'une
     #    liste ecrite a la main. Quand il reste inconnu, on se tait.
@@ -250,6 +288,22 @@ INTOUCHABLES = [
     # demandent des corrections opposees : « les chiens courts » ou « les
     # chiens courent ». Devant ce partage, le correcteur n'invente pas.
     "les chiens court vite",
+    # Les paires des regles ci-dessus, du bon cote.
+    "quelle heure il est",
+    "quelle chance tu as",
+    "il la voit tous les jours",
+    "les paris sont ouverts",
+    "la chine et le japon",
+    "je suis en perm cette semaine",
+    "on se parle sur chanel",
+    "hate is a strong word",
+    "i found it among the others",
+    "several things went wrong",
+    "cent vingt euros",
+    "vingt et un ans",
+    "un un deux trois",
+    "un sil naturel dans la peinture",
+    "ces derniers jours ont été durs",
     # Genre inconnu : l'adjectif differe au masculin et au feminin, et
     # l'ecrire au masculin serait un coup de des. Mieux vaut ne rien faire.
     "des trucs blanc",

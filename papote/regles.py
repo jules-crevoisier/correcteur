@@ -71,11 +71,13 @@ LEXIQUE_PROTEGE = {
     "tjrs", "qqn", "qqch", "rdv", "nrv", "dcd", "dac", "oki", "jvb", "vrmt",
     "jms", "srx", "tfq", "ct", "cv", "mrc", "bnj", "tt", "ms", "ds", "pr",
     "auj", "ajd", "bref", "askip", "apparement",
-    # Interjections et argot
-    "wsh", "wesh", "frr", "frero", "frere", "gros", "zbeul", "ouf", "relou",
+    # Interjections et argot. « frere » et « carrement » n'y figurent plus :
+    # ce ne sont pas des mots d'argot, ce sont « frère » et « carrément »
+    # prives de leur accent, et les rendre est precisement le travail.
+    "wsh", "wesh", "frr", "frero", "gros", "zbeul", "ouf", "relou",
     "chelou", "meuf", "keuf", "reuf", "teuf", "bail", "bails", "sah",
     "wallah", "khey", "chanmé", "chanme", "vener", "nickel", "grave",
-    "carrement", "franchement", "genre", "trop", "chaud", "zarb",
+    "franchement", "genre", "trop", "chaud", "zarb",
     # Vocabulaire en ligne / gaming
     "screen", "screenshot", "stream", "streamer", "chill", "spoil", "spoiler",
     "ping", "afk", "brb", "gg", "wp", "ez", "irl", "rip", "noob", "smurf",
@@ -94,6 +96,7 @@ LEXIQUE_PROTEGE = {
     # Plateformes et marques
     "discord", "twitch", "youtube", "tiktok", "insta", "snap", "whatsapp",
     "telegram", "steam", "spotify", "netflix", "reddit", "twitter",
+    "facebook", "insta", "messenger", "gmail", "outlook", "zoom",
     # Formes contractees frequentes
     "chuis", "chais", "ouais", "ouaip", "nan", "bah", "ben", "hein", "euh",
     "hmm", "pff", "yes", "yep", "nope", "ok", "okay",
@@ -164,6 +167,12 @@ LEXIQUE_ANGLAIS = {
     "whose", "why", "wife", "will", "win", "with", "within", "without",
     "woman", "word", "work", "world", "worst", "would", "write", "wrong",
     "yeah", "year", "yes", "yesterday", "you", "young", "your",
+    # Ceux-la manquaient, et le dictionnaire francais les reecrivait :
+    # « strong » -> « string », « several » -> « général », « third » ->
+    # « tard ». Trouves en passant une liste de mots anglais courants au
+    # correcteur ; les autres en ressortaient intacts.
+    "along", "among", "another", "belong", "bored", "found", "goodbye",
+    "kept", "least", "seen", "several", "strong", "third",
 }
 
 # Mots anglais qui sont aussi un mot francais courant ampute de son accent.
@@ -194,6 +203,12 @@ ANGLAIS_TROMPEURS = {
 LEXIQUE_ANGLAIS -= ANGLAIS_TROMPEURS
 
 # Prefixes/motifs qu'on ne touche jamais, ou qu'on protege integralement.
+# Regles auxquelles la protection ne s'applique pas. Elles nomment le mot
+# en entier et disent dans quel contexte le remplacer — « week end » ->
+# « week-end », « j'ai hate » -> « j'ai hâte ». Elles ne devinent donc rien,
+# et c'est le fait de deviner que la protection interdit.
+REGLES_SUR_MOTS_PROTEGES = {"TRAIT_UNION_COMPOSE", "MOT_REEL_TROMPEUR"}
+
 MOTIFS_PROTEGES = [
     r"https?://\S+",            # liens
     r"www\.\S+",                # liens sans schema

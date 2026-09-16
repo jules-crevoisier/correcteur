@@ -212,6 +212,13 @@ CONFUSIONS = (
                                     "serai", "seras", "reste", "restes")),
               "« là » designe le lieu"),
 
+    # « hate » est un mot anglais protege, et « hâte » un mot francais
+    # courant. La protection empeche le correcteur de deviner ; ici il ne
+    # devine pas, il lit l'auxiliaire : « j'ai hate » n'est pas de l'anglais.
+    Confusion("hate", "hâte", apres("ai", "as", "a", "avons", "avez", "ont",
+                                    "j'", "avais", "avait", "aurai"),
+              "« j'ai hâte » : le mot francais prend un accent"),
+
     # « ces » demonstratif et « ses » possessif. Seul le contexte tranche, et
     # il ne tranche que rarement : on s'en tient au cas ou un possesseur
     # vient d'etre nomme.

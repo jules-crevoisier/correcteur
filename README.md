@@ -305,7 +305,7 @@ quelques fichiers Python et un dictionnaire.
 | Où et comment | `papote/politique.py` | Se taire ici, hausser le ton là |
 | Vos remplacements | `papote/config.py` | Ce que vous lui avez appris passe avant tout |
 | Protection | `papote/regles.py` | Ce qui sort du circuit avant examen |
-| Grammaire | `papote/grammaire.py` | 51 règles de contexte : homonymes, accords, conjugaison |
+| Grammaire | `papote/grammaire.py` | 56 règles de contexte : homonymes, accords, conjugaison |
 | Morphologie | `papote/morphologie.py` | Ce qu'est chaque mot : personne, nombre, genre |
 | Genre des noms | `papote/genres.py` | Ce que le dictionnaire ne dit pas |
 | Orthographe | `papote/lexique.py` | 450 000 formes françaises, accents et fautes de frappe |
@@ -348,7 +348,7 @@ elle ne tranche pas nettement, **le mot est laissé tel quel**.
 ### La grammaire
 
 Le dictionnaire ne voit pas les fautes où les deux graphies existent :
-`sa va`, `ils on mangé`, `j'ai manger`. Cinquante et une règles regardent les mots
+`sa va`, `ils on mangé`, `j'ai manger`. Cinquante-six règles regardent les mots
 voisins pour trancher, et chacune ne se déclenche que sur un contexte où
 l'autre lecture est impossible :
 
@@ -366,6 +366,10 @@ l'autre lecture est impossible :
 | `il a du partir` → `il a dû partir` | `il a du pain` |
 | `je suis sur de moi` → `sûr` | `je suis sur la route` |
 | `ces pas grave` → `c'est pas grave` | `ses pas résonnaient` |
+| `je sais quelle viendra` → `qu'elle` | `quelle heure il est` |
+| `il la vu hier` → `il l'a vu hier` | `il la voit souvent` |
+| `vingt cinq` → `vingt-cinq` | `cent vingt`, `vingt et un` |
+| `il habite en france` → `en France` | `j'ai gagné des paris` |
 | `les gens finit` → `les gens finissent` | `les chiens court vite` |
 | `ils vient demain` → `ils viennent` | `ce sont des choses qui arrivent` |
 | `les bijou` → `les bijoux` | `la souris est cassée` |
@@ -412,6 +416,18 @@ Le paradigme d'un verbe arrive **découpé par temps**, et c'est ce qui permet
 d'accorder sans déplacer : dans `les gens finit`, on cherche la troisième
 personne du pluriel *dans le temps de `finit`*, ce qui donne `finissent` et non
 `finirent` — un passé simple parfaitement correct, mais hors sujet.
+
+### Les noms propres
+
+Le dictionnaire connaît `France` et ne connaît qu'elle : il n'existe pas de
+nom commun `france`. La majuscule est donc aussi certaine qu'un accent sauté,
+et Papote la rend — à trois conditions, toutes nécessaires :
+
+| | |
+|---|---|
+| une seule graphie connue, et capitalisée | `paris` garde sa minuscule, les paris existent ; `chine`, `japon`, `suisse` aussi |
+| au moins trois lettres | `to` et `pr` ont une entrée capitalisée sans être des noms propres |
+| parmi les trois mille mots les plus courants | `Perm` est une ville de Russie, mais qui écrit `perm` veut dire *permission* |
 
 ### Le genre des noms
 

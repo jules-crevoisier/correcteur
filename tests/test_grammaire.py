@@ -491,3 +491,72 @@ def test_un_adjectif_epicene_n_a_pas_besoin_du_genre(correcteur):
     """« rouge » s'ecrit pareil aux deux genres : le nombre suffit."""
     assert correcteur.corriger("des voitures rouge")[0] == "des voitures rouges"
     assert correcteur.corriger("des trucs rouge")[0] == "des trucs rouges"
+
+
+# ---------------------------------------------------------------------------
+# Mots composes, nombres, apostrophes collees
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("avant, apres", [
+    # « end » est un mot anglais protege : sans exception, « week end »
+    # restait tel quel. Une regle qui nomme le compose ne devine rien.
+    ("on part le week end", "on part le week-end"),
+    ("un aller retour", "un aller-retour"),
+    ("ma grand mere", "ma grand-mère"),
+    # Les nombres composes.
+    ("trente huit degrés", "trente-huit degrés"),
+    ("dix sept ans", "dix-sept ans"),
+    ("quatre vingt dix", "quatre-vingt-dix"),
+    # Le « t » de liaison ne s'ecrit jamais separe.
+    ("va t en d'ici", "va-t-en d'ici"),
+    ("y a t il quelqu'un", "y a-t-il quelqu'un"),
+    # Deux regles se repondaient d'une passe a l'autre sur cette locution.
+    ("tout a fait d'accord", "tout à fait d'accord"),
+    # Apostrophes que la coupure generale n'atteint pas.
+    ("jusqua ce soir", "jusqu'à ce soir"),
+    ("jusquou tu vas", "jusqu'où tu vas"),
+    ("sil vous plait repondez", "s'il vous plaît répondez"),
+    ("aujourdhui il pleut", "aujourd'hui il pleut"),
+])
+def test_les_composes_et_les_collages(correcteur, avant, apres):
+    assert correcteur.corriger(avant)[0] == apres
+
+
+@pytest.mark.parametrize("phrase", [
+    # Un nombre derriere un nombre fait partie du nombre.
+    "cent vingt euros",
+    "vingt et un ans",
+    "un un deux trois",
+    # « sil » est un nom du dictionnaire : il lui faut un contexte.
+    "un sil naturel dans la peinture",
+])
+def test_les_composes_ne_s_inventent_pas(correcteur, phrase):
+    assert correcteur.corriger(phrase)[0] == phrase
+
+
+# ---------------------------------------------------------------------------
+# Les noms propres
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("avant, apres", [
+    ("je rentre en france demain", "je rentre en France demain"),
+    ("je pars en italie", "je pars en Italie"),
+    ("on passe par lyon", "on passe par Lyon"),
+    ("on se voit a bruxelles", "on se voit à Bruxelles"),
+])
+def test_un_nom_propre_prend_sa_majuscule(correcteur, avant, apres):
+    assert correcteur.corriger(avant)[0] == apres
+
+
+@pytest.mark.parametrize("phrase", [
+    # Une graphie minuscule existe : la majuscule n'est plus certaine.
+    "j'ai gagné des paris",
+    "la chine et le japon",
+    "il est suisse",
+    # Trop rares pour que leur homonyme capitalise l'emporte : « Perm » est
+    # une ville de Russie, mais qui ecrit « perm » veut dire « permission ».
+    "je suis en perm cette semaine",
+    "on se parle sur chanel",
+])
+def test_une_majuscule_incertaine_ne_s_ajoute_pas(correcteur, phrase):
+    assert correcteur.corriger(phrase)[0] == phrase

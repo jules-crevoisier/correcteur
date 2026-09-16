@@ -264,6 +264,40 @@ class Lexique:
         # l'inverse n'est pas vrai : « paris » ne vaut pas « Paris ».
         return mot[:1].isupper() and mot.lower().capitalize() in formes
 
+    # En dessous, la majuscule ne vaut pas le pari : « to » et « pr » ont une
+    # entree capitalisee au dictionnaire sans etre des noms propres ici.
+    LONGUEUR_MINIMALE_MAJUSCULE = 3
+
+    # Au-dela, le mot est trop rare pour que la lecture « nom propre »
+    # l'emporte. « perm » (29 310e) a bien une entree « Perm » — une ville
+    # de Russie — mais qui ecrit « perm » veut dire « permission ». Sous ce
+    # rang, au contraire, la majuscule est ce qui manque : personne n'ecrit
+    # « france » pour autre chose que la France.
+    RANG_MAXIMAL_MAJUSCULE = 3_000
+
+    def majuscule_obligatoire(self, mot: str) -> str | None:
+        """« france » -> « France », quand aucune autre lecture n'existe.
+
+        Le dictionnaire connait « France » et ne connait qu'elle : il n'y a
+        pas de nom commun « france ». La majuscule est donc certaine, comme
+        l'est un accent qu'on a saute.
+
+        La condition est stricte — **une** graphie connue, capitalisee, et un
+        mot assez courant pour que cette lecture soit la bonne. « paris »
+        garde sa minuscule parce que les paris existent ; « chine »,
+        « japon » et « suisse » aussi ; « perm » et « chanel » parce qu'ils
+        sont trop rares pour que leur homonyme capitalise l'emporte.
+        """
+        if (not mot or mot[:1].isupper()
+                or len(mot) < self.LONGUEUR_MINIMALE_MAJUSCULE):
+            return None
+        if self.rang(mot) > self.RANG_MAXIMAL_MAJUSCULE:
+            return None
+        formes = self.formes(mot)
+        if len(formes) != 1 or not formes[0][:1].isupper():
+            return None
+        return formes[0]
+
     def rang(self, mot: str) -> int:
         """Position du mot parmi les plus employes (petit = courant)."""
         rangs = self.rangs

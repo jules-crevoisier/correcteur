@@ -279,6 +279,13 @@ class Correcteur:
             if pluriel is not None:
                 return elision + pluriel
 
+        # La majuscule d'un nom propre passe avant le garde-fou des
+        # frequences : « france » y figure — la liste est en minuscules —
+        # alors que le nom commun, lui, n'existe pas.
+        majuscule = self.lexique.majuscule_obligatoire(noyau)
+        if majuscule is not None:
+            return elision + majuscule
+
         # Un mot que le dictionnaire ignore mais que la liste de frequences
         # connait est un mot que des gens ecrivent : une abreviation
         # (« perm »), une marque (« chanel »), un mot anglais passe dans
@@ -400,9 +407,17 @@ class Correcteur:
         propositions: list[Correction] = []
         traites: set[int] = set()
 
-        def utilisable(indices: range, debut: int, fin: int) -> bool:
+        def utilisable(indices: range, debut: int, fin: int,
+                       regle: str = "") -> bool:
             if _chevauche(debut, fin, zones):
                 return False
+            if regle in regles.REGLES_SUR_MOTS_PROTEGES:
+                # La protection empeche le correcteur de **deviner** sur un
+                # mot qu'il ne connait pas. Une regle qui nomme le mot
+                # compose en entier ne devine rien : sans cette exception,
+                # « week end » restait tel quel parce que « end » est un mot
+                # anglais protege.
+                return True
             return not any(self._protege(jetons[i].texte) for i in indices)
 
         # -- vos remplacements : ils passent avant tout, y compris avant les
@@ -434,7 +449,7 @@ class Correcteur:
                 continue
             debut = jetons[suggestion.index].debut
             fin = jetons[indices[-1]].fin
-            if not utilisable(indices, debut, fin):
+            if not utilisable(indices, debut, fin, suggestion.regle):
                 continue
             propositions.append(
                 Correction(debut, fin, texte[debut:fin], suggestion.texte,
