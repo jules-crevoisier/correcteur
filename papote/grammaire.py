@@ -1015,6 +1015,24 @@ def _la_l_a(ctx: Contexte, i: int):
     return appliquer_casse(ctx.brut(i), "l'a")
 
 
+# Les formes d'etre devant lesquelles « quel » interroge sur un attribut :
+# « quelle est ta couleur », « quelles sont les options ». Elles se lisent
+# aussi « qu'elle est », « qu'elles sont » — et rien dans la phrase ne dit
+# laquelle. C'est le seul endroit ou cette regle renonce.
+ATTRIBUTIFS = {
+    "est", "sont", "était", "étaient", "sera", "seront",
+    "serait", "seraient", "fut", "furent",
+}
+
+# Avec « avoir », le partage se fait un mot plus loin. « quelle a été ta
+# réaction » interroge sur un attribut ; « il pense quelle a raison » est
+# « qu'elle a raison ». Ce qui les separe, c'est le participe : sans lui,
+# « a » est le verbe plein, et « quel » n'a rien a determiner.
+ATTRIBUTIFS_COMPOSES = {
+    "a", "ont", "avait", "avaient", "aura", "auront",
+}
+
+
 @regle("QUELLE_QU_ELLE",
        "« quelle » interroge sur un nom ; devant un verbe c'est « qu'elle »")
 def _quelle_qu_elle(ctx: Contexte, i: int):
@@ -1026,7 +1044,19 @@ def _quelle_qu_elle(ctx: Contexte, i: int):
     mot = ctx.mot(i)
     if mot not in ("quelle", "quelles") or ctx.elision(i):
         return None
+    if ctx.debut_de_segment(i):
+        # « qu' » est une conjonction : il lui faut un verbe qui la
+        # gouverne devant. En tete de phrase, « Quelles sont les options »
+        # ne peut etre que le determinant interrogatif.
+        return None
     suivant = ctx.mot(i + 1)
+    if suivant in ATTRIBUTIFS:
+        # « quelles sont tes idées » et « je sais qu'elles sont là » se
+        # disent tous les deux, et deux mots de contexte ne les separent
+        # pas. On ne devine pas : on se tait.
+        return None
+    if suivant in ATTRIBUTIFS_COMPOSES and ctx.est_participe(ctx.mot(i + 2)):
+        return None
     traits = ctx.morphologie.traits(suivant)
     # Une forme conjuguee, et rien d'autre : « quelle chance » garde son
     # nom, « quelle heure » aussi.
@@ -1412,6 +1442,14 @@ def _participe_apres_auxiliaire_conjugue(ctx: Contexte, i: int):
         return None
     if _dans_un_compose(ctx, i):
         return None
+    if mot in AUXILIAIRES:
+        # « les idées qu'elle a sont bonnes » : « a » n'est pas un
+        # auxiliaire ici, c'est le verbe de la relative, et « sont » est le
+        # verbe de la principale. Papote en faisait « qu'elle a été
+        # bonnes ». Personne n'ecrit « sont » en pensant « été » : refuser
+        # de toucher aux formes d'etre et d'avoir coute moins qu'une
+        # analyse de la phrase, et ne perd rien.
+        return None
     traits = ctx.morphologie.traits(mot)
     # Une forme conjuguee ou un imperatif, et rien d'autre : ni nom, ni
     # participe deja correct, ni infinitif. L'imperatif compte parce qu'il
@@ -1512,6 +1550,37 @@ TRAITS_ETRE = {
 }
 
 
+def _pronominal(ctx: "Contexte", i: int) -> bool:
+    """Le verbe en position i est-il pronominal ?
+
+    « elle s'est levée » : le pronom est colle a l'auxiliaire, et le
+    decoupage rend « s'est » d'un bloc — c'est l'elision qu'il faut
+    regarder, pas le mot d'avant. Cette confusion faisait passer tous les
+    pronominaux elides pour des verbes ordinaires.
+
+    « nous » et « vous » n'y figurent pas : dans « nous sommes arrives »,
+    « nous » est le sujet, et rien ne le distingue du pronom reflechi de
+    « nous nous sommes vus ».
+    """
+    if ctx.elision(i - 1) in ("s'", "m'", "t'"):
+        return True
+    return ctx.mot(i - 2) in ("se", "me", "te")
+
+
+def _objet_direct_apres(ctx: "Contexte", i: int) -> bool:
+    """Un complement d'objet direct suit-il le participe ?
+
+    On ne cherche pas a analyser la phrase : un determinant juste apres
+    suffit a rendre l'accord douteux, et le doute vaut silence.
+
+    Un nom nu ne compte pas, et c'est voulu. Le dictionnaire tient « tôt »,
+    « hier », « vite » et « bien » pour des noms — ils se nominalisent tous
+    —, si bien que « elle s'est levé tôt » passait pour un verbe suivi de
+    son objet, et ne s'accordait plus. Le determinant, lui, ne ment pas.
+    """
+    return ctx.mot(i + 1) in DETERMINANTS
+
+
 @regle("ACCORD_PARTICIPE_ETRE",
        "avec l'auxiliaire « être », le participe s'accorde avec le sujet")
 def _accord_participe_etre(ctx: Contexte, i: int):
@@ -1524,7 +1593,15 @@ def _accord_participe_etre(ctx: Contexte, i: int):
         return None
 
     # « elles se sont écrit » : le complement est indirect, rien ne s'accorde.
-    if ctx.mot(i - 2) in ("se", "s'") and mot in PARTICIPES_SANS_ACCORD:
+    if _pronominal(ctx, i) and mot in PARTICIPES_SANS_ACCORD:
+        return None
+
+    # « elle s'est lavé les cheveux » : avec un verbe pronominal, le
+    # participe s'accorde avec le complement d'objet direct, et seulement
+    # s'il le precede. Quand l'objet suit, rien ne s'accorde — et Papote
+    # ecrivait « elle s'est lavée les cheveux », une faute la ou il n'y en
+    # avait pas.
+    if _pronominal(ctx, i) and _objet_direct_apres(ctx, i):
         return None
 
     # « nous sommes arrivé » : le sujet est juste la. « ils se sont trompé » :
@@ -1744,14 +1821,44 @@ def _sujet_pluriel_avant(ctx: "Contexte", i: int) -> bool:
     if ctx.mot(i - 1) == "qui":
         recul = 2
 
-    nom = ctx.mot(i - recul)
+    position = _tete_du_groupe(ctx, i - recul)
+    nom = ctx.mot(position)
     if not _est_pluriel(ctx, nom) or _adjectif_antepose(nom):
         return False
-    if _determinant_pluriel(ctx, i - recul - 1):
+    if _determinant_pluriel(ctx, position - 1):
         return True
     # « beaucoup de gens » : la quantite est deux mots plus loin.
-    return (ctx.noyau(i - recul - 1) in ("de", "d'")
-            and ctx.mot(i - recul - 2) in QUANTITES)
+    return (ctx.noyau(position - 1) in ("de", "d'")
+            and ctx.mot(position - 2) in QUANTITES)
+
+
+# Ce qui introduit un complement du nom : « le prix **des** billets », « la
+# porte **du** garage ». « de » et « d' » en sont absents : ils servent aussi
+# a la quantite — « beaucoup de gens pensent » — ou le verbe s'accorde bien
+# avec le nom qui suit.
+DETERMINANTS_DE_COMPLEMENT = {"des", "du", "aux", "au"}
+
+
+def _tete_du_groupe(ctx: "Contexte", i: int) -> int:
+    """Remonte du complement du nom jusqu'au nom qu'il complete.
+
+    « le prix des billets a augmenté » : Papote lisait « billets » comme le
+    sujet — il est au pluriel, « des » l'annonce — et ecrivait « le prix des
+    billets **ont** augmenté ». Mais ce ne sont pas les billets qui
+    augmentent : c'est le prix.
+
+    Un groupe introduit par « des » ou « du » qui suit un nom le complete,
+    il ne le remplace pas. On remonte donc jusqu'a la tete, et l'accord se
+    fait avec elle. La boucle traite « le prix des billets du concert ».
+    """
+    for _ in range(3):
+        if ctx.mot(i - 1) not in DETERMINANTS_DE_COMPLEMENT:
+            return i
+        precedent = ctx.mot(i - 2)
+        if not precedent or not ctx.morphologie.nom(precedent):
+            return i
+        i -= 2
+    return i
 
 
 def _determinant_pluriel(ctx: "Contexte", i: int) -> bool:
@@ -1885,6 +1992,27 @@ def _accord_sujet_nominal(ctx: Contexte, i: int):
     return appliquer_casse(ctx.brut(i), accorde)
 
 
+# Ce qui suit une couleur pour en preciser la nuance. L'usage veut que
+# l'ensemble reste invariable : « des yeux bleu foncé », « des chemises vert
+# clair ». Papote ecrivait « des yeux bleus foncé », qui n'est correct sous
+# aucune lecture.
+NUANCES = {
+    "clair", "claire", "foncé", "foncée", "pâle", "vif", "vive", "sombre",
+    "bouteille", "pomme", "olive", "ciel", "marine", "canard", "turquoise",
+    "émeraude", "anis", "fluo", "pastel", "électrique", "petrole", "pétrole",
+}
+
+
+def _couleur_composee(ctx: "Contexte", i: int) -> bool:
+    """L'adjectif fait-il partie d'une couleur composee ?
+
+    On ne verifie pas que le mot est une couleur : n'importe quel adjectif
+    suivi de « clair » ou de « foncé » forme une nuance, et la regle de
+    l'invariabilite vaut pour toutes.
+    """
+    return ctx.mot(i + 1) in NUANCES
+
+
 @regle("ACCORD_ADJECTIF_PLURIEL",
        "l'adjectif s'accorde avec le nom au pluriel")
 def _accord_adjectif_pluriel(ctx: Contexte, i: int):
@@ -1904,6 +2032,9 @@ def _accord_adjectif_pluriel(ctx: Contexte, i: int):
     # verbe, et les deux lectures demandent des corrections opposees —
     # « courts » ou « courent ». Devant ce partage, on n'invente pas.
     if ctx.morphologie.verbe(mot):
+        return None
+
+    if _couleur_composee(ctx, i):
         return None
 
     indice_du_nom = None

@@ -525,4 +525,35 @@ INTOUCHABLES = [
     "regarde https://exemple.fr/a_b-c",
     "écris `git commit -m truc` dans le terminal",
     "salut <@123456789> tu viens ?",
+
+    # -- ce que quatre auditeurs a l'aveugle ont vu Papote abimer
+    #
+    # Verbe pronominal : le participe s'accorde avec l'objet direct, et
+    # seulement s'il le precede.
+    "elle s'est lavé les cheveux",
+    "elle s'est cassé la jambe",
+    "elle s'est rendu compte de son erreur",
+    "il s'est fait mal au dos",
+    # « a » est le verbe de la relative, pas un auxiliaire.
+    "les idées qu'elle a sont bonnes",
+    "les photos qu'il a sont belles",
+    # « quel » interroge sur un attribut.
+    "quelles sont les options",
+    "dis-moi quelles sont tes idées",
+    "quelle est ta couleur préférée",
+    # Le verbe s'accorde avec la tête du groupe, pas avec son complément.
+    "le prix des billets a augmenté",
+    "la liste des courses est longue",
+    "le nombre de participants a doublé",
+    # Une couleur composée reste invariable.
+    "des yeux bleu foncé",
+    "une veste vert clair",
+    "des chemises bleu ciel",
+    # Vocabulaire technique et noms à capitale intérieure.
+    "il faut débugger le endpoint",
+    "on fait un scrum tous les matins",
+    "j'ai perdu mon iPhone",
+    "c'est écrit en JavaScript",
+    "envoie-moi un email",
+    "le layout du dashboard",
 ]

@@ -92,7 +92,23 @@ LEXIQUE_PROTEGE = {
     "deploy",    # devenait « déployé »
     "devops",    # devenait « devons »
     "debug",     # devenait « début »
+    "debugger",  # devenait « débuter »
     "json",      # devenait « son »
+    "endpoint",  # devenait « endroit »
+    "rest",      # devenait « est » : une lettre en moins et un autre mot
+    "rebase",    # devenait « re base »
+    "runner",    # devenait « ruiner »
+    "library",   # devenait « libraire »
+    "await",     # devenait « avait »
+    "layout",    # devenait « l'août »
+    "slider",    # devenait « spider »
+    "hover",     # devenait « hiver »
+    "tablet",    # devenait « table »
+    # Vocabulaire de projet, meme raison.
+    "scrum",     # devenait « sérum »
+    # « email » devenait « émail », qui est le revetement des baignoires.
+    # C'est peut-etre le mot anglais le plus ecrit en francais.
+    "email", "emails",
     # Plateformes et marques
     "discord", "twitch", "youtube", "tiktok", "insta", "snap", "whatsapp",
     "telegram", "steam", "spotify", "netflix", "reddit", "twitter",
@@ -226,6 +242,14 @@ MOTIFS_PROTEGES = [
     # une lettre ou un chiffre, pour ne pas avaler le point d'une phrase.
     r"(?<!\w)[@#/]\w(?:[\w.\-]*\w)?",
     r"\b\w*\d\w*\b",            # tout mot contenant un chiffre
+    # Une majuscule au milieu d'un mot : « iPhone », « JavaScript »,
+    # « GitHub », « macOS ». C'est une marque ou un nom technique, jamais un
+    # mot francais — aucun n'a de capitale interieure. Sans cela, « iPhone »
+    # devenait « phone » : le correcteur ne voyait pas de mot francais
+    # commencant par « iph », et coupait.
+    # « (?-i: ) » : les motifs sont compiles sans egard a la casse, et
+    # celui-ci ne parle que de casse.
+    r"(?-i:\b\w*[a-zà-öø-ÿ]\w*[A-ZÀ-ÖØ-Þ]\w*\b)",
     # Noms de fichiers : « config.json », « app.py », « index.html ». Sans
     # eux, le point coupe le mot en deux et la seconde moitie se fait
     # corriger — « json » devenait « j'son ». La liste d'extensions est

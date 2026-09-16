@@ -616,3 +616,49 @@ def test_le_moteur_ne_leve_jamais_sur_une_locution(correcteur):
 ])
 def test_les_regles_corrigent_toujours_ce_qu_elles_doivent(correcteur, avant, apres):
     assert correcteur.corriger(avant)[0] == apres
+
+
+# ---------------------------------------------------------------------------
+# Les fautes que Papote inventait
+#
+# Chacune de ces phrases est correcte. Elles sont ici parce que le correcteur
+# les abimait — et une faute ecrite coute plus cher qu'une faute laissee.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("phrase", [
+    # Verbe pronominal : le participe s'accorde avec l'objet direct, et
+    # seulement s'il le precede. Ici il suit.
+    "elle s'est lavé les cheveux",
+    "elle s'est cassé la jambe",
+    "elle s'est rendu compte",
+    "il s'est fait mal au dos",
+    # « a » est le verbe de la relative, « sont » celui de la principale.
+    "les idées qu'elle a sont bonnes",
+    "les photos qu'il a sont belles",
+    # « quel » interroge sur un attribut : ce n'est pas « qu'elle ».
+    "Quelles sont les options",
+    "dis-moi quelles sont tes idées",
+    "quelle est ta couleur préférée",
+    # Le sujet est la tete du groupe, pas son complement.
+    "le prix des billets a augmenté",
+    "la liste des courses est longue",
+    "le nombre de participants a doublé",
+    # Une couleur composee reste invariable.
+    "des yeux bleu foncé",
+    "une veste vert clair",
+    "des chemises bleu ciel",
+])
+def test_ces_phrases_correctes_ne_bougent_pas(correcteur, phrase):
+    assert correcteur.corriger(phrase)[0] == phrase
+
+
+@pytest.mark.parametrize("phrase,attendu", [
+    # Ce que les correctifs ci-dessus ne doivent pas avoir emporte.
+    ("elle s'est levé", "elle s'est levée"),
+    ("je sais quelle viendra", "je sais qu'elle viendra"),
+    ("les gens pense", "les gens pensent"),
+    ("des voitures rouge", "des voitures rouges"),
+])
+def test_les_corrections_voisines_tiennent_toujours(correcteur, phrase,
+                                                     attendu):
+    assert correcteur.corriger(phrase)[0] == attendu
