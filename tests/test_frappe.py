@@ -270,3 +270,103 @@ def test_on_ne_s_ecoute_pas_soi_meme(correcteur, clavier):
     surveillant._sur_evenement(FauxEvenement("a"))
     assert surveillant.frappe.texte == ""
     assert surveillant._touche_pendant_ecriture
+
+
+# -- retour arriere = annuler ------------------------------------------------
+
+def test_le_retour_arriere_defait_la_correction(correcteur, clavier, monkeypatch):
+    """Comme sur un clavier de telephone : on efface, la correction s'annule."""
+    surveillant = ecoute(correcteur)
+    surveillant.actif = True
+    tapes = []
+    monkeypatch.setattr(surveillant, "_taper_ailleurs", tapes.append)
+
+    for caractere in "sa va ":
+        surveillant._sur_evenement(FauxEvenement(
+            {" ": "space"}.get(caractere, caractere)))
+
+    assert tapes, "la correction n'a pas eu lieu"
+    correction = tapes[-1]
+
+    surveillant._sur_evenement(FauxEvenement("backspace"))
+    annulation = tapes[-1]
+
+    # Le retour arriere de l'utilisateur a deja efface un caractere : il en
+    # reste un de moins a reprendre.
+    assert annulation.effacer == len(correction.ecrire) - 1
+    assert annulation.ecrire == correction.avant
+
+
+def test_une_autre_touche_referme_la_fenetre_de_l_annulation(correcteur, clavier,
+                                                             monkeypatch):
+    surveillant = ecoute(correcteur)
+    surveillant.actif = True
+    tapes = []
+    monkeypatch.setattr(surveillant, "_taper_ailleurs", tapes.append)
+
+    for caractere in "sa va ":
+        surveillant._sur_evenement(FauxEvenement(
+            {" ": "space"}.get(caractere, caractere)))
+    nombre = len(tapes)
+
+    surveillant._sur_evenement(FauxEvenement("b"))
+    surveillant._sur_evenement(FauxEvenement("backspace"))
+    assert len(tapes) == nombre, "le retour arriere a annule trop tard"
+
+
+def test_le_remplacement_retient_les_regles_qui_l_ont_produit(correcteur):
+    """Annuler trois fois la meme regle doit pouvoir se remarquer."""
+    frappe = Frappe(correcteur)
+    remplacement = None
+    for caractere in "sa va ":
+        remplacement = frappe.caractere(caractere) or remplacement
+    assert "SA_CA" in remplacement.regles
+
+
+# -- ou corriger -------------------------------------------------------------
+
+def test_papote_se_tait_dans_les_applications_exclues(correcteur, clavier):
+    from papote.politique import Politique
+
+    surveillant = EcouteClavier(
+        Frappe(correcteur),
+        politique=Politique(exclues=["cmd.exe"]),
+        application=lambda: "cmd.exe",
+    )
+    surveillant.actif = True
+    for caractere in "sa va ":
+        surveillant._sur_evenement(FauxEvenement(
+            {" ": "space"}.get(caractere, caractere)))
+    assert surveillant.frappe.texte == ""
+
+
+def test_changer_de_fenetre_fait_oublier_la_phrase(correcteur, clavier):
+    fenetres = ["discord.exe"]
+    surveillant = EcouteClavier(
+        Frappe(correcteur), application=lambda: fenetres[0]
+    )
+    surveillant.actif = True
+    surveillant._sur_evenement(FauxEvenement("a"))
+    assert surveillant.frappe.texte == "a"
+
+    fenetres[0] = "word.exe"
+    surveillant._application_vue = 0        # la memoire de la fenetre expire
+    surveillant._sur_evenement(FauxEvenement("b"))
+    assert surveillant.frappe.texte == "b"
+
+
+def test_le_registre_suit_l_application(correcteur, clavier):
+    from papote.politique import PARLE, SOUTENU, Politique
+
+    temoins = []
+    surveillant = EcouteClavier(
+        Frappe(correcteur),
+        politique=Politique(registres={"outlook.exe": SOUTENU}),
+        application=lambda: "outlook.exe",
+        correcteur_pour=lambda registre: temoins.append(registre) or correcteur,
+    )
+    surveillant.actif = True
+    surveillant._sur_evenement(FauxEvenement("a"))
+    assert temoins == [SOUTENU]
+    assert surveillant._registre == SOUTENU
+    assert surveillant.politique.registre_ici("discord.exe") == PARLE

@@ -27,6 +27,7 @@ from dataclasses import dataclass
 
 from . import grammaire, regles
 from .lexique import CLASSE_ACCENT, Lexique, sans_accents
+from .politique import PARLE, SOUTENU
 
 # Trois lettres identiques d'affilee : « ouiiii », « mdrrrr », « nooon ».
 # C'est de l'emphase volontaire, jamais une faute de frappe.
@@ -39,6 +40,12 @@ _MOTIFS_PROTEGES = re.compile(
 _DEBUT_DE_PHRASE = re.compile(r"(?:^|[.!?…]\s+|\n\s*)$")
 
 _PONCTUATION_FINALE = ".!?…:;,"
+
+# Typographie francaise, en option.
+_ESPACE_INSECABLE = "\u00a0"
+_SUSPENSION = re.compile(r"\.{3,}")
+_GUILLEMETS = re.compile(r'"([^"\n]{1,200})"')
+_AVANT_PONCTUATION = re.compile(r"[ \u00a0]*([?!;:])")
 
 
 @dataclass(frozen=True)
@@ -76,11 +83,18 @@ class Correcteur:
     def __init__(self, lexique: Lexique | None = None,
                  regles_optionnelles: dict[str, bool] | None = None,
                  mots_perso: list[str] | None = None,
-                 remplacements_perso: dict[str, str] | None = None):
+                 remplacements_perso: dict[str, str] | None = None,
+                 registre: str = PARLE):
         self.lexique = lexique if lexique is not None else Lexique()
+        self.registre = registre if registre in (PARLE, SOUTENU) else PARLE
 
         actives = dict(regles.REGLES_OPTIONNELLES)
         actives.update(regles_optionnelles or {})
+        if self.registre == SOUTENU:
+            # Un texte soutenu commence par une majuscule et finit par un
+            # point : ce n'est plus une question de gout.
+            actives["MAJUSCULE_PHRASE"] = True
+            actives["PONCTUATION_POINT"] = True
         self.regles_ignorees = {nom for nom, active in actives.items() if not active}
 
         self.mots_proteges = set(regles.LEXIQUE_PROTEGE) | set(regles.LEXIQUE_ANGLAIS)
@@ -89,10 +103,16 @@ class Correcteur:
 
         # Les cles sont comparees en minuscules et sans apostrophe typographique,
         # pour que « Ptetre » et « ptetre » trouvent la meme entree.
+        remplacements = dict(regles.ABREVIATIONS_SOUTENUES) \
+            if self.registre == SOUTENU else {}
+        # Les remplacements de l'utilisateur passent avant les notres.
+        remplacements.update({
+            cle: valeur for cle, valeur in (remplacements_perso or {}).items()
+            if cle.strip() and valeur.strip()
+        })
         self.remplacements = {
             cle.lower().replace("\u2019", "'"): valeur
-            for cle, valeur in (remplacements_perso or {}).items()
-            if cle.strip() and valeur.strip()
+            for cle, valeur in remplacements.items()
         }
 
     def prechauffer(self) -> None:
@@ -212,7 +232,7 @@ class Correcteur:
 
         # -- grammaire : elle voit le contexte, elle passe en premier.
         for suggestion in grammaire.analyser(
-            texte, jetons, self.lexique, self.regles_ignorees
+            texte, jetons, self.lexique, self.regles_ignorees, self.registre
         ):
             indices = range(suggestion.index, suggestion.index + suggestion.portee)
             if traites.intersection(indices):
@@ -279,6 +299,10 @@ class Correcteur:
                 )
                 texte = texte[:jeton.debut] + premiere.upper() + texte[jeton.debut + 1:]
 
+        if "TYPOGRAPHIE" not in self.regles_ignorees:
+            texte, typographiques = self._typographie(texte)
+            corrections.extend(typographiques)
+
         if "PONCTUATION_POINT" not in self.regles_ignorees:
             corps = texte.rstrip()
             if corps and corps[-1] not in _PONCTUATION_FINALE:
@@ -291,6 +315,44 @@ class Correcteur:
 
         corrections.reverse()
         return texte, corrections
+
+    def _typographie(self, texte: str) -> tuple[str, list[Correction]]:
+        """Points de suspension, guillemets francais, espaces insecables.
+
+        Les liens et les blocs de code sont laisses de cote : une espace
+        insecable glissee dans une URL la casse.
+        """
+        corrections: list[Correction] = []
+        zones = _zones_protegees(texte)
+
+        def transformer(morceau: str) -> str:
+            nouveau = _SUSPENSION.sub("…", morceau)
+            if nouveau != morceau:
+                corrections.append(Correction(0, 0, "...", "…", "TYPOGRAPHIE",
+                                              "points de suspension"))
+            morceau, nouveau = nouveau, _GUILLEMETS.sub(
+                lambda m: f"«{_ESPACE_INSECABLE}{m.group(1).strip()}"
+                          f"{_ESPACE_INSECABLE}»", nouveau)
+            if nouveau != morceau:
+                corrections.append(Correction(0, 0, '"', "« »", "TYPOGRAPHIE",
+                                              "guillemets français"))
+            morceau, nouveau = nouveau, _AVANT_PONCTUATION.sub(
+                lambda m: _ESPACE_INSECABLE + m.group(1), nouveau)
+            if nouveau != morceau:
+                corrections.append(Correction(0, 0, "?", f"{_ESPACE_INSECABLE}?",
+                                              "TYPOGRAPHIE", "espace insécable"))
+            return nouveau
+
+        morceaux, position = [], 0
+        for debut, fin in sorted(zones):
+            if debut < position:
+                continue
+            morceaux.append(transformer(texte[position:debut]))
+            morceaux.append(texte[debut:fin])
+            position = fin
+        morceaux.append(transformer(texte[position:]))
+
+        return "".join(morceaux), corrections
 
     # -- entree publique ----------------------------------------------------
 
@@ -332,16 +394,21 @@ class Correcteur:
 
 def construire(regles_optionnelles: dict[str, bool] | None = None,
                mots_perso: list[str] | None = None,
-               remplacements_perso: dict[str, str] | None = None) -> Correcteur:
+               remplacements_perso: dict[str, str] | None = None,
+               registre: str = PARLE) -> Correcteur:
     """Le correcteur pret a l'emploi, dictionnaire compris."""
-    return Correcteur(Lexique(), regles_optionnelles, mots_perso, remplacements_perso)
+    return Correcteur(Lexique(), regles_optionnelles, mots_perso,
+                      remplacements_perso, registre)
 
 
-def depuis_config(config: dict, lexique: Lexique | None = None) -> Correcteur:
+def depuis_config(config: dict, lexique: Lexique | None = None,
+                  registre: str | None = None) -> Correcteur:
     """Le correcteur decrit par un fichier de reglages."""
     return Correcteur(
         lexique if lexique is not None else Lexique(),
         regles_optionnelles=config.get("regles_optionnelles"),
         mots_perso=config.get("mots_perso"),
         remplacements_perso=config.get("remplacements_perso"),
+        registre=registre if registre is not None
+        else config.get("registre", PARLE),
     )

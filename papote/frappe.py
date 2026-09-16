@@ -17,6 +17,12 @@ Une touche inconnue, un accent mort, un deplacement du curseur, un silence
 un peu long, et le tampon repart de zero. Une correction manquee ne se voit
 pas ; une correction appliquee au mauvais endroit detruit le texte.
 
+Deux details achevent le tableau. Papote ne corrige pas partout : dans un
+terminal ou un editeur de code, il se tait (`politique.py`). Et un simple
+**retour arriere** juste apres une correction la defait, comme sur un clavier
+de telephone — la touche efface deja un caractere, il ne reste qu'a reprendre
+les autres.
+
 `Frappe` ne connait ni le clavier ni le systeme : elle recoit des caracteres
 et rend des remplacements, ce qui la rend entierement testable.
 `EcouteClavier` fait le reste.
@@ -28,6 +34,8 @@ import threading
 import time
 from dataclasses import dataclass
 from typing import Callable
+
+from . import politique as politique_mod
 
 # Un mot se termine sur l'un de ces caracteres. Ni l'apostrophe ni le trait
 # d'union n'y figurent : « j'ai » et « est-ce » sont des mots entiers.
@@ -61,11 +69,27 @@ class Remplacement:
     effacer: int      # nombre de retours arriere
     ecrire: str       # texte a taper ensuite
     avant: str        # ce qui disparait, pour pouvoir le remettre
+    # Les regles qui ont produit ce remplacement. Annuler trois fois la meme
+    # regle, c'est dire a Papote qu'elle derange.
+    regles: tuple[str, ...] = ()
 
     @property
     def inverse(self) -> "Remplacement":
         """Le remplacement qui annule celui-ci."""
-        return Remplacement(len(self.ecrire), self.avant, self.ecrire)
+        return Remplacement(len(self.ecrire), self.avant, self.ecrire,
+                            self.regles)
+
+    @property
+    def inverse_apres_retour_arriere(self) -> "Remplacement":
+        """L'annulation quand l'utilisateur vient d'appuyer sur retour arriere.
+
+        Sa touche a deja efface un caractere : il en reste un de moins a
+        reprendre. C'est ce qui permet a Papote de se defaire d'un simple
+        retour arriere, comme un clavier de telephone, sans avoir a empecher
+        la touche d'agir.
+        """
+        return Remplacement(max(0, len(self.ecrire) - 1), self.avant,
+                            self.ecrire, self.regles)
 
     def __str__(self) -> str:
         return f"{self.avant.strip()} → {self.ecrire.strip()}"
@@ -163,7 +187,11 @@ class Frappe:
             return None
 
         self.texte = corrige + separateur
-        return Remplacement(len(efface), ecrit, efface)
+        # Seules comptent les regles qui ont touche la partie reecrite.
+        regles = tuple(dict.fromkeys(
+            c.regle for c in corrections if c.fin > commun
+        ))
+        return Remplacement(len(efface), ecrit, efface, regles)
 
 
 def _prefixe_commun(gauche: str, droite: str) -> int:
@@ -189,19 +217,39 @@ class EcouteClavier:
       s'efface des que le doute s'installe.
     """
 
+    # Duree pendant laquelle on se fie a la derniere application reconnue.
+    # Interroger Windows a chaque touche serait du gaspillage ; un dixieme de
+    # seconde de retard sur un changement de fenetre n'a aucune consequence.
+    MEMOIRE_APPLICATION = 0.5
+
     def __init__(self, frappe: Frappe, delai_oubli: float = 5.0,
                  sur_correction: Callable[[Remplacement], None] | None = None,
-                 profondeur_annulation: int = 20):
+                 sur_annulation: Callable[[Remplacement], None] | None = None,
+                 profondeur_annulation: int = 20,
+                 politique: politique_mod.Politique | None = None,
+                 application: Callable[[], str | None] | None = None,
+                 correcteur_pour: Callable[[str], object] | None = None):
         self.frappe = frappe
         self.delai_oubli = delai_oubli
         self.sur_correction = sur_correction
+        self.sur_annulation = sur_annulation
         self.annulables: list[Remplacement] = []
         self.profondeur_annulation = profondeur_annulation
 
+        self.politique = politique or politique_mod.Politique()
+        self.application = application or politique_mod.application_active
+        self.correcteur_pour = correcteur_pour
+
         self.actif = False
+        self.derniere_application: str | None = None
+        self._registre = politique_mod.PARLE
+        self._application_vue = 0.0
         self._en_ecriture = False
         self._touche_pendant_ecriture = False
         self._derniere_touche = 0.0
+        # La derniere correction, tant qu'aucune autre touche n'est venue :
+        # c'est elle qu'un retour arriere immediat defait.
+        self._defaisable: Remplacement | None = None
         self._branchement = None
 
     # -- cycle de vie -------------------------------------------------------
@@ -212,6 +260,7 @@ class EcouteClavier:
         if self._branchement is not None:
             return
         self.frappe.oublier()
+        self._defaisable = None
         self._branchement = keyboard.hook(self._sur_evenement)
         self.actif = True
 
@@ -230,6 +279,33 @@ class EcouteClavier:
 
     # -- reception des touches ----------------------------------------------
 
+    def _application(self) -> str | None:
+        """L'application au premier plan, sans harceler le systeme."""
+        maintenant = time.monotonic()
+        if maintenant - self._application_vue > self.MEMOIRE_APPLICATION:
+            self._application_vue = maintenant
+            try:
+                nouvelle = self.application()
+            except Exception:
+                nouvelle = None
+            if nouvelle != self.derniere_application:
+                # On a change de fenetre : la phrase en cours n'est plus la
+                # notre, et le registre peut changer avec elle.
+                self.frappe.oublier()
+                self._defaisable = None
+                self.derniere_application = nouvelle
+                self._adapter_registre(nouvelle)
+        return self.derniere_application
+
+    def _adapter_registre(self, application: str | None) -> None:
+        if self.correcteur_pour is None:
+            return
+        registre = self.politique.registre_ici(application)
+        if registre == self._registre:
+            return
+        self._registre = registre
+        self.frappe.correcteur = self.correcteur_pour(registre)
+
     def _sur_evenement(self, evenement) -> None:
         if not self.actif:
             return
@@ -242,13 +318,27 @@ class EcouteClavier:
         if getattr(evenement, "event_type", None) != "down":
             return
 
+        if not self.politique.corrige_ici(self._application()):
+            # Un terminal, un editeur de code : on regarde ailleurs.
+            self.frappe.oublier()
+            self._defaisable = None
+            return
+
         maintenant = time.monotonic()
         if maintenant - self._derniere_touche > self.delai_oubli:
             # Un silence : le curseur a pu aller ailleurs entre-temps.
             self.frappe.oublier()
+            self._defaisable = None
         self._derniere_touche = maintenant
 
+        if (getattr(evenement, "name", None) == "backspace"
+                and self._defaisable is not None):
+            self._defaire(self._defaisable)
+            return
+
         caractere = self._traduire(evenement)
+        # Toute autre touche referme la fenetre du retour arriere.
+        self._defaisable = None
         if caractere is None:
             return
 
@@ -305,12 +395,25 @@ class EcouteClavier:
     def _appliquer(self, remplacement: Remplacement) -> None:
         self.annulables.append(remplacement)
         del self.annulables[:-self.profondeur_annulation]
+        self._defaisable = remplacement
         if self.sur_correction is not None:
             self.sur_correction(remplacement)
-        # Taper depuis le fil du crochet clavier le bloquerait : on passe la
-        # main a un fil dedie.
+        self._taper_ailleurs(remplacement)
+
+    def _taper_ailleurs(self, remplacement: Remplacement) -> None:
+        """Taper depuis le fil du crochet clavier le bloquerait."""
         threading.Thread(target=self._taper, args=(remplacement,),
                          daemon=True).start()
+
+    def _defaire(self, remplacement: Remplacement) -> None:
+        """Annule la correction que le retour arriere vient d'entamer."""
+        self._defaisable = None
+        if self.annulables and self.annulables[-1] is remplacement:
+            self.annulables.pop()
+        self._taper_ailleurs(remplacement.inverse_apres_retour_arriere)
+        self.frappe.oublier()
+        if self.sur_annulation is not None:
+            self.sur_annulation(remplacement)
 
     def _taper(self, remplacement: Remplacement) -> None:
         import keyboard
@@ -337,8 +440,11 @@ class EcouteClavier:
         if not self.annulables:
             return None
         remplacement = self.annulables.pop()
+        self._defaisable = None
         self._taper(remplacement.inverse)
         # Le mot rétabli ne doit pas etre recorrige dans la foulee : on repart
         # de la phrase suivante.
         self.frappe.oublier()
+        if self.sur_annulation is not None:
+            self.sur_annulation(remplacement)
         return remplacement

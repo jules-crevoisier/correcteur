@@ -27,6 +27,8 @@ import re
 from dataclasses import dataclass
 from typing import Callable
 
+from .politique import PARLE, SOUTENU
+
 # ---------------------------------------------------------------------------
 # Decoupage en mots
 # ---------------------------------------------------------------------------
@@ -162,15 +164,18 @@ class Regle:
     nom: str
     message: str
     fonction: Fonction
+    # « tous » : la regle corrige une faute, quel que soit le ton.
+    # « soutenu » : elle releve le registre, ce qui ne se fait que sur demande.
+    registre: str = "tous"
 
 
 REGLES: list[Regle] = []
 
 
-def regle(nom: str, message: str):
+def regle(nom: str, message: str, registre: str = "tous"):
     """Enregistre une regle. L'ordre de declaration est l'ordre d'application."""
     def decorateur(fonction: Fonction) -> Fonction:
-        REGLES.append(Regle(nom, message, fonction))
+        REGLES.append(Regle(nom, message, fonction, registre))
         return fonction
     return decorateur
 
@@ -686,16 +691,21 @@ def _accord_determinant_nom(ctx: Contexte, i: int):
 # ---------------------------------------------------------------------------
 
 def analyser(texte: str, jetons: list[Jeton], lexique,
-             regles_ignorees: set[str] = frozenset()) -> list[Suggestion]:
+             regles_ignorees: set[str] = frozenset(),
+             registre: str = PARLE) -> list[Suggestion]:
     """Passe toutes les regles sur le texte et renvoie leurs propositions."""
     ctx = Contexte(texte, jetons, lexique)
+    applicables = [
+        r for r in REGLES
+        if r.registre == "tous" or (r.registre == SOUTENU and registre == SOUTENU)
+    ]
     suggestions: list[Suggestion] = []
     couvert: set[int] = set()
 
     for i in range(len(jetons)):
         if i in couvert:
             continue
-        for r in REGLES:
+        for r in applicables:
             if r.nom in regles_ignorees:
                 continue
             resultat = r.fonction(ctx, i)
@@ -713,3 +723,103 @@ def analyser(texte: str, jetons: list[Jeton], lexique,
             break
 
     return suggestions
+
+
+# ---------------------------------------------------------------------------
+# Le registre soutenu
+#
+# Ces regles-la ne corrigent aucune faute : elles remontent le ton. Elles
+# dorment donc tant qu'on ne les reclame pas, application par application ou
+# d'un reglage. C'est exactement ce que Papote refuse de faire par defaut.
+# ---------------------------------------------------------------------------
+
+# « que » n'y figure pas : « faut que j'y aille » n'est pas une negation.
+NEGATIONS = {"pas", "plus", "jamais", "rien", "personne", "guère", "aucun",
+             "aucune", "nul", "nulle"}
+
+# Pronoms qui s'intercalent entre le sujet et le verbe. Le « ne » se place
+# devant eux, pas devant le verbe : « il n'y a pas », jamais « il y n'a pas ».
+PRONOMS_INTERCALES = {"me", "te", "se", "le", "la", "les", "lui", "leur",
+                      "y", "en", "nous", "vous"}
+
+# Combien de mots peuvent separer le verbe de sa negation.
+PORTEE_NEGATION = 3
+
+# Sujets derriere lesquels on peut glisser un « ne » sans se tromper. Ni « y »
+# ni « en » n'y figurent : ce sont des pronoms intercales, et le « ne » se
+# place devant eux — « il n'y a pas », jamais « il y n'a pas ».
+SUJETS_NEGATION = PRONOMS_SUJETS | {"ça", "ce", "qui", "celui", "celle",
+                                    "chacun", "personne", "tout"}
+
+# Elisions qui portent le sujet : « j'ai » -> « je n'ai ».
+SUJETS_ELIDES = {"j'": "je", "c'": "ce", "ç'": "ce", "t'": "tu", "n'": None}
+
+VOYELLES = "aeiouyàâäéèêëîïôöùûüh"
+
+
+def _negation(verbe: str) -> str:
+    """« ne » ou « n' », selon ce que le verbe commence."""
+    return "n'" if verbe[:1].lower() in VOYELLES else "ne "
+
+
+@regle("NEGATION_COMPLETE",
+       "a l'ecrit soutenu, la negation garde son « ne »", registre=SOUTENU)
+def _negation_complete(ctx: Contexte, i: int):
+    """« j'ai pas » -> « je n'ai pas », « y a pas » -> « n'y a pas ».
+
+    La regle se declenche sur le premier mot qui suit le sujet, et non sur le
+    verbe : le « ne » se glisse devant les pronoms qui les separent.
+    """
+    debut = ctx.brut(i)
+    if not debut:
+        return None
+
+    elision, noyau = separer_clitique(debut.lower())
+    if not noyau:
+        return None
+
+    # Le sujet est-il juste avant, ou porte par l'elision du mot lui-meme ?
+    sujet_elide = SUJETS_ELIDES.get(elision) if elision else None
+    if sujet_elide is None and ctx.noyau(i - 1) not in SUJETS_NEGATION:
+        return None
+    if elision and sujet_elide is None:
+        return None
+
+    # Une negation suit-elle, a portee de vue ?
+    if not any(ctx.mot(i + n) in NEGATIONS for n in range(1, PORTEE_NEGATION + 1)):
+        return None
+
+    # Deja niee ?
+    if elision == "n'" or ctx.mot(i - 1) in ("ne", "n'"):
+        return None
+    if any(ctx.mot(i + n) in ("ne", "n'") or ctx.elision(i + n) == "n'"
+           for n in range(0, PORTEE_NEGATION)):
+        return None
+
+    if sujet_elide is not None:
+        return appliquer_casse(debut, f"{sujet_elide} {_negation(noyau)}{noyau}")
+    return f"{_negation(noyau)}{debut}"
+
+
+@regle("SUJET_IMPERSONNEL",
+       "a l'ecrit soutenu, le sujet impersonnel s'ecrit", registre=SOUTENU)
+def _sujet_impersonnel(ctx: Contexte, i: int):
+    """« faut y aller » -> « il faut y aller », « y a » -> « il y a »."""
+    if not ctx.debut_de_segment(i):
+        return None
+    mot = ctx.mot(i)
+    if mot == "faut":
+        return appliquer_casse(ctx.brut(i), "il faut")
+    if mot == "y" and ctx.mot(i + 1) in ("a", "avait", "aura", "aurait"):
+        return appliquer_casse(ctx.brut(i), "il y")
+    return None
+
+
+@regle("CA_CELA", "a l'ecrit soutenu, « ça » devient « cela »", registre=SOUTENU)
+def _ca_cela(ctx: Contexte, i: int):
+    if ctx.mot(i) != "ça" or ctx.elision(i):
+        return None
+    # « ça va ? » reste « ça va ? » : personne n'ecrit « cela va ? ».
+    if ctx.mot(i + 1) in ("va", "vas", "allait"):
+        return None
+    return appliquer_casse(ctx.brut(i), "cela")

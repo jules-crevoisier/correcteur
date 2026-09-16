@@ -31,7 +31,31 @@ REGLES_OPTIONNELLES = {
     "MAJUSCULE_PHRASE": False,
     # Ajoute le point final manquant.
     "PONCTUATION_POINT": False,
+    # Typographie francaise : « ... » -> « … », guillemets « », espaces
+    # insecables. Correct, mais mal rendu par certaines applications.
+    "TYPOGRAPHIE": False,
 }
+
+# ---------------------------------------------------------------------------
+# Abreviations depliees dans le registre soutenu.
+#
+# Elles ne sont pas des fautes : « bcp » est parfaitement clair entre amis.
+# Mais dans une lettre de motivation, elles n'ont rien a y faire. Cette table
+# ne sert donc que lorsque le registre soutenu est demande.
+# ---------------------------------------------------------------------------
+ABREVIATIONS_SOUTENUES = {
+    "bcp": "beaucoup", "dsl": "désolé", "slt": "salut", "bjr": "bonjour",
+    "bsr": "bonsoir", "stp": "s'il te plaît", "svp": "s'il vous plaît",
+    "pk": "pourquoi", "pq": "pourquoi", "pcq": "parce que", "pck": "parce que",
+    "prsq": "parce que", "cad": "c'est-à-dire", "qqn": "quelqu'un",
+    "qqch": "quelque chose", "rdv": "rendez-vous", "tjr": "toujours",
+    "tjrs": "toujours", "auj": "aujourd'hui", "ajd": "aujourd'hui",
+    "vrmt": "vraiment", "jms": "jamais", "ms": "mais", "ds": "dans",
+    "pr": "pour", "tt": "tout", "nrv": "énervé", "dispo": "disponible",
+    "jsp": "je ne sais pas", "askip": "à ce qu'il paraît",
+    "mrc": "merci", "bnj": "bonjour", "dac": "d'accord", "oki": "d'accord",
+    "nan": "non", "ouaip": "oui", "chuis": "je suis",
+    }
 
 # ---------------------------------------------------------------------------
 # Lexique a proteger.

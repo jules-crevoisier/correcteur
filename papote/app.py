@@ -10,8 +10,11 @@ import time
 import traceback
 from typing import Callable
 
+from . import apprentissage as apprentissage_mod
 from . import config as config_mod
-from . import demarrage, frappe as frappe_mod, lexique, maj, moteur, presse_papier
+from . import demarrage, frappe as frappe_mod, lexique, maj, moteur
+from . import politique as politique_mod
+from . import presse_papier
 from .raccourci import Raccourci, RaccourciInvalide
 
 
@@ -25,14 +28,22 @@ class Application:
         # etre redirige sans ramasser les messages de chargement.
         self.journal = journal or (lambda message: print(message, file=sys.stderr))
         self.actif = True
-        self._correcteur: moteur.Correcteur | None = None
+        self._correcteurs: dict[str, moteur.Correcteur] = {}
+        self._lexique: lexique.Lexique | None = None
         self._verrou = threading.Lock()
         self._ecoute: frappe_mod.EcouteClavier | None = None
+
+        self.politique = politique_mod.depuis_config(self.config)
+        self.journal_habitudes = apprentissage_mod.charger()
+        self._corrections_depuis_sauvegarde = 0
 
         # Les mots que l'utilisateur a retablis a la main : ce sont ceux qu'il
         # veut voir entrer dans son dictionnaire, et la fenetre les lui
         # proposera.
         self.mots_retablis: list[str] = []
+        # Les regles qu'il annule sans cesse : la fenetre proposera de les
+        # eteindre.
+        self.regles_contestees: list[str] = []
 
         # La version telechargee qui attend le prochain demarrage, s'il y en a.
         self.maj_prete: maj.Version | None = None
@@ -48,6 +59,7 @@ class Application:
             Raccourci(self.config.get("raccourci", ""), self.sur_raccourci),
             Raccourci(self.config.get("raccourci_annuler", ""), self.annuler),
             Raccourci(self.config.get("raccourci_fenetre", ""), self.ouvrir_fenetre),
+            Raccourci(self.config.get("raccourci_relecture", ""), self.relire),
         ]
 
     def _activer_raccourcis(self) -> None:
@@ -62,38 +74,87 @@ class Application:
         for raccourci in self.raccourcis:
             raccourci.desactiver()
 
-    def ouvrir_fenetre(self) -> None:
-        """Ouvre la fenetre dans un processus a part.
+    def _lancer(self, *arguments: str) -> bool:
+        """Relance Papote avec d'autres arguments, dans un processus a part.
 
         pystray occupe deja la boucle d'evenements du processus et tkinter
         exige la sienne ; les faire cohabiter est une source de blocages, un
         second processus n'en est pas une.
         """
-        commande = ([sys.executable, "--fenetre"] if getattr(sys, "frozen", False)
-                    else [sys.executable, "-m", "correcteur", "--fenetre"])
+        commande = ([sys.executable] if getattr(sys, "frozen", False)
+                    else [sys.executable, "-m", "papote"])
         try:
-            subprocess.Popen(commande)
+            subprocess.Popen(commande + list(arguments))
+            return True
         except OSError as e:
             self.notifier("Fenêtre", f"Ouverture impossible : {e}")
+            return False
+
+    def ouvrir_fenetre(self) -> None:
+        self._lancer("--fenetre")
+
+    def relire(self) -> None:
+        """Capture la selection et montre les corrections avant de les poser."""
+        threading.Thread(target=self._relire, daemon=True).start()
+
+    def _relire(self) -> None:
+        try:
+            texte = presse_papier.capturer_selection(
+                delai=self.config.get("delai_copie", 0.35)
+            )
+        except Exception:
+            self.journal(traceback.format_exc())
+            return
+
+        if not texte:
+            self.notifier("Rien à relire",
+                          "Sélectionnez d'abord le texte à relire.")
+            return
+
+        # On rend sa selection au presse-papiers : la capture l'avait videe.
+        try:
+            presse_papier.ecrire(texte)
+        except Exception:
+            pass
+
+        chemin = config_mod.dossier_config() / "relecture.txt"
+        try:
+            chemin.parent.mkdir(parents=True, exist_ok=True)
+            chemin.write_text(texte, encoding="utf-8")
+        except OSError as e:
+            self.notifier("Relecture", f"Impossible : {e}")
+            return
+
+        self._lancer("--relecture", str(chemin))
 
     # -- preparation --------------------------------------------------------
 
     @property
     def correcteur(self) -> moteur.Correcteur:
-        """Construit le moteur au premier usage.
+        """Le correcteur du registre par defaut."""
+        return self.correcteur_pour(self.config.get("registre", politique_mod.PARLE))
 
-        Lire le dictionnaire prend une fraction de seconde : le faire a la
-        demande permet a l'icone d'apparaitre immediatement au lancement.
+    def correcteur_pour(self, registre: str) -> moteur.Correcteur:
+        """Le correcteur d'un registre donne, construit au premier usage.
+
+        Les deux registres partagent le meme dictionnaire : seul le jeu de
+        regles change, et il ne coute rien.
         """
-        if self._correcteur is None:
-            with self._verrou:
-                if self._correcteur is None:
-                    self.journal("Chargement du dictionnaire...")
-                    correcteur = moteur.depuis_config(self.config)
-                    correcteur.prechauffer()
-                    self._correcteur = correcteur
-                    self.journal("Papote pret.")
-        return self._correcteur
+        if registre in self._correcteurs:
+            return self._correcteurs[registre]
+
+        with self._verrou:
+            if registre in self._correcteurs:
+                return self._correcteurs[registre]
+            if self._lexique is None:
+                self.journal("Chargement du dictionnaire...")
+                self._lexique = lexique.Lexique()
+                self._lexique.charger()
+                self.journal("Papote pret.")
+            self._correcteurs[registre] = moteur.depuis_config(
+                self.config, self._lexique, registre
+            )
+        return self._correcteurs[registre]
 
     @property
     def ecoute(self) -> frappe_mod.EcouteClavier:
@@ -103,6 +164,9 @@ class Application:
                 frappe_mod.Frappe(self.correcteur),
                 delai_oubli=self.config.get("delai_oubli", 5.0),
                 sur_correction=self._signaler_correction,
+                sur_annulation=self._signaler_annulation,
+                politique=self.politique,
+                correcteur_pour=self.correcteur_pour,
             )
         return self._ecoute
 
@@ -191,6 +255,93 @@ class Application:
     def _signaler_correction(self, remplacement) -> None:
         """Appelee a chaque correction automatique."""
         self.journal(f"[auto] {remplacement}")
+        if not self.config.get("apprentissage", True):
+            return
+        self.journal_habitudes.correction_appliquee(
+            remplacement.avant, remplacement.ecrire
+        )
+        self._corrections_depuis_sauvegarde += 1
+        if self._corrections_depuis_sauvegarde >= 20:
+            self.enregistrer_habitudes()
+
+    def _signaler_annulation(self, remplacement) -> None:
+        """Appelee quand une correction automatique est defaite.
+
+        C'est le moment le plus instructif de la journee : refuser une
+        correction, c'est en apprendre une.
+        """
+        mot = remplacement.avant.strip(" \t\n.,;:!?…")
+        if mot and mot not in self.mots_retablis:
+            self.mots_retablis.append(mot)
+            del self.mots_retablis[:-20]
+
+        if not self.config.get("apprentissage", True):
+            return
+
+        lecons = []
+        for regle in remplacement.regles or ("",):
+            lecons += self.journal_habitudes.correction_annulee(mot, regle)
+        for lecon in lecons:
+            self._appliquer_lecon(lecon)
+        self.enregistrer_habitudes()
+
+    def _appliquer_lecon(self, lecon) -> None:
+        """Tire les consequences d'un refus repete."""
+        if lecon.genre == "mot":
+            mots = list(self.config.get("mots_perso", []))
+            if lecon.valeur in mots:
+                return
+            mots.append(lecon.valeur)
+            self.config["mots_perso"] = mots
+            self._sauvegarder_config()
+            self.journal_habitudes.oublier_mot(lecon.valeur)
+            self._correcteurs.clear()
+            self.notifier("Papote a compris",
+                          f"« {lecon.valeur} » ne sera plus corrigé.")
+        else:
+            # Desactiver une regle est une decision plus lourde : on la
+            # propose, on ne la prend pas.
+            self.regles_contestees.append(lecon.valeur)
+            del self.regles_contestees[:-10]
+            self.notifier(
+                "Une règle vous dérange",
+                f"Vous avez annulé {lecon.compte} fois la règle {lecon.valeur}. "
+                f"Vous pouvez l'éteindre depuis la fenêtre.",
+            )
+
+    def enregistrer_habitudes(self) -> None:
+        self._corrections_depuis_sauvegarde = 0
+        try:
+            self.journal_habitudes.enregistrer(apprentissage_mod.chemin_journal())
+        except OSError:
+            pass
+
+    def _sauvegarder_config(self) -> None:
+        try:
+            config_mod.sauvegarder(self.config)
+        except OSError:
+            pass
+
+    # -- applications -------------------------------------------------------
+
+    @property
+    def application_courante(self) -> str | None:
+        """La derniere application dans laquelle on a tape."""
+        if self._ecoute is not None and self._ecoute.derniere_application:
+            return self._ecoute.derniere_application
+        return politique_mod.application_active()
+
+    def exclure_application(self, application: str) -> None:
+        """Ne plus corriger dans cette application."""
+        exclues = list(self.config.get("applications_exclues", []))
+        if application in exclues:
+            return
+        exclues.append(application)
+        self.config["applications_exclues"] = exclues
+        self.politique.exclure(application)
+        self._sauvegarder_config()
+        self.notifier("Papote se tait",
+                      f"Plus aucune correction automatique dans {application}.")
 
     def annuler(self) -> None:
         """Remet ce qui etait ecrit avant la derniere correction automatique."""
@@ -239,7 +390,8 @@ class Application:
             for cle in ("raccourci", "raccourci_annuler", "raccourci_fenetre")
         )
         self.config = config
-        self._correcteur = None
+        self._correcteurs.clear()
+        self.politique = politique_mod.depuis_config(config)
 
         if self._ecoute is not None:
             self._ecoute.desactiver()
@@ -333,6 +485,7 @@ class Application:
         self._desactiver_raccourcis()
         if self._ecoute is not None:
             self._ecoute.desactiver()
+        self.enregistrer_habitudes()
 
     def basculer(self) -> bool:
         """Met tout en pause, ou repart. Renvoie le nouvel etat."""

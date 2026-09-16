@@ -70,7 +70,7 @@ class InterfaceBarre:
         """Relance l'application : la version telechargee prend alors la place."""
         self.app.arreter()
         commande = ([sys.executable] if getattr(sys, "frozen", False)
-                    else [sys.executable, "-m", "correcteur"])
+                    else [sys.executable, "-m", "papote"])
         try:
             subprocess.Popen(commande)
         except OSError as e:
@@ -94,6 +94,24 @@ class InterfaceBarre:
 
     def _annuler(self, _icone, _element) -> None:
         self.app.annuler()
+
+    def _relire(self, _icone=None, _element=None) -> None:
+        self.app.relire()
+
+    def _exclure_application(self, icone, _element) -> None:
+        application = self.app.application_courante
+        if not application:
+            self.notifier("Applications",
+                          "Papote ne sait pas dans quel programme vous écrivez.")
+            return
+        self.app.exclure_application(application)
+        icone.title = self._titre()
+
+    def _libelle_exclusion(self) -> str:
+        application = self.app.application_courante
+        if not application:
+            return "Ne plus corriger dans cette application"
+        return f"Ne plus corriger dans {application}"
 
     def _basculer(self, icone, _element) -> None:
         actif = self.app.basculer()
@@ -168,6 +186,9 @@ class InterfaceBarre:
                 checked=lambda _: self.app.correction_auto,
             ),
             pystray.MenuItem("Annuler la dernière correction", self._annuler),
+            pystray.MenuItem("Relire la sélection…", self._relire),
+            pystray.MenuItem(lambda _: self._libelle_exclusion(),
+                             self._exclure_application),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem(
                 lambda _: self._libelle_maj(),
