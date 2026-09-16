@@ -374,3 +374,68 @@ def test_l_accord_reste_dans_le_temps(correcteur):
     """« les gens finit » est un present : sa 3e personne du pluriel aussi."""
     assert correcteur.corriger("les gens finit")[0] == "les gens finissent"
     assert correcteur.corriger("les gens pensait")[0] == "les gens pensaient"
+
+
+# ---------------------------------------------------------------------------
+# Les homophones dont les deux membres sont courants
+#
+# La table de `confusions.py` exige un ecart de frequence : elle ne peut rien
+# pour « ou » / « où » ni « du » / « dû », aussi employes l'un que l'autre.
+# Ceux-la demandent une regle, et une condition qui ne laisse pas de doute.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("avant, apres", [
+    # « ou » relie deux choix : il lui faut quelque chose des deux cotes.
+    ("tu vas ou", "tu vas où"),
+    ("il est ou le fichier", "il est où le fichier"),
+    ("je sais pas ou il est", "je sais pas où il est"),
+    ("la ou on s'est vus", "là où on s'est vus"),
+    ("ou est ce qu'on mange", "où est-ce qu'on mange"),
+    # Un article ne precede jamais un infinitif.
+    ("elle a du rentrer plus tot", "elle a dû rentrer plus tôt"),
+    ("j'aurais du le faire avant", "j'aurais dû le faire avant"),
+    # « sûr » se construit avec « de » ou « que » ; « sur » avec un lieu.
+    ("je suis sur de moi", "je suis sûr de moi"),
+    ("elle est sure de son coup", "elle est sûre de son coup"),
+    ("bien sur que oui", "bien sûr que oui"),
+    # Un adverbe ne gouverne pas d'infinitif.
+    ("on peu passer ce soir", "on peut passer ce soir"),
+    ("je peu pas venir", "je peux pas venir"),
+    ("peu etre demain alors", "peut-être demain alors"),
+    # « voire » est un adverbe : il ne suit pas un semi-auxiliaire.
+    ("faut voire avec lui", "faut voir avec lui"),
+    # Derriere un pronom sujet et devant un participe, c'est le pronominal.
+    ("il c'est trompé de jour", "il s'est trompé de jour"),
+    ("elle c'est bien débrouillée", "elle s'est bien débrouillée"),
+    # « ces » determine un nom pluriel ; devant « pas » il n'y en a pas.
+    ("ces pas faux ce que tu dis", "c'est pas faux ce que tu dis"),
+    ("ses pas normal ce truc", "c'est pas normal ce truc"),
+])
+def test_les_homophones_courants(correcteur, avant, apres):
+    assert correcteur.corriger(avant)[0] == apres
+
+
+@pytest.mark.parametrize("phrase", [
+    # Les memes paires, du bon cote. Une regle qui les abime coute plus
+    # cher qu'elle ne rapporte.
+    "café ou thé",
+    "oui ou non ça m'est égal",
+    "tu viens ou pas",
+    "un ou deux jours de plus",
+    "il a du pain et du fromage",
+    "j'ai du mal à y croire",
+    "il a du courage pour deux",
+    "je suis sur la route",
+    "pose ça sur la table",
+    "un peu plus tard dans la journée",
+    "il y a peu de chances",
+    "voire même beaucoup mieux",
+    "ses pas résonnaient dans le couloir",
+    "ces pas perdus ne servent à rien",
+    "lui c'est différent",
+    "ces livres sont à moi",
+    "il peut être là dans dix minutes",
+    "c'est noir ou blanc",
+])
+def test_les_homophones_courants_ne_s_inventent_pas(correcteur, phrase):
+    assert correcteur.corriger(phrase)[0] == phrase

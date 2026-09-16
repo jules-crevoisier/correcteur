@@ -29,7 +29,8 @@ from typing import Callable
 
 from .lexique import ACCENTUEES, accentue as accentue_mot, sans_accents
 from .morphologie import (
-    CONJUGUES, NOMS_PLURIELS, PARTICIPES, PARTICIPES_MASCULINS, Morphologie,
+    CONJUGUES, NOMS_PLURIELS, PARTICIPES, PARTICIPES_MASCULINS, PLURIELS,
+    Morphologie,
 )
 from . import confusions
 from .politique import PARLE, SOUTENU
@@ -867,6 +868,80 @@ def _s_est_c_est(ctx: Contexte, i: int):
     return None
 
 
+# Verbes apres lesquels un « ou » final designe forcement un lieu : « tu vas
+# ou ? », « il est ou ? ». La liste est fermee, et c'est ce qui la rend sure —
+# « tu viens ou ? » veut dire « ou pas ? », et « venir » n'y figure pas.
+VERBES_DE_LIEU = {
+    "est", "sont", "es", "suis", "sommes", "êtes", "était", "étaient",
+    "sera", "seront", "vas", "va", "vais", "allons", "allez", "vont",
+    "habite", "habites", "habitez", "habitent", "bosse", "bosses",
+    "travaille", "travailles", "travaillez", "mets", "met", "mettez",
+    "range", "ranges", "rangez", "trouve", "trouves", "trouvez", "trouvent",
+    "retrouve", "retrouves", "retrouvons", "retrouve-t-on", "pars", "part",
+    "partez", "partent", "passe", "passes", "passez", "passent",
+}
+
+# Verbes qui introduisent une interrogation indirecte : apres eux, « ou »
+# annonce un lieu et non un choix. « je sais pas ou il est ».
+VERBES_D_INTERROGATION = {
+    "sais", "sait", "savons", "savez", "savent", "su",
+    "dis", "dit", "dites", "disent", "demande", "demandes", "demandez",
+    "demandent", "demander", "voir", "vois", "voit", "voyez", "regarde",
+    "regardes", "regardez", "cherche", "cherches", "cherchez", "cherchent",
+    "oublie", "oublies", "oublié", "montre", "montres", "montrez",
+}
+
+
+@regle("C_EST_S_EST",
+       "apres un pronom sujet, « c'est » est le pronominal « s'est »")
+def _c_est_s_est(ctx: Contexte, i: int):
+    """« il c'est trompe » -> « il s'est trompé ».
+
+    La regle inverse existe deja. Celle-ci prend l'autre sens, et sa
+    condition est nette : derriere un pronom sujet et devant un participe,
+    « c'est » n'a aucune lecture — c'est le verbe pronominal.
+    """
+    if ctx.elision(i) != "c'" or ctx.noyau(i) != "est":
+        return None
+    if ctx.mot(i - 1) not in PRONOMS_SUJETS:
+        return None
+    # « il c'est bien passé » : un adverbe se glisse souvent entre
+    # l'auxiliaire et son participe.
+    suivant = ctx.mot(i + 1)
+    if suivant in ADVERBES_INTERCALES:
+        suivant = ctx.mot(i + 2)
+    if not suivant or not (ctx.morphologie.est(suivant, *PARTICIPES)
+                           or ctx.est_participe(suivant)):
+        return None
+    return appliquer_casse(ctx.brut(i), "s'est")
+
+
+@regle("CES_C_EST", "« ces » est un determinant ; ici c'est « c'est »")
+def _ces_c_est(ctx: Contexte, i: int):
+    """« ces pas grave » -> « c'est pas grave ».
+
+    « ces » et « ses » determinent un nom au pluriel. Devant « pas » suivi
+    d'un adjectif, il n'y a pas de nom du tout : c'est « c'est », et la
+    negation sans « ne » du francais parle.
+
+    « ses pas resonnaient dans le couloir » existe, lui — d'ou la condition
+    sur ce qui suit : un verbe conjugue derriere « pas » et la regle se
+    tait.
+    """
+    if ctx.mot(i) not in ("ces", "ses") or ctx.elision(i):
+        return None
+    if ctx.mot(i + 1) != "pas":
+        return None
+    apres = ctx.mot(i + 2)
+    # Derriere « c'est pas », ce qui suit est au singulier : « c'est pas
+    # grave », « c'est pas vrai ». Le moindre pluriel derriere — « ses pas
+    # résonnaient », « ses pas perdus » — et « pas » est bien le nom. Le mot
+    # doit aussi etre connu : « resonnaient » sans accent ne prouve rien.
+    if not ctx.morphologie.connait(apres) or ctx.morphologie.est(apres, *PLURIELS):
+        return None
+    return appliquer_casse(ctx.brut(i), "c'est")
+
+
 @regle("OU_ACCENT", "« où » designe le lieu ; « ou » relie deux choix")
 def _ou_accent(ctx: Contexte, i: int):
     if ctx.mot(i) != "ou":
@@ -874,19 +949,42 @@ def _ou_accent(ctx: Contexte, i: int):
     if ctx.mot(i + 1) in ("est", "sont", "es", "était", "étaient", "sera",
                           "seront", "ça"):
         return appliquer_casse(ctx.brut(i), "où")
-    # « là ou j'habite » : apres « là », c'est toujours le lieu.
-    if ctx.mot(i - 1) == "là":
+    # « là ou j'habite » : apres « là », c'est toujours le lieu. L'accent du
+    # « la » est encore a mettre : LA_ACCENT s'en charge, de son cote.
+    if ctx.mot(i - 1) in ("là", "la"):
         return appliquer_casse(ctx.brut(i), "où")
     # « je sais pas ou aller » : devant un infinitif, « ou » n'a pas de sens.
     suivant = ctx.mot(i + 1)
     if suivant.endswith(("er", "ir")) and ctx.connait(suivant) \
             and suivant not in MOTS_INVARIABLES:
         return appliquer_casse(ctx.brut(i), "où")
+    # « tu vas ou ? » : une conjonction ne ferme pas une phrase — il lui
+    # faut quelque chose des deux cotes. Reste a ecarter « tu viens ou ? »,
+    # qui veut dire « ou pas ? » : seuls les verbes de lieu comptent.
+    if ctx.fin_de_segment(i) and ctx.noyau(i - 1) in VERBES_DE_LIEU:
+        return appliquer_casse(ctx.brut(i), "où")
+    # « je sais pas ou il est » : apres un verbe d'interrogation indirecte,
+    # suivi d'un pronom ou d'un nom, c'est le lieu.
+    if ctx.mot(i + 1) in ("est-ce", "est") or (
+            ctx.mot(i + 1) in PRONOMS_SUJETS
+            and _verbe_d_interrogation_avant(ctx, i)):
+        return appliquer_casse(ctx.brut(i), "où")
+    # « il est ou le fichier » : la question posee a l'envers. Un verbe de
+    # lieu devant, un groupe nominal derriere — une conjonction n'aurait
+    # rien a relier.
+    if ctx.noyau(i - 1) in VERBES_DE_LIEU and ctx.mot(i + 1) in DETERMINANTS:
+        return appliquer_casse(ctx.brut(i), "où")
     return None
 
 
+def _verbe_d_interrogation_avant(ctx: "Contexte", i: int) -> bool:
+    """« je sais pas ou », « dis moi ou » : le verbe est a deux ou trois mots."""
+    return any(ctx.noyau(i - recul) in VERBES_D_INTERROGATION
+               for recul in (1, 2, 3))
+
+
 AVANT_LA_ACCENT = {
-    "suis", "es", "est", "sommes", "êtes", "sont", "étais", "était",
+    "être", "suis", "es", "est", "sommes", "êtes", "sont", "étais", "était",
     "serai", "sera", "reste", "restes", "restons", "restez", "viens",
     "vient", "venez", "arrive", "arrives", "jusque", "par", "celui",
     "celle", "ceux", "celles", "mets", "assieds",
@@ -914,12 +1012,150 @@ def _peut_suivre_un_article(ctx: "Contexte", i: int) -> bool:
     return ctx.morphologie.au_pluriel(mot) is not None
 
 
+def _infinitif_apres(ctx: "Contexte", i: int, sauts: int = 2) -> bool:
+    """Un infinitif suit, un pronom complement eventuellement intercale.
+
+    « il a du partir », « il a du le faire » : entre l'auxiliaire et
+    l'infinitif se glissent « le », « la », « les », « en », « y ».
+    """
+    for saut in range(1, sauts + 1):
+        mot = ctx.mot(i + saut)
+        if not mot:
+            return False
+        if ctx.morphologie.est(mot, "inf"):
+            return True
+        if mot not in PRONOMS_INTERCALES and mot not in ADVERBES_DE_NEGATION:
+            return False
+    return False
+
+
+# « je peu pas venir » : la negation se glisse entre le verbe et son
+# infinitif, et le « ne » manque — c'est du francais parle, pas une faute.
+ADVERBES_DE_NEGATION = {"pas", "plus", "jamais", "rien", "que", "qu'"}
+
+
+@regle("DU_ACCENT", "« dû » est le participe de « devoir »")
+def _du_accent(ctx: Contexte, i: int):
+    """« il a du partir » -> « il a dû partir ».
+
+    « du » est un article, « dû » le participe de « devoir ». Les deux sont
+    trop courants pour se departager sur la frequence : c'est l'infinitif
+    qui suit qui tranche, car un article n'en precede jamais.
+    """
+    if ctx.mot(i) != "du" or ctx.elision(i):
+        return None
+    if ctx.noyau(i - 1) not in AUXILIAIRES_AVOIR:
+        return None
+    if not _infinitif_apres(ctx, i):
+        return None
+    return appliquer_casse(ctx.brut(i), "dû")
+
+
+# Formes de « avoir » : elles seules annoncent le participe « dû ».
+AUXILIAIRES_AVOIR = {
+    "ai", "as", "a", "avons", "avez", "ont",
+    "avais", "avait", "avions", "aviez", "avaient",
+    "aurai", "auras", "aura", "aurons", "aurez", "auront",
+    "aurais", "aurait", "aurions", "auriez", "auraient",
+}
+
+
+@regle("SUR_ACCENT", "« sûr » veut dire certain ; « sur » est la preposition")
+def _sur_accent(ctx: Contexte, i: int):
+    """« je suis sur de moi » -> « sûr », « bien sur » -> « bien sûr ».
+
+    La preposition « sur » introduit un lieu ; l'adjectif « sûr » se
+    construit avec « de » ou « que ». C'est cette construction qui tranche,
+    et elle ne laisse pas de place au doute : « sur de » n'existe pas.
+    """
+    mot = ctx.mot(i)
+    if mot not in ("sur", "sure", "surs", "sures") or ctx.elision(i):
+        return None
+    accentue = {"sur": "sûr", "sure": "sûre",
+                "surs": "sûrs", "sures": "sûres"}[mot]
+
+    # « bien sur, on y va » : la locution, qui ne mene nulle part.
+    if mot == "sur" and ctx.mot(i - 1) == "bien" and (
+            ctx.fin_de_segment(i) or ctx.mot(i + 1) in ("que", "qu'")):
+        return appliquer_casse(ctx.brut(i), accentue)
+
+    # « je suis sur de moi », « t'es sur que c'est bon ».
+    if ctx.noyau(i - 1) not in AUXILIAIRES_ETRE:
+        return None
+    if ctx.mot(i + 1) not in ("de", "d'", "que", "qu'") \
+            and ctx.elision(i + 1) not in ("d'", "qu'"):
+        return None
+    return appliquer_casse(ctx.brut(i), accentue)
+
+
+AUXILIAIRES_ETRE = {
+    "suis", "es", "est", "sommes", "êtes", "sont",
+    "étais", "était", "étions", "étiez", "étaient",
+    "serai", "seras", "sera", "serons", "serez", "seront",
+    "serais", "serait", "seriez", "seraient", "sois", "soit", "soyez",
+}
+
+
+@regle("PEU_PEUT", "« peut » est le verbe pouvoir ; « peu » est l'adverbe")
+def _peu_peut(ctx: Contexte, i: int):
+    """« il peu venir » -> « il peut venir ».
+
+    PEUT_PEU traite le sens inverse. Ici c'est l'infinitif qui suit qui
+    fait du « peu » un verbe : un adverbe n'en gouverne jamais.
+    """
+    if ctx.mot(i) != "peu" or ctx.elision(i):
+        return None
+    sujet = sujet_avant(ctx, i)
+    formes = {"je": "peux", "tu": "peux", "il": "peut", "elle": "peut",
+              "on": "peut", "ça": "peut"}
+    accorde = formes.get(sujet)
+    if accorde is None or not _infinitif_apres(ctx, i):
+        return None
+    return appliquer_casse(ctx.brut(i), accorde)
+
+
+@regle("PEUT_ETRE", "« peut-être » s'ecrit avec un trait d'union")
+def _peut_etre(ctx: Contexte, i: int):
+    """« peu etre que oui » -> « peut-être que oui ».
+
+    « peu être » n'existe pas : l'adverbe « peu » ne gouverne pas
+    d'infinitif. Sauf derriere un sujet, ou « il peut être là » est correct
+    et c'est PEU_PEUT qui s'en occupe.
+    """
+    if ctx.mot(i) != "peu" or ctx.separateur(i) != " ":
+        return None
+    if ctx.mot(i + 1) not in ("etre", "être"):
+        return None
+    if sujet_avant(ctx, i) in PRONOMS_SUJETS:
+        return None
+    return (appliquer_casse(ctx.brut(i), "peut-être"), 2)
+
+
+@regle("VOIRE_VOIR", "« voire » veut dire « et même » ; ici c'est « voir »")
+def _voire_voir(ctx: Contexte, i: int):
+    """« je vais voire » -> « je vais voir ».
+
+    « voire » est un adverbe : il ne se conjugue pas, ne suit pas un
+    semi-auxiliaire et ne se laisse pas introduire par « de » ou « a ».
+    """
+    if ctx.mot(i) != "voire" or ctx.elision(i):
+        return None
+    precedent = ctx.noyau(i - 1)
+    if precedent not in SEMI_AUXILIAIRES and precedent not in ("de", "d'", "à"):
+        return None
+    return appliquer_casse(ctx.brut(i), "voir")
+
+
 @regle("LA_ACCENT", "« là » designe le lieu ; « la » est un article")
 def _la_accent(ctx: Contexte, i: int):
     if ctx.mot(i) != "la":
         return None
     if ctx.mot(i + 1) == "bas" and ctx.separateur(i) == " ":
         return (appliquer_casse(ctx.brut(i), "là-bas"), 2)
+    # « la ou j'habite » : l'article ne precede jamais une conjonction, et
+    # les deux mots se corrigent ensemble.
+    if ctx.mot(i + 1) in ("ou", "où") and ctx.separateur(i) == " ":
+        return (appliquer_casse(ctx.brut(i), "là où"), 2)
     if ctx.noyau(i - 1) in AVANT_LA_ACCENT and not _peut_suivre_un_article(ctx, i + 1):
         return appliquer_casse(ctx.brut(i), "là")
     return None
@@ -1169,6 +1405,10 @@ NOMBRES_PLURIELS = {"deux", "trois", "quatre", "cinq", "six", "sept", "huit",
 # dictionnaire — « les avants » d'une equipe, « les contres » au bridge — et
 # les regles d'accord les prendraient pour des adjectifs.
 MOTS_INVARIABLES = {
+    # « pas » est aussi un nom — « des pas dans le couloir » — mais c'est
+    # mille fois la negation. Le compter comme un pluriel ferait accorder
+    # ce qui le suit : « c'est pas vrai » deviendrait « pas vrais ».
+    "pas",
     "avant", "après", "contre", "entre", "sous", "sur", "dans", "vers",
     "chez", "depuis", "pendant", "malgré", "selon", "sauf", "comme", "sans",
     "avec", "pour", "par", "de", "du", "des", "à", "au", "aux", "en", "que",

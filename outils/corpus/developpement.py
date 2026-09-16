@@ -108,6 +108,31 @@ FAUTES = [
     ("ils sont national", "ils sont nationaux", "accord"),
     ("un chevaux blanc", "un cheval blanc", "accord"),
 
+    # -- homophones : les paires dont les deux membres sont trop courants
+    #    pour se departager sur la frequence. Seul le contexte tranche.
+    ("je sais pas ou il est", "je sais pas où il est", "homophone"),
+    ("tu vas ou", "tu vas où", "homophone"),
+    ("il est ou le fichier", "il est où le fichier", "homophone"),
+    ("la ou on s'est vus", "là où on s'est vus", "homophone"),
+    ("ou est ce qu'on mange", "où est-ce qu'on mange", "homophone"),
+    ("elle a du rentrer plus tot", "elle a dû rentrer plus tôt",
+     "homophone"),
+    ("j'aurais du le faire avant", "j'aurais dû le faire avant",
+     "homophone"),
+    ("je suis sur de moi", "je suis sûr de moi", "homophone"),
+    ("elle est sure de son coup", "elle est sûre de son coup", "homophone"),
+    ("bien sur que oui", "bien sûr que oui", "homophone"),
+    ("on peu passer ce soir", "on peut passer ce soir", "homophone"),
+    ("je peu pas venir", "je peux pas venir", "homophone"),
+    ("peu etre demain alors", "peut-être demain alors", "homophone"),
+    ("faut voire avec lui", "faut voir avec lui", "homophone"),
+    ("il c'est trompé de jour", "il s'est trompé de jour", "homophone"),
+    ("elle c'est bien débrouillée", "elle s'est bien débrouillée",
+     "homophone"),
+    ("ces pas faux ce que tu dis", "c'est pas faux ce que tu dis",
+     "homophone"),
+    ("ses pas normal ce truc", "c'est pas normal ce truc", "homophone"),
+
     # -- des mots francais que la protection anglaise interdisait d'accentuer
     ("une decision importante", "une décision importante", "accent"),
     ("le president a parle", "le président a parlé", "accent"),
@@ -209,6 +234,25 @@ INTOUCHABLES = [
     # demandent des corrections opposees : « les chiens courts » ou « les
     # chiens courent ». Devant ce partage, le correcteur n'invente pas.
     "les chiens court vite",
+    # Les deux lectures de chaque paire d'homophones, cote « ne pas
+    # toucher ». Une regle qui les abime coute plus cher qu'elle ne rapporte.
+    "café ou thé",
+    "oui ou non ça m'est égal",
+    "tu viens ou pas",
+    "un ou deux jours de plus",
+    "il a du pain et du fromage",
+    "j'ai du mal à y croire",
+    "il a du courage pour deux",
+    "je suis sur la route",
+    "pose ça sur la table",
+    "un peu plus tard dans la journée",
+    "il y a peu de chances",
+    "voire même beaucoup mieux",
+    "ses pas résonnaient dans le couloir",
+    "ces pas perdus ne servent à rien",
+    "lui c'est différent",
+    "ces livres sont à moi",
+    "il peut être là dans dix minutes",
     # La fin de phrase se reconnait a une ponctuation, pas a une espace.
     "c'est la vie",
     "c'est la fin",
