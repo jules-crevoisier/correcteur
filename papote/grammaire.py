@@ -74,6 +74,11 @@ def separer_clitique(mot: str) -> tuple[str, str]:
 
 PRONOMS_SUJETS = {"je", "tu", "il", "elle", "on", "nous", "vous", "ils", "elles"}
 
+# Pronoms qui s'intercalent entre le sujet et le verbe. Le « ne » se place
+# devant eux, pas devant le verbe : « il n'y a pas », jamais « il y n'a pas ».
+PRONOMS_INTERCALES = {"me", "te", "se", "le", "la", "les", "lui", "leur",
+                      "y", "en", "nous", "vous"}
+
 # Sujets a la 3e personne du singulier : devant eux, « et » est un « est ».
 SUJETS_SINGULIER = {
     "il", "elle", "on", "ça", "ce", "qui", "celui", "celle", "chacun",
@@ -111,6 +116,14 @@ SEMI_AUXILIAIRES = {
 }
 
 # Participes irreguliers frequents, que leur terminaison ne trahit pas.
+# Adverbes qui se glissent entre l'auxiliaire et le participe :
+# « elle a beaucoup travaillé ».
+ADVERBES_INTERCALES = {
+    "beaucoup", "bien", "trop", "peu", "déjà", "jamais", "toujours", "encore",
+    "vraiment", "presque", "enfin", "souvent", "rarement", "tellement",
+    "même", "aussi", "pas", "plus", "rien", "tout",
+}
+
 PARTICIPES_IRREGULIERS = {
     "dit", "fait", "mis", "pris", "vu", "su", "pu", "voulu", "dû", "eu",
     "été", "venu", "tenu", "reçu", "connu", "cru", "bu", "lu", "écrit",
@@ -248,6 +261,94 @@ class Contexte:
         return False
 
 
+# Terminaisons du present et du participe des verbes du 1er groupe, de la
+# plus longue a la plus courte : « mangeons » avant « mange ».
+TERMINAISONS_PREMIER_GROUPE = ("ent", "ons", "ez", "ées", "és", "ée", "es",
+                               "é", "e")
+
+
+# Formes des verbes irreguliers les plus courants. Le dictionnaire en
+# rattache certaines a un verbe du 1er groupe homographe — « sommes » a
+# « sommer », « fait » a « faiter » — et la conjugaison automatique les
+# abimerait : « nous sommes » deviendrait « nous sommons ».
+FORMES_INTOUCHABLES = {
+    "suis", "es", "est", "somme", "sommes", "êtes", "sont", "été",
+    "étais", "était", "étions", "étiez", "étaient",
+    "ai", "as", "a", "avons", "avez", "ont", "eu",
+    "avais", "avait", "avions", "aviez", "avaient",
+    "vais", "vas", "va", "allons", "allez", "vont",
+    "fais", "fait", "faisons", "faites", "font", "faisais", "faisait",
+    "dis", "dit", "disons", "dites", "disent",
+    "peux", "peut", "pouvons", "pouvez", "peuvent",
+    "veux", "veut", "voulons", "voulez", "veulent",
+    "dois", "doit", "devons", "devez", "doivent",
+    "sais", "sait", "savons", "savez", "savent",
+    "vois", "voit", "voyons", "voyez", "voient",
+    "viens", "vient", "venons", "venez", "viennent",
+    "prends", "prend", "prenons", "prenez", "prennent",
+    "mets", "met", "mettons", "mettez", "mettent",
+    "sors", "sort", "sortons", "sortez", "sortent",
+    "pars", "part", "partons", "partez", "partent",
+    "lis", "lit", "lisons", "lisez", "lisent",
+    "écris", "écrit", "écrivons", "écrivez", "écrivent",
+}
+
+
+def infinitif_premier_groupe(ctx: "Contexte", mot: str) -> str | None:
+    """L'infinitif dont `mot` serait une forme, s'il est du 1er groupe.
+
+    « mange », « mangeons », « mangé » -> « manger ». Le dictionnaire tranche :
+    on ne renvoie un infinitif que s'il existe vraiment, ce qui ecarte
+    « rouge » (« rouger » n'existe pas) sans avoir a le savoir d'avance.
+    """
+    minuscule = mot.lower()
+    if minuscule in FORMES_INTOUCHABLES:
+        return None
+    for terminaison in TERMINAISONS_PREMIER_GROUPE:
+        if not minuscule.endswith(terminaison):
+            continue
+        radical = minuscule[: len(minuscule) - len(terminaison)]
+        if len(radical) < 2:
+            continue
+        candidats = [radical + "er"]
+        if radical.endswith(("e", "è")):
+            # « mangeons » -> « manger », « achète » -> « acheter »
+            candidats.append(radical[:-1] + "er")
+        for candidat in candidats:
+            if ctx.connait(candidat):
+                return candidat
+    return None
+
+
+def conjuguer(ctx: "Contexte", infinitif: str, terminaison: str) -> str | None:
+    """« manger » + « ons » -> « mangeons ». None si la forme n'existe pas.
+
+    Les irregularites orthographiques du 1er groupe — le « e » de
+    « mangeons », l'accent de « achète » — se resolvent en proposant les
+    variantes au dictionnaire plutot qu'en les codant.
+    """
+    radical = infinitif[:-2]
+    for candidat in (radical + terminaison,
+                     radical + "e" + terminaison,
+                     radical + "è" + terminaison):
+        if ctx.connait(candidat):
+            return candidat
+    return None
+
+
+def sujet_avant(ctx: "Contexte", i: int) -> str:
+    """Le sujet du verbe en position i, pronom complement saute au besoin.
+
+    « ils se parlent », « je me souviens » : entre le sujet et son verbe, un
+    pronom s'intercale souvent. Le chercher un mot plus loin evite d'avoir a
+    l'ecrire dans chaque regle.
+    """
+    precedent = ctx.noyau(i - 1)
+    if precedent in PRONOMS_INTERCALES and ctx.noyau(i - 2) in PRONOMS_SUJETS:
+        return ctx.noyau(i - 2)
+    return precedent
+
+
 def appliquer_casse(modele: str, mot: str) -> str:
     """Garde la majuscule du mot d'origine : « On » -> « Ont »."""
     if modele[:1].isupper():
@@ -292,7 +393,7 @@ ACCORDS_SUJET = {
 @regle("ACCORD_SUJET_VERBE",
        "le verbe s'accorde avec « je » ou « tu »")
 def _accord_sujet_verbe(ctx: Contexte, i: int):
-    formes = ACCORDS_SUJET.get(ctx.noyau(i - 1))
+    formes = ACCORDS_SUJET.get(sujet_avant(ctx, i))
     if formes is None:
         return None
     correcte = formes.get(ctx.mot(i))
@@ -305,7 +406,7 @@ def _accord_sujet_verbe(ctx: Contexte, i: int):
        "avec « je » ou « tu », le verbe se termine par « -s »")
 def _accord_je_tu_s(ctx: Contexte, i: int):
     mot = ctx.mot(i)
-    if ctx.noyau(i - 1) not in ("je", "tu") or ctx.elision(i):
+    if sujet_avant(ctx, i) not in ("je", "tu") or ctx.elision(i):
         return None
     if mot in PRONOMS_COMPLEMENTS:
         return None
@@ -313,6 +414,9 @@ def _accord_je_tu_s(ctx: Contexte, i: int):
         accorde = mot + "s"
     elif mot.endswith("t"):
         accorde = mot[:-1] + "s"
+    elif not ctx.connait(mot) and mot not in MOTS_INVARIABLES:
+        # « tu vien » : le mot n'existe pas, mais « viens » oui.
+        accorde = mot + "s"
     else:
         return None
     if ctx.connait(accorde):
@@ -323,7 +427,7 @@ def _accord_je_tu_s(ctx: Contexte, i: int):
 @regle("ACCORD_TU_S", "avec « tu », le verbe se termine par « -s »")
 def _accord_tu_s(ctx: Contexte, i: int):
     mot = ctx.mot(i)
-    if ctx.noyau(i - 1) != "tu" or ctx.elision(i):
+    if sujet_avant(ctx, i) != "tu" or ctx.elision(i):
         return None
     if not mot.endswith("e") or mot in PRONOMS_COMPLEMENTS:
         return None
@@ -332,10 +436,108 @@ def _accord_tu_s(ctx: Contexte, i: int):
     return None
 
 
+# Les auxiliaires ne se conjuguent pas comme les autres : « nous somme »
+# doit devenir « nous sommes », surement pas « nous sommons ».
+AUXILIAIRES_NOUS_VOUS = {
+    "nous": {"somme": "sommes", "suis": "sommes", "est": "sommes",
+             "sont": "sommes", "etes": "sommes", "été": "sommes",
+             "ai": "avons", "as": "avons", "a": "avons", "ont": "avons",
+             "vais": "allons", "va": "allons", "vas": "allons",
+             "étais": "étions", "était": "étions", "étaient": "étions"},
+    "vous": {"ete": "êtes", "été": "êtes", "etes": "êtes", "est": "êtes",
+             "suis": "êtes", "sont": "êtes", "sommes": "êtes",
+             "ai": "avez", "as": "avez", "a": "avez", "ont": "avez",
+             "vais": "allez", "va": "allez", "vas": "allez",
+             "étais": "étiez", "était": "étiez", "étaient": "étiez"},
+}
+
+
+@regle("ACCORD_AUXILIAIRE_NOUS_VOUS",
+       "l'auxiliaire s'accorde avec « nous » ou « vous »")
+def _accord_auxiliaire_nous_vous(ctx: Contexte, i: int):
+    """« nous somme » -> « nous sommes », « vous ete » -> « vous êtes »."""
+    formes = AUXILIAIRES_NOUS_VOUS.get(ctx.noyau(i - 1))
+    if formes is None or ctx.elision(i):
+        return None
+    # « il nous a dit » : « nous » y est complement.
+    if ctx.mot(i - 2) in PRONOMS_SUJETS:
+        return None
+    correcte = formes.get(ctx.mot(i))
+    if correcte is None:
+        return None
+    return appliquer_casse(ctx.brut(i), correcte)
+
+
+@regle("ACCORD_NOUS_VOUS",
+       "le verbe s'accorde avec « nous » ou « vous »")
+def _accord_nous_vous(ctx: Contexte, i: int):
+    """« nous mange » -> « nous mangeons », « vous parle » -> « vous parlez »."""
+    terminaisons = {"nous": "ons", "vous": "ez"}
+    terminaison = terminaisons.get(sujet_avant(ctx, i))
+    if terminaison is None or ctx.elision(i):
+        return None
+
+    # « il nous parle » : « nous » y est complement, le verbe a raison.
+    if ctx.mot(i - 2) in PRONOMS_SUJETS:
+        return None
+
+    mot = ctx.mot(i)
+    if mot in PRONOMS_COMPLEMENTS or mot.endswith(terminaison):
+        return None
+
+    infinitif = infinitif_premier_groupe(ctx, mot)
+    if infinitif is None:
+        return None
+    accorde = conjuguer(ctx, infinitif, terminaison)
+    if accorde is None or accorde == mot:
+        return None
+    return appliquer_casse(ctx.brut(i), accorde)
+
+
+@regle("ACCORD_IL_SINGULIER",
+       "avec « il » ou « elle », le verbe reste au singulier")
+def _accord_il_singulier(ctx: Contexte, i: int):
+    """« il mangent » -> « il mange »."""
+    if sujet_avant(ctx, i) not in ("il", "elle", "on") or ctx.elision(i):
+        return None
+    mot = ctx.mot(i)
+    if not mot.endswith("ent"):
+        return None
+
+    infinitif = infinitif_premier_groupe(ctx, mot)
+    if infinitif is None:
+        return None
+    accorde = conjuguer(ctx, infinitif, "e")
+    if accorde is None or accorde == mot:
+        return None
+    return appliquer_casse(ctx.brut(i), accorde)
+
+
+@regle("ACCORD_IMPARFAIT",
+       "a l'imparfait, « je » et « tu » prennent « -ais », « il » prend « -ait »")
+def _accord_imparfait(ctx: Contexte, i: int):
+    """« il mangeais » -> « il mangeait », « je mangeait » -> « je mangeais »."""
+    sujet = sujet_avant(ctx, i)
+    mot = ctx.mot(i)
+    if ctx.elision(i) or mot in FORMES_INTOUCHABLES:
+        return None
+
+    if sujet in ("il", "elle", "on") and mot.endswith("ais"):
+        accorde = mot[:-3] + "ait"
+    elif sujet in ("je", "tu") and mot.endswith("ait"):
+        accorde = mot[:-3] + "ais"
+    else:
+        return None
+
+    if not ctx.connait(accorde):
+        return None
+    return appliquer_casse(ctx.brut(i), accorde)
+
+
 @regle("ACCORD_ILS_ENT", "avec « ils », le verbe se termine par « -nt »")
 def _accord_ils_ent(ctx: Contexte, i: int):
     mot = ctx.mot(i)
-    if ctx.mot(i - 1) not in PRONOMS_PLURIEL or ctx.elision(i):
+    if sujet_avant(ctx, i) not in PRONOMS_PLURIEL or ctx.elision(i):
         return None
     if not mot.endswith("e") or mot in PRONOMS_COMPLEMENTS:
         return None
@@ -414,10 +616,17 @@ AVANT_A_ACCENT = {
 # Mots apres lesquels « a » ne peut etre que la preposition « à ».
 APRES_A_ACCENT = {
     "côté", "cause", "travers", "propos", "peine", "nouveau", "priori",
-    "part", "moitié", "force", "fond", "volonté", "moi", "toi", "plus",
-    "demain", "bientôt", "jamais", "toute", "nouveau", "condition", "défaut",
-    "domicile", "l'heure", "l'aise", "l'avance", "l'époque", "l'écart",
+    "part", "moitié", "force", "fond", "volonté", "moi", "toi",
+    "condition", "défaut", "domicile", "l'heure", "l'aise", "l'avance",
+    "l'époque", "l'écart",
 }
+
+# « à plus ! », « à demain ! » : ceux-la ne valent qu'en fin de phrase.
+# « il n'y a plus rien » est un tout autre « a ».
+APRES_A_ACCENT_FINAL = {"plus", "demain", "bientôt", "toute", "tantôt"}
+
+# Devant ces mots, « a » est le verbe avoir : « il a », « on n'a », « y a ».
+AVANT_A_VERBE = PRONOMS_SUJETS | {"ça", "ce", "qui", "y", "en", "n'", "qu'"}
 
 
 @regle("A_ACCENT", "ici « a » est la preposition « à »")
@@ -426,7 +635,14 @@ def _a_accent(ctx: Contexte, i: int):
         return None
     if ctx.noyau(i - 1) in AVANT_A_ACCENT or ctx.mot(i - 1) in AVANT_A_ACCENT:
         return appliquer_casse(ctx.brut(i), "à")
+
+    # Un sujet juste avant, et « a » redevient le verbe avoir.
+    if ctx.noyau(i - 1) in AVANT_A_VERBE or ctx.elision(i - 1) == "n'":
+        return None
+
     if ctx.mot(i + 1) in APRES_A_ACCENT:
+        return appliquer_casse(ctx.brut(i), "à")
+    if ctx.mot(i + 1) in APRES_A_ACCENT_FINAL and ctx.fin_de_segment(i + 1):
         return appliquer_casse(ctx.brut(i), "à")
     return None
 
@@ -452,7 +668,12 @@ def _ils_ont(ctx: Contexte, i: int):
 
 @regle("ILS_SONT", "« ils son » : le verbe etre s'ecrit « sont »")
 def _ils_sont(ctx: Contexte, i: int):
-    if ctx.mot(i) == "son" and ctx.mot(i - 1) in PRONOMS_PLURIEL:
+    if ctx.mot(i) != "son":
+        return None
+    sujet_pluriel = (ctx.mot(i - 1) in PRONOMS_PLURIEL
+                     or (_est_pluriel(ctx, ctx.mot(i - 1))
+                         and _determinant_pluriel(ctx, i - 2)))
+    if sujet_pluriel:
         return appliquer_casse(ctx.brut(i), "sont")
     return None
 
@@ -533,6 +754,14 @@ def _ou_accent(ctx: Contexte, i: int):
     if ctx.mot(i + 1) in ("est", "sont", "es", "était", "étaient", "sera",
                           "seront", "ça"):
         return appliquer_casse(ctx.brut(i), "où")
+    # « là ou j'habite » : apres « là », c'est toujours le lieu.
+    if ctx.mot(i - 1) == "là":
+        return appliquer_casse(ctx.brut(i), "où")
+    # « je sais pas ou aller » : devant un infinitif, « ou » n'a pas de sens.
+    suivant = ctx.mot(i + 1)
+    if suivant.endswith(("er", "ir")) and ctx.connait(suivant) \
+            and suivant not in MOTS_INVARIABLES:
+        return appliquer_casse(ctx.brut(i), "où")
     return None
 
 
@@ -605,18 +834,67 @@ def _est_ce(ctx: Contexte, i: int):
     return (appliquer_casse(ctx.brut(i), "est-ce"), 2)
 
 
+def _auxiliaire_avant(ctx: Contexte, i: int) -> bool:
+    """Un auxiliaire precede-t-il, adverbe intercale ou non ?
+
+    « elle a beaucoup travaillé » : l'adverbe ne coupe pas le lien entre
+    l'auxiliaire et son participe.
+    """
+    if ctx.noyau(i - 1) in AUXILIAIRES:
+        return True
+    return (ctx.mot(i - 1) in ADVERBES_INTERCALES
+            and ctx.noyau(i - 2) in AUXILIAIRES)
+
+
 @regle("PARTICIPE_APRES_AUXILIAIRE",
        "apres l'auxiliaire, le verbe prend « -é » et non « -er »")
 def _participe_apres_auxiliaire(ctx: Contexte, i: int):
     mot = ctx.mot(i)
     if not mot.endswith("er") or ctx.elision(i):
         return None
-    if ctx.noyau(i - 1) not in AUXILIAIRES:
+    if not _auxiliaire_avant(ctx, i):
         return None
     participe = mot[:-2] + "é"
     if ctx.connait(participe):
         return appliquer_casse(ctx.brut(i), participe)
     return None
+
+
+@regle("PARTICIPE_SANS_ACCENT",
+       "apres l'auxiliaire, le participe prend son accent")
+def _participe_sans_accent(ctx: Contexte, i: int):
+    """« j'ai mange » -> « j'ai mangé ».
+
+    L'accent oublie ne se voit pas du dictionnaire : « mange » est un mot.
+    Seul l'auxiliaire qui precede trahit le participe.
+
+    Reste un piege : « j'ai envie » n'est pas « j'ai envié ». On s'appuie sur
+    la frequence — un participe bien plus rare que le mot ecrit est sans
+    doute un nom qui lui ressemble.
+    """
+    if ctx.noyau(i - 1) not in AUXILIAIRES or ctx.elision(i):
+        return None
+
+    mot = ctx.mot(i)
+    if not mot.endswith("e") or mot in MOTS_INVARIABLES:
+        return None
+
+    # « contente » est le feminin de « content », pas une forme de
+    # « contenter » : quand le mot prive de son « e » existe deja, c'est un
+    # adjectif ou un nom, et l'auxiliaire ne prouve rien.
+    if ctx.connait(mot[:-1]):
+        return None
+
+    infinitif = infinitif_premier_groupe(ctx, mot)
+    if infinitif is None or infinitif[:-2] + "e" != mot:
+        return None
+
+    participe = infinitif[:-2] + "é"
+    if not ctx.connait(participe):
+        return None
+    if ctx.lexique.rang(participe) > ctx.lexique.rang(mot) * 10:
+        return None
+    return appliquer_casse(ctx.brut(i), participe)
 
 
 @regle("INFINITIF_APRES_SEMI_AUXILIAIRE",
@@ -633,6 +911,14 @@ def _infinitif_apres_semi_auxiliaire(ctx: Contexte, i: int):
     return None
 
 
+# Verbes pronominaux dont le participe ne s'accorde pas : leur complement
+# est indirect. « elles se sont écrit » — on ecrit *a* quelqu'un.
+PARTICIPES_SANS_ACCORD = {
+    "écrit", "parlé", "téléphoné", "plu", "souri", "menti", "nui",
+    "succédé", "ressemblé", "demandé", "dit", "répondu", "promis",
+    "permis", "rendu", "donné", "offert", "envoyé", "juré", "raconté",
+}
+
 # Sujet -> terminaison a ajouter au participe employe avec « etre ».
 ACCORDS_ETRE = {
     ("elle", "est"): "e",
@@ -645,16 +931,108 @@ ACCORDS_ETRE = {
 @regle("ACCORD_PARTICIPE_ETRE",
        "avec l'auxiliaire « etre », le participe s'accorde avec le sujet")
 def _accord_participe_etre(ctx: Contexte, i: int):
-    participe = ctx.mot(i)
-    if ctx.elision(i) or not ctx.est_participe(participe):
+    mot = ctx.mot(i)
+    if ctx.elision(i):
         return None
-    terminaison = ACCORDS_ETRE.get((ctx.mot(i - 2), ctx.noyau(i - 1)))
+    # Un participe (« venu ») ou un adjectif (« content ») : les deux
+    # s'accordent avec le sujet.
+    if not ctx.est_participe(mot) and not _est_adjectif(ctx, mot):
+        return None
+
+    # « elles se sont écrit » : le complement est indirect, rien ne s'accorde.
+    if ctx.mot(i - 2) in ("se", "s'") and mot in PARTICIPES_SANS_ACCORD:
+        return None
+
+    # « nous sommes arrivé » : le sujet est juste la. « ils se sont trompé » :
+    # il est un mot plus loin, derriere le pronom reflechi.
+    auxiliaire = ctx.noyau(i - 1)
+    terminaison = ACCORDS_ETRE.get((ctx.mot(i - 2), auxiliaire))
+    if terminaison is None and ctx.mot(i - 2) in PRONOMS_INTERCALES:
+        terminaison = ACCORDS_ETRE.get((ctx.mot(i - 3), auxiliaire))
+    if terminaison is None:
+        terminaison = _accord_sujet_nominal_etre(ctx, i)
     if terminaison is None:
         return None
-    accorde = participe + terminaison
-    if participe.endswith(("s", "x", "e")) or not ctx.connait(accorde):
+
+    accorde = mot + terminaison
+    if mot.endswith(("s", "x", "e")) or not ctx.connait(accorde):
         return None
     return appliquer_casse(ctx.brut(i), accorde)
+
+
+def _accord_sujet_nominal_etre(ctx: Contexte, i: int) -> str | None:
+    """« les enfants sont content » : le sujet est un nom, et il est pluriel.
+
+    Le genre reste inconnu — le dictionnaire ne le dit pas — donc on ne
+    propose que le pluriel masculin, celui qui vaut aussi pour un groupe
+    mixte.
+    """
+    if ctx.noyau(i - 1) not in ("sont", "sommes", "étaient", "étions",
+                                "seront", "serons"):
+        return None
+    if not _est_pluriel(ctx, ctx.mot(i - 2)):
+        return None
+    return "s"
+
+
+NOMBRES_PLURIELS = {"deux", "trois", "quatre", "cinq", "six", "sept", "huit",
+                    "neuf", "dix", "onze", "douze", "quinze", "vingt", "cent"}
+
+# Mots qui ne s'accordent jamais. Plusieurs ont pourtant un pluriel au
+# dictionnaire — « les avants » d'une equipe, « les contres » au bridge — et
+# les regles d'accord les prendraient pour des adjectifs.
+MOTS_INVARIABLES = {
+    "avant", "après", "contre", "entre", "sous", "sur", "dans", "vers",
+    "chez", "depuis", "pendant", "malgré", "selon", "sauf", "comme", "sans",
+    "avec", "pour", "par", "de", "du", "des", "à", "au", "aux", "en", "que",
+    "qui", "quoi", "dont", "où", "quand", "donc", "alors", "puis", "ensuite",
+    "très", "trop", "bien", "mal", "encore", "jamais", "toujours", "aussi",
+    "plus", "moins", "ainsi", "lorsque", "puisque", "parce", "car", "mais",
+    "ou", "et", "ni", "si", "non", "oui", "peu", "assez", "presque", "déjà",
+    "hier", "demain", "aujourd'hui", "ici", "là", "partout", "ailleurs",
+    "dehors", "dedans", "dessus", "dessous", "jusque", "jusqu", "afin",
+    "autour", "auprès", "grâce", "face", "quant", "soit", "tant", "tellement",
+}
+
+
+def _est_adjectif(ctx: "Contexte", mot: str) -> bool:
+    """Le mot peut-il s'accorder comme un adjectif ?
+
+    Un adjectif a un feminin — « content » / « contente » — ou se termine
+    deja par un « e » qui lui en tient lieu — « rouge ». Cette question
+    posee au dictionnaire suffit a ecarter « avant », « contre » et les
+    autres invariables qui ont un pluriel pour d'autres raisons.
+    """
+    if mot in MOTS_INVARIABLES or not ctx.connait(mot):
+        return False
+    return mot.endswith("e") or ctx.connait(mot + "e")
+
+
+def _est_pluriel(ctx: "Contexte", mot: str) -> bool:
+    """Le mot est-il un nom au pluriel ?
+
+    « quelques » et « plusieurs » portent bien la marque du pluriel, mais ce
+    sont des determinants : les prendre pour le nom du groupe ferait chercher
+    le verbe un mot trop loin.
+    """
+    if not mot or not mot.endswith(("s", "x")):
+        return False
+    if (mot in DETERMINANTS_PLURIELS or mot in NOMBRES_PLURIELS
+            or mot in MOTS_INVARIABLES or mot in PRONOMS_SUJETS):
+        return False
+    return ctx.connait(mot)
+
+
+def _determinant_pluriel(ctx: "Contexte", i: int) -> bool:
+    """Le jeton i annonce-t-il un groupe au pluriel ?
+
+    « les » est aussi un pronom complement : « je les mange » n'annonce
+    aucun nom. On le refuse donc derriere un pronom sujet.
+    """
+    mot = ctx.mot(i)
+    if mot in DETERMINANTS_PLURIELS or mot in NOMBRES_PLURIELS:
+        return True
+    return mot == "les" and ctx.mot(i - 1) not in PRONOMS_SUJETS
 
 
 def _pluriels(mot: str) -> list[str]:
@@ -684,6 +1062,133 @@ def _accord_determinant_nom(ctx: Contexte, i: int):
         if ctx.connait(pluriel):
             return appliquer_casse(ctx.brut(i), pluriel)
     return None
+
+
+@regle("ACCORD_SUJET_NOMINAL",
+       "le verbe s'accorde avec son sujet au pluriel")
+def _accord_sujet_nominal(ctx: Contexte, i: int):
+    """« les gens pense » -> « les gens pensent »."""
+    if ctx.elision(i):
+        return None
+    if not _est_pluriel(ctx, ctx.mot(i - 1)) or not _determinant_pluriel(ctx, i - 2):
+        return None
+
+    mot = ctx.mot(i)
+    if mot.endswith("ent") or mot in PRONOMS_COMPLEMENTS:
+        return None
+    # « ces quelques minutes » : un nom deja au pluriel n'est pas le verbe
+    # qu'on cherche, meme si « minuter » existe.
+    if mot.endswith(("s", "x")) and ctx.connait(mot[:-1]):
+        return None
+
+    infinitif = infinitif_premier_groupe(ctx, mot)
+    if infinitif is None:
+        return None
+    # Un participe (« les enfants joué ») n'est pas un verbe conjugue.
+    if mot.endswith(("é", "és", "ée", "ées")):
+        return None
+    accorde = conjuguer(ctx, infinitif, "ent")
+    if accorde is None or accorde == mot:
+        return None
+    return appliquer_casse(ctx.brut(i), accorde)
+
+
+@regle("ACCORD_ADJECTIF_PLURIEL",
+       "l'adjectif s'accorde avec le nom au pluriel")
+def _accord_adjectif_pluriel(ctx: Contexte, i: int):
+    """« des voitures rouge » -> « rouges », « trois petit chats » -> « petits »."""
+    mot = ctx.mot(i)
+    if ctx.elision(i) or not mot or mot.endswith(("s", "x")):
+        return None
+    if mot in PRONOMS_COMPLEMENTS or not _est_adjectif(ctx, mot):
+        return None
+    # Un verbe s'accorde autrement : ACCORD_SUJET_NOMINAL s'en charge.
+    if infinitif_premier_groupe(ctx, mot) is not None:
+        return None
+
+    apres_le_nom = (_est_pluriel(ctx, ctx.mot(i - 1))
+                    and _determinant_pluriel(ctx, i - 2))
+    avant_le_nom = (_determinant_pluriel(ctx, i - 1)
+                    and _est_pluriel(ctx, ctx.mot(i + 1)))
+    if not (apres_le_nom or avant_le_nom):
+        return None
+
+    for pluriel in _pluriels(mot):
+        if ctx.connait(pluriel):
+            return appliquer_casse(ctx.brut(i), pluriel)
+    return None
+
+
+# Conditionnel -> imparfait, pour les verbes dont la forme ne se devine pas.
+IMPARFAITS = {
+    "aurais": "avais", "aurait": "avait", "aurions": "avions",
+    "auriez": "aviez", "auraient": "avaient",
+    "serais": "étais", "serait": "était", "serions": "étions",
+    "seriez": "étiez", "seraient": "étaient",
+    "pourrais": "pouvais", "pourrait": "pouvait", "pourrions": "pouvions",
+    "pourriez": "pouviez", "pourraient": "pouvaient",
+    "voudrais": "voulais", "voudrait": "voulait", "voudraient": "voulaient",
+    "devrais": "devais", "devrait": "devait", "devraient": "devaient",
+    "saurais": "savais", "saurait": "savait", "sauraient": "savaient",
+    "irais": "allais", "irait": "allait", "iraient": "allaient",
+    "ferais": "faisais", "ferait": "faisait", "feraient": "faisaient",
+    "viendrais": "venais", "viendrait": "venait", "viendraient": "venaient",
+    "verrais": "voyais", "verrait": "voyait", "verraient": "voyaient",
+}
+
+TERMINAISONS_CONDITIONNEL = ("rais", "rait", "raient", "rions", "riez")
+
+
+@regle("SI_CONDITIONNEL",
+       "apres « si », le verbe se met a l'imparfait, jamais au conditionnel")
+def _si_conditionnel(ctx: Contexte, i: int):
+    """« si j'aurais su » -> « si j'avais su », « si tu pourrais » -> « pouvais »."""
+    # Le sujet peut s'intercaler : « si tu pourrais ».
+    apres_si = ctx.mot(i - 1) == "si" or (
+        ctx.mot(i - 1) in PRONOMS_SUJETS and ctx.mot(i - 2) == "si"
+    )
+    if not apres_si:
+        return None
+
+    elision, noyau = separer_clitique(ctx.mot(i))
+    if not noyau:
+        return None
+
+    imparfait = IMPARFAITS.get(noyau)
+    if imparfait is None:
+        # Verbes reguliers : le conditionnel est l'infinitif suivi de « -ais ».
+        for terminaison in TERMINAISONS_CONDITIONNEL:
+            if not noyau.endswith(terminaison):
+                continue
+            infinitif = noyau[: len(noyau) - len(terminaison)] + "r"
+            if not ctx.connait(infinitif) or not infinitif.endswith("er"):
+                continue
+            imparfait = conjuguer(ctx, infinitif,
+                                  terminaison.replace("r", "", 1))
+            break
+
+    if imparfait is None or imparfait == noyau:
+        return None
+    return appliquer_casse(ctx.brut(i), elision + imparfait)
+
+
+@regle("LEUR_LEURS", "devant un nom au pluriel, « leur » prend un « s »")
+def _leur_leurs(ctx: Contexte, i: int):
+    """« dans leur maisons » -> « dans leurs maisons »."""
+    if ctx.mot(i) != "leur" or ctx.elision(i):
+        return None
+    # « je leur dis » : la, « leur » est un pronom, et reste invariable.
+    if ctx.mot(i - 1) in PRONOMS_SUJETS:
+        return None
+
+    suivant = ctx.mot(i + 1)
+    if not _est_pluriel(ctx, suivant):
+        return None
+    # Le mot doit avoir un singulier : c'est ce qui distingue un nom au
+    # pluriel d'un verbe comme « dis ».
+    if not ctx.connait(suivant[:-1]) or infinitif_premier_groupe(ctx, suivant):
+        return None
+    return appliquer_casse(ctx.brut(i), "leurs")
 
 
 # ---------------------------------------------------------------------------
@@ -736,11 +1241,6 @@ def analyser(texte: str, jetons: list[Jeton], lexique,
 # « que » n'y figure pas : « faut que j'y aille » n'est pas une negation.
 NEGATIONS = {"pas", "plus", "jamais", "rien", "personne", "guère", "aucun",
              "aucune", "nul", "nulle"}
-
-# Pronoms qui s'intercalent entre le sujet et le verbe. Le « ne » se place
-# devant eux, pas devant le verbe : « il n'y a pas », jamais « il y n'a pas ».
-PRONOMS_INTERCALES = {"me", "te", "se", "le", "la", "les", "lui", "leur",
-                      "y", "en", "nous", "vous"}
 
 # Combien de mots peuvent separer le verbe de sa negation.
 PORTEE_NEGATION = 3

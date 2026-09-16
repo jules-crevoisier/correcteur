@@ -155,7 +155,8 @@ class Correcteur:
                 continue
             reste = mot[len(tete):]
             # « ca » ne doit pas devenir « c'a » : il faut un vrai mot derriere.
-            if len(reste) < 2:
+            # « ny » fait exception — « n'y » est trop courant pour le manquer.
+            if len(reste) < 2 and reste != "y":
                 continue
             if self.lexique.connait(reste):
                 return mot[: len(tete)] + "'" + reste

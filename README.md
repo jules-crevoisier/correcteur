@@ -276,7 +276,7 @@ quelques fichiers Python et un dictionnaire.
 | Où et comment | `papote/politique.py` | Se taire ici, hausser le ton là |
 | Vos remplacements | `papote/config.py` | Ce que vous lui avez appris passe avant tout |
 | Protection | `papote/regles.py` | Ce qui sort du circuit avant examen |
-| Grammaire | `papote/grammaire.py` | 24 règles de contexte : homonymes, accords, conjugaison |
+| Grammaire | `papote/grammaire.py` | 36 règles de contexte : homonymes, accords, conjugaison |
 | Orthographe | `papote/lexique.py` | 450 000 formes françaises, accents et fautes de frappe |
 | Frappe | `papote/frappe.py` | Suit ce que vous tapez et décide quand intervenir |
 
@@ -317,7 +317,7 @@ elle ne tranche pas nettement, **le mot est laissé tel quel**.
 ### La grammaire
 
 Le dictionnaire ne voit pas les fautes où les deux graphies existent :
-`sa va`, `ils on mangé`, `j'ai manger`. Vingt-quatre règles regardent les mots
+`sa va`, `ils on mangé`, `j'ai manger`. Trente-six règles regardent les mots
 voisins pour trancher, et chacune ne se déclenche que sur un contexte où
 l'autre lecture est impossible :
 
@@ -330,9 +330,51 @@ l'autre lecture est impossible :
 | `des enfant` → `des enfants` | `je les mange` |
 | `tas vu` → `t'as vu` | `un tas de trucs` |
 | `je vais a la gare` → `à la gare` | `il a la flemme` |
+| `les gens pense` → `les gens pensent` | `ces quelques minutes ont suffi` |
+| `nous somme en retard` → `nous sommes` | `nous sommes allés à la plage` |
+| `des voitures rouge` → `rouges` | `il se lave les mains avant de manger` |
+| `si j'aurais su` → `si j'avais su` | `je serais ravi de t'aider` |
+| `ils se sont trompé` → `trompés` | `elles se sont écrit` |
+
+La conjugaison ne repose sur aucune table de verbes : les formes se
+fabriquent et se soumettent au dictionnaire. Pour accorder `nous mange`, Papote
+essaie `mangons` puis `mangeons` et garde celle qui existe — ce qui règle
+`mangeons`, `plaçons` et `achète` sans avoir codé une seule exception.
 
 Le principe, partout : **mieux vaut sous-corriger que corrompre**. Un message
 qui garde une faute reste lisible ; un message mal corrigé ne l'est plus.
+
+### Mesurer plutôt que croire
+
+Un correcteur ne se juge pas sur ses règles mais sur ses résultats. Le corpus
+d'évaluation tient dans `outils/evaluer.py` : des phrases fautives avec leur
+correction attendue, et des phrases correctes qui doivent ressortir intactes.
+
+```
+python outils/evaluer.py --detail
+
+  categorie        corrigees
+  accent           10/10  ██████████
+  accord           22/22  ██████████████████████
+  apostrophe        7/7   ███████
+  conjugaison      32/32  ████████████████████████████████
+  frappe            2/2   ██
+  homophone        24/24  ████████████████████████
+
+  RAPPEL      97/97  (100 %)   fautes attrapees
+  PRECISION  130/130  (100 %)   phrases correctes laissees tranquilles
+```
+
+La précision est le seuil dur, et la suite de tests le défend :
+`tests/test_qualite.py` échoue dès qu'**une seule** phrase correcte est abîmée.
+Une faute laissée passer se remarque à peine ; une phrase juste corrompue se
+voit tout de suite.
+
+Les phrases du corpus n'ont pas été choisies pour flatter l'outil : elles ont
+été écrites en trois vagues, chacune à l'aveugle, et chaque vague a trouvé des
+dégradations que la précédente ne voyait pas — `il n'y à plus rien`,
+`nous sommons allés`, `ces quelques minutent`. Ce sont elles qui ont dicté les
+garde-fous.
 
 ## En ligne de commande
 
@@ -359,7 +401,8 @@ Depuis les sources, remplacez `Papote.exe` par `python -m papote`.
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest tests/ -q          # ~300 tests, moins d'une seconde
+python -m pytest tests/ -q          # ~310 tests, moins d'une seconde
+python outils/evaluer.py           # la qualité du correcteur, en chiffres
 python -m papote --texte "sa va ?"
 ```
 
@@ -426,3 +469,4 @@ Le dictionnaire français vient de [Dicollecte](https://grammalecte.net/)
 | `papote/demarrage.py` | Lancement automatique via le registre Windows |
 | `papote/chemins.py` | Emplacements selon le mode (sources, `.exe`) |
 | `outils/construire_lexique.py` | Fabrication des fichiers de `donnees/` |
+| `outils/evaluer.py` | Le corpus d'évaluation et son tableau de bord |
