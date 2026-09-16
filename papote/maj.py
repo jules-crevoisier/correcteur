@@ -194,6 +194,42 @@ def _noter_numero(numero: str, cible: Path) -> None:
         pass
 
 
+# ---------------------------------------------------------------------------
+# Relancer Papote
+# ---------------------------------------------------------------------------
+
+# Le lanceur de PyInstaller se parle a lui-meme par l'environnement : il
+# deballe l'executable dans un dossier temporaire, y note le chemin, puis
+# relance le meme fichier pour que le second etage y trouve ses affaires.
+#
+# Un programme fige qui en lance un autre lui transmet ces variables sans le
+# vouloir. Le nouveau se croit alors ce second etage, cherche ses fichiers
+# dans le dossier temporaire de l'ancien, et s'arrete sur :
+#
+#     Failed to start embedded python interpreter!
+#     Failed to remove temporary directory: ...\Temp\_MEI00002a102
+#
+# Le premier message est le nouveau Papote qui echoue ; le second est
+# l'ancien qui ne peut plus faire le menage, puisqu'un processus tient
+# encore son dossier. C'est exactement ce qui se passait en installant une
+# mise a jour.
+VARIABLES_LANCEUR = ("_MEIPASS2", "_MEIPASS")
+
+
+def environnement_de_relance() -> dict[str, str]:
+    """L'environnement a passer a un Papote qu'on relance : le notre, deballe.
+
+    A utiliser partout ou l'on demarre un second Papote — la fenetre, le
+    redemarrage, la mise a jour. Depuis les sources il n'y a rien a retirer,
+    et la fonction se contente de rendre l'environnement courant.
+    """
+    propre = dict(os.environ)
+    for nom in list(propre):
+        if nom in VARIABLES_LANCEUR or nom.startswith("_PYI"):
+            del propre[nom]
+    return propre
+
+
 # Marqueur pose par la fenetre pour demander a l'icone de se relancer. Les
 # deux vivent dans des processus differents : un fichier est le canal le plus
 # simple, et le seul qui survive a l'absence de l'un des deux.
@@ -293,7 +329,8 @@ def appliquer() -> bool:
         return False
 
     try:
-        subprocess.Popen([str(courant)] + sys.argv[1:], close_fds=True)
+        subprocess.Popen([str(courant)] + sys.argv[1:], close_fds=True,
+                         env=environnement_de_relance())
     except OSError:
         return False
     return True

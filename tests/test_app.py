@@ -77,3 +77,26 @@ def test_sans_correction_automatique_aucun_crochet_n_est_pose(application,
     import time
     time.sleep(0.3)
     assert poses == []
+
+
+def test_ouvrir_la_fenetre_relance_avec_un_environnement_propre(monkeypatch,
+                                                                tmp_path):
+    """Un programme fige qui en lance un autre doit deballer l'environnement."""
+    import subprocess as sous_processus
+
+    from papote import app as app_mod
+
+    monkeypatch.setattr(config_mod, "dossier_config", lambda: tmp_path)
+    monkeypatch.setenv("_MEIPASS2", r"C:\Temp\_MEI00002a102")
+    lancements = []
+    monkeypatch.setattr(
+        sous_processus, "Popen",
+        lambda commande, **options: lancements.append((commande, options)),
+    )
+
+    application = app_mod.Application(config=dict(config_mod.DEFAUTS),
+                                      journal=lambda _m: None)
+    assert application._lancer("--fenetre") is True
+    _commande, options = lancements[0]
+    assert "_MEIPASS2" not in options["env"]
+
