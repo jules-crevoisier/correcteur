@@ -61,8 +61,10 @@
          l'installation a echoue. C'est le premier endroit ou l'on perd
          quelqu'un, et il se repare en quatre lignes.
 
-         `asyncNoWait` : l'assistant n'attend pas que Papote se termine — il
-         ne se termine jamais, c'est une icone dans la barre des taches. -->
+         `Return="ignore"` : `WixShellExec` passe par `ShellExecute`, qui
+         rend la main sans attendre — et c'est necessaire, parce que Papote
+         ne se termine jamais : c'est une icone dans la barre des taches. Si
+         le lancement echoue, l'installation reste reussie ; elle l'est. -->
     <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT"
               Value="Lancer Papote maintenant" />
     <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
@@ -72,7 +74,7 @@
                   BinaryRef="Wix4UtilCA_X86"
                   Impersonate="yes"
                   Execute="immediate"
-                  Return="asyncNoWait" />
+                  Return="ignore" />
     <UI>
       <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction"
                Value="LancerPapote"

@@ -448,6 +448,13 @@ class EcouteClavier:
         self._relu = True
         self._guetteur: threading.Thread | None = None
         self._arret = threading.Event()
+        # Deux fils touchent au meme tampon : le crochet clavier, a chaque
+        # touche, et le guetteur, quand les doigts s'arretent. Sans verrou,
+        # le guetteur pouvait lire la phrase, calculer une correction, et
+        # l'ecrire une frappe trop tard — a un endroit du texte qui avait
+        # bouge entre-temps. Le verrou est reentrant parce que le crochet
+        # appelle des methodes qui le reprennent.
+        self._verrou = threading.RLock()
 
     # -- cycle de vie -------------------------------------------------------
 
@@ -508,8 +515,9 @@ class EcouteClavier:
             # Les molettes et les deplacements ne bougent pas le curseur.
             return
         try:
-            self.frappe.oublier()
-            self._defaisable = None
+            with self._verrou:
+                self.frappe.oublier()
+                self._defaisable = None
             self._retirer_la_bulle()
         except Exception:                          # noqa: BLE001
             pass
@@ -519,7 +527,11 @@ class EcouteClavier:
 
         self.actif = False
         self._arret.set()
-        self._guetteur = None
+        guetteur, self._guetteur = self._guetteur, None
+        if guetteur is not None and guetteur is not threading.current_thread():
+            # Un battement en cours peut encore vouloir taper. On lui laisse
+            # le temps de voir l'arret, sans se lier a lui indefiniment.
+            guetteur.join(timeout=self.BATTEMENT * 4)
         self._retirer_la_bulle()
         if self.bulle is not None:
             self.bulle.fermer()
@@ -579,7 +591,8 @@ class EcouteClavier:
         disque plein ou un antivirus qui verrouille un fichier.
         """
         try:
-            self._sur_evenement_sans_filet(evenement)
+            with self._verrou:
+                self._sur_evenement_sans_filet(evenement)
         except Exception:                          # noqa: BLE001
             # Au moindre doute, on oublie la phrase : mieux vaut rater une
             # correction que corriger a partir d'un tampon faux.
@@ -794,6 +807,25 @@ class EcouteClavier:
         self._retirer_la_bulle()
 
     def _relire_si_pause(self) -> None:
+        """Relit la phrase, si personne d'autre n'y touche.
+
+        Le verrou est pris sans attendre : une touche qui arrive pendant
+        qu'on reflechit rend la relecture caduque, et il vaut mieux repasser
+        au battement suivant que d'ecrire a l'aveugle. C'est aussi pour cela
+        que `_relu` n'est pose qu'une fois le verrou tenu.
+        """
+        if not self.actif or self._relu or self._en_ecriture:
+            return
+        if not self.frappe.texte:
+            return
+        if not self._verrou.acquire(blocking=False):
+            return
+        try:
+            self._relire_maintenant()
+        finally:
+            self._verrou.release()
+
+    def _relire_maintenant(self) -> None:
         if not self.actif or self._relu or self._en_ecriture:
             return
         if not self.frappe.texte:
@@ -861,13 +893,15 @@ class EcouteClavier:
                 keyboard.send("backspace")
             keyboard.write(remplacement.ecrire, delay=0)
         except Exception:
-            self.frappe.oublier()
+            with self._verrou:
+                self.frappe.oublier()
         finally:
             self._en_ecriture = False
             if self._touche_pendant_ecriture:
                 # L'utilisateur a tape pendant qu'on ecrivait : impossible de
                 # savoir ce que donne le melange.
-                self.frappe.oublier()
+                with self._verrou:
+                    self.frappe.oublier()
 
     # -- annulation ---------------------------------------------------------
 
@@ -883,14 +917,16 @@ class EcouteClavier:
         meme application. Passe ce delai, mieux vaut ne rien faire et le
         dire.
         """
-        if not self.annulables or not self._annulation_encore_possible():
-            return None
-        remplacement = self.annulables.pop()
-        self._defaisable = None
+        with self._verrou:
+            if not self.annulables or not self._annulation_encore_possible():
+                return None
+            remplacement = self.annulables.pop()
+            self._defaisable = None
         self._taper(remplacement.inverse)
         # Le mot rétabli ne doit pas etre recorrige dans la foulee : on repart
         # de la phrase suivante.
-        self.frappe.oublier()
+        with self._verrou:
+            self.frappe.oublier()
         if self.sur_annulation is not None:
             self.sur_annulation(remplacement)
         return remplacement

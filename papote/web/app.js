@@ -664,6 +664,14 @@ async function demarrer() {
   brancherDictee();
   afficher("corriger");
   $("#champ").focus();
+
+  // Le raccourci de relecture ouvre la fenetre avec la selection dedans.
+  // On la corrige tout de suite : c'est ce qu'on venait demander.
+  if (etat.texte_a_relire) {
+    $("#champ").value = etat.texte_a_relire;
+    compter();
+    corriger();
+  }
 }
 
 

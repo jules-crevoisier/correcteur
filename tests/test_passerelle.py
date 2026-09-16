@@ -245,3 +245,22 @@ def test_aucune_methode_ne_leve_sur_une_application_muette(tmp_path,
     traversable(passerelle.applications())
     traversable(passerelle.journal())
     assert "erreur" in passerelle.corriger("bonjour")
+
+
+# -- le texte du raccourci de relecture --------------------------------------
+
+def test_le_texte_a_relire_arrive_avec_la_page(passerelle):
+    passerelle.app.texte_a_relire = "jai pas vu sa"
+    assert passerelle.demarrer()["texte_a_relire"] == "jai pas vu sa"
+
+
+def test_le_texte_a_relire_ne_sort_qu_une_fois(passerelle):
+    """Recharger la page ne doit pas ressusciter un texte deja traite."""
+    passerelle.app.texte_a_relire = "jai pas vu sa"
+    passerelle.demarrer()
+    assert passerelle.demarrer()["texte_a_relire"] == ""
+    assert passerelle.app.texte_a_relire == ""
+
+
+def test_sans_relecture_le_champ_reste_vide(passerelle):
+    assert passerelle.demarrer()["texte_a_relire"] == ""

@@ -95,3 +95,53 @@ def test_le_fichier_d_habitudes_se_vide_vraiment(tmp_path):
     journal.vider()
     assert journal.total_corrections() == 0
     assert journal.fautes_frequentes() == []
+
+
+# ---------------------------------------------------------------------------
+# Le fichier du raccourci de relecture
+#
+# Ctrl+Alt+R ecrit la selection sur le disque pour la passer au processus qui
+# affiche la fenetre. C'est le seul moment ou du texte saisi touche un
+# fichier, et il doit disparaitre quoi qu'il arrive — y compris quand la
+# fenetre refuse de s'ouvrir.
+# ---------------------------------------------------------------------------
+
+def test_le_fichier_de_relecture_disparait_meme_si_la_fenetre_echoue(
+        tmp_path, monkeypatch):
+    from papote import __main__ as principal
+
+    fichier = tmp_path / "relecture.txt"
+    fichier.write_text("mon code secret 4712", encoding="utf-8")
+
+    class FenetreImpossible(Exception):
+        pass
+
+    def refuser(app):
+        raise FenetreImpossible
+
+    monkeypatch.setattr(principal, "_ouvrir_fenetre", refuser)
+
+    class FausseApp:
+        texte_a_relire = ""
+
+    app = FausseApp()
+    with pytest.raises(FenetreImpossible):
+        principal._relire(app, str(fichier))
+
+    assert not fichier.exists()
+
+
+def test_le_fichier_de_relecture_disparait_apres_usage(tmp_path, monkeypatch):
+    from papote import __main__ as principal
+
+    fichier = tmp_path / "relecture.txt"
+    fichier.write_text("jai pas vu sa", encoding="utf-8")
+    monkeypatch.setattr(principal, "_ouvrir_fenetre", lambda app: 0)
+
+    class FausseApp:
+        texte_a_relire = ""
+
+    app = FausseApp()
+    assert principal._relire(app, str(fichier)) == 0
+    assert app.texte_a_relire == "jai pas vu sa"
+    assert not fichier.exists()

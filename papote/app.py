@@ -85,6 +85,11 @@ class Application:
         # La version telechargee qui attend le prochain demarrage, s'il y en a.
         self.maj_prete: maj.Version | None = None
 
+        # Le texte que le raccourci de relecture vient de capturer, en
+        # attendant que la fenetre le reclame. Il ne vit qu'en memoire, et
+        # seulement dans le processus qui affiche la fenetre.
+        self.texte_a_relire: str = ""
+
         self.raccourcis: list[Raccourci] = []
         self._installer_raccourcis()
 

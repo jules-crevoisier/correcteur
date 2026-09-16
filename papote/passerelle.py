@@ -143,7 +143,17 @@ class Passerelle:
             "demarrage_actif": _sans_bruit(demarrage.actif, False),
             "compilee": maj.compilee(),
             "maj": self.etat_maj(),
+            # Le raccourci de relecture ouvre la fenetre avec la selection
+            # deja dedans. On ne le rend qu'une fois : recharger la page ne
+            # doit pas ressortir un texte que l'utilisateur a efface.
+            "texte_a_relire": self._prendre_le_texte_a_relire(),
         }
+
+    def _prendre_le_texte_a_relire(self) -> str:
+        texte = getattr(self.app, "texte_a_relire", "") or ""
+        if texte:
+            self.app.texte_a_relire = ""
+        return texte
 
     def _reglages_exposes(self) -> dict:
         """Les reglages que la page manipule, et rien d'autre.

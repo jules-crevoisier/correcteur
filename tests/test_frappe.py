@@ -10,6 +10,7 @@ texte.
 """
 
 import sys
+import threading
 import time
 import types
 from pathlib import Path
@@ -862,3 +863,86 @@ def _touche(caractere: str):
     nom = "space" if caractere == " " else caractere
     return type("E", (), {"event_type": "down", "name": nom,
                           "scan_code": 0})()
+
+
+# ---------------------------------------------------------------------------
+# Deux fils, un seul tampon
+#
+# Le crochet clavier et le guetteur de pause tournent en parallele. Le second
+# lit la phrase, calcule une correction, puis l'ecrit — et entre la lecture et
+# l'ecriture, le premier peut avoir tout change. Ces epreuves verifient que la
+# relecture renonce plutot que d'ecrire au hasard.
+# ---------------------------------------------------------------------------
+
+def test_la_relecture_renonce_si_le_clavier_tient_le_verrou(correcteur,
+                                                            clavier):
+    ecouteur = ecoute(correcteur)
+    ecouteur.actif = True
+    for caractere in "les gens":
+        ecouteur.frappe.caractere(caractere)
+    ecouteur._relu = False
+    ecouteur._derniere_touche = time.monotonic() - 1.0
+
+    relu = []
+    ecouteur._relire_maintenant = lambda: relu.append(True)
+
+    verrou_pris = threading.Event()
+    relacher = threading.Event()
+
+    def tenir():
+        with ecouteur._verrou:
+            verrou_pris.set()
+            relacher.wait(1.0)
+
+    fil = threading.Thread(target=tenir, daemon=True)
+    fil.start()
+    assert verrou_pris.wait(1.0)
+    try:
+        ecouteur._relire_si_pause()
+        assert relu == []
+        # Le temoin n'a pas ete pose : le battement suivant reessaiera.
+        assert ecouteur._relu is False
+    finally:
+        relacher.set()
+        fil.join(1.0)
+
+    ecouteur._relire_si_pause()
+    assert relu == [True]
+
+
+def test_le_crochet_clavier_prend_le_verrou(correcteur, clavier):
+    ecouteur = ecoute(correcteur)
+    ecouteur.actif = True
+
+    tenus = []
+    vrai_traitement = ecouteur._sur_evenement_sans_filet
+
+    def observer(evenement):
+        # `acquire(blocking=False)` depuis le meme fil reussirait : le verrou
+        # est reentrant. On regarde donc depuis un autre fil.
+        essai = []
+
+        def tenter():
+            essai.append(ecouteur._verrou.acquire(blocking=False))
+            if essai[0]:
+                ecouteur._verrou.release()
+
+        fil = threading.Thread(target=tenter)
+        fil.start()
+        fil.join(1.0)
+        tenus.append(essai[0])
+        return vrai_traitement(evenement)
+
+    ecouteur._sur_evenement_sans_filet = observer
+    ecouteur._sur_evenement(FauxEvenement("a"))
+    assert tenus == [False]
+
+
+def test_l_arret_attend_le_guetteur(correcteur, clavier, monkeypatch):
+    ecouteur = ecoute(correcteur)
+    monkeypatch.setattr(ecouteur, "_ecouter_la_souris", lambda: None)
+    ecouteur.activer()
+    guetteur = ecouteur._guetteur
+    assert guetteur is not None and guetteur.is_alive()
+    ecouteur.desactiver()
+    assert not guetteur.is_alive()

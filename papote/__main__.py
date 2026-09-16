@@ -207,15 +207,28 @@ def _ouvrir_fenetre(app) -> int:
         return 0
 
     from .fenetre import Fenetre
-    Fenetre(app).lancer()
+    fenetre = Fenetre(app)
+    texte = getattr(app, "texte_a_relire", "")
+    if texte:
+        fenetre.poser_le_texte(texte)
+    fenetre.lancer()
     return 0
 
 
 def _relire(app, chemin: str) -> int:
-    """Ouvre la fenetre de relecture sur le texte capture."""
-    from pathlib import Path
+    """Ouvre la fenetre sur le texte capture, et efface le fichier.
 
-    from .fenetre import FenetreRelecture
+    Ce chemin visait autrefois une fenetre a lui, `FenetreRelecture`, qui
+    n'existe plus : le raccourci ecrivait la selection sur le disque, le
+    processus fils mourait sur un import manquant, et le fichier restait la
+    — avec le texte dedans. C'etait tout ce que Papote promet de ne pas
+    faire.
+
+    Desormais la selection ouvre la page « Corriger », qui fait le meme
+    travail en mieux. Et l'effacement est dans un `finally` : la fenetre
+    peut refuser de s'ouvrir, le texte ne survit pas.
+    """
+    from pathlib import Path
 
     fichier = Path(chemin)
     try:
@@ -223,11 +236,14 @@ def _relire(app, chemin: str) -> int:
     except OSError as e:
         print(f"[X]  {chemin} est illisible ({e}).", file=sys.stderr)
         return 1
-    # Le texte capture ne traine pas : il a servi.
-    fichier.unlink(missing_ok=True)
+    finally:
+        try:
+            fichier.unlink(missing_ok=True)
+        except OSError:
+            pass
 
-    FenetreRelecture(app, texte).lancer()
-    return 0
+    app.texte_a_relire = texte
+    return _ouvrir_fenetre(app)
 
 
 def _mettre_a_jour() -> int:

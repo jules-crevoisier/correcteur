@@ -1089,6 +1089,15 @@ class Fenetre:
 
     # -- boucle -------------------------------------------------------------
 
+    def poser_le_texte(self, texte: str) -> None:
+        """Remplit la page « Corriger », avant que la fenetre ne s'ouvre.
+
+        C'est par la qu'arrive le texte selectionne au raccourci de
+        relecture : il est deja la quand l'utilisateur voit la fenetre.
+        """
+        self.champ.delete("1.0", "end")
+        self.champ.insert("1.0", texte)
+
     def lancer(self) -> None:
         self.racine.mainloop()
 

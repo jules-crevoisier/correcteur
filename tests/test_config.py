@@ -112,3 +112,54 @@ def test_les_reglages_deja_migres_ne_sont_pas_ecrases(tmp_path, monkeypatch):
     (nouveau / "config.json").write_text('{"raccourci": "f8"}', encoding="utf-8")
 
     assert config_mod.charger()["raccourci"] == "f8"
+
+
+# ---------------------------------------------------------------------------
+# Un fichier de reglages abime
+#
+# Le fichier est du JSON ecrit par nous, mais il peut avoir ete edite a la
+# main, tronque par une coupure, ou ecrase par un autre programme. Aucun de
+# ces cas ne doit empecher Papote de demarrer.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("contenu", [
+    "[1, 2, 3]",            # du JSON valide, mais pas un objet
+    '"bonjour"',
+    "42",
+    "null",
+    "true",
+    "{",                    # tronque
+    "",                     # vide
+    "\x00\x01\x02",         # binaire
+])
+def test_un_fichier_abime_rend_les_reglages_d_origine(tmp_path, monkeypatch,
+                                                      contenu):
+    monkeypatch.setattr(config_mod, "dossier_config", lambda: tmp_path)
+    (tmp_path / "config.json").write_text(contenu, encoding="utf-8",
+                                          errors="ignore")
+    config = config_mod.charger()
+    assert config["registre"] == config_mod.DEFAUTS["registre"]
+    assert config["correction_auto"] is True
+
+
+def test_une_valeur_de_la_mauvaise_forme_ne_fait_pas_tomber_le_chargement(
+        tmp_path, monkeypatch):
+    monkeypatch.setattr(config_mod, "dossier_config", lambda: tmp_path)
+    (tmp_path / "config.json").write_text(
+        '{"regles_optionnelles": "toutes"}', encoding="utf-8")
+    # « regles_optionnelles » attend un dictionnaire ; une chaine ne doit pas
+    # faire tomber le demarrage.
+    assert config_mod.charger()["correction_auto"] is True
+
+
+def test_un_dossier_ou_l_on_ne_peut_pas_ecrire_n_empeche_pas_de_demarrer(
+        tmp_path, monkeypatch):
+    """Un profil itinerant verrouille, un disque plein : on corrige quand meme."""
+    monkeypatch.setattr(config_mod, "dossier_config", lambda: tmp_path / "x")
+
+    def refuser(_config):
+        raise OSError("lecture seule")
+
+    monkeypatch.setattr(config_mod, "sauvegarder", refuser)
+    config = config_mod.charger()
+    assert config["registre"] == config_mod.DEFAUTS["registre"]
