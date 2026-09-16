@@ -129,11 +129,17 @@ jobs:
             dist/Papote.exe
             dist/Papote.msi
 
+      # Le tag doit etre pose sur le commit qu'on vient de compiler. Sans
+      # « target_commitish », GitHub le pose sur la branche par defaut du
+      # depot — qui n'est pas « main » ici : les huit tags precedents
+      # designaient tous le meme vieux commit, et les notes de version
+      # listaient les toutes premieres fusions au lieu des dernieres.
       - name: Publier la version
         if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
+          target_commitish: ${{ github.sha }}
           name: Papote ${{ steps.version.outputs.tag }}
           body: |
             **Papote.msi** installe Papote proprement : menu Démarrer,
