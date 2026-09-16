@@ -28,6 +28,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 from .lexique import sans_accents
+from . import confusions
 from .politique import PARLE, SOUTENU
 
 # ---------------------------------------------------------------------------
@@ -336,9 +337,23 @@ def conjuguer(ctx: "Contexte", infinitif: str, terminaison: str) -> str | None:
     for candidat in (radical + terminaison,
                      radical + "e" + terminaison,
                      radical + "è" + terminaison):
-        if ctx.connait(candidat):
+        if ctx.connait(candidat) and _vaut_la_peine(ctx, candidat):
             return candidat
     return None
+
+
+def _vaut_la_peine(ctx: "Contexte", candidat: str) -> bool:
+    """La forme conjuguee est-elle employee par quelqu'un ?
+
+    « les claviers telephone » : l'orthographe rend « téléphone » (797e mot
+    du francais), puis l'accord le conjugue en « téléphonent » — une forme
+    qui existe au dictionnaire mais que personne n'ecrit, et le nom devient
+    un verbe. Une forme absente des cinquante mille mots les plus employes
+    ne remplace pas un mot qui, lui, en fait partie.
+    """
+    from .lexique import RANG_INCONNU
+
+    return ctx.lexique.rang(candidat) != RANG_INCONNU
 
 
 def sujet_avant(ctx: "Contexte", i: int) -> str:
@@ -1342,3 +1357,170 @@ def _ca_cela(ctx: Contexte, i: int):
     if ctx.mot(i + 1) in ("va", "vas", "allait"):
         return None
     return appliquer_casse(ctx.brut(i), "cela")
+
+
+# ---------------------------------------------------------------------------
+# Les mots justes qui en cachent un autre
+#
+# Le correcteur ne regarde que les mots absents du dictionnaire. « commet »
+# y figure — c'est le verbe commettre — donc « commet ça va » passait
+# intact. La table de `confusions.py` liste ces paires, chacune avec la
+# condition qui rend la substitution sure.
+# ---------------------------------------------------------------------------
+
+@regle("MOT_REEL_TROMPEUR",
+       "ce mot existe, mais ce n'est pas celui-la qu'on attend ici")
+def _mot_reel_trompeur(ctx: Contexte, i: int):
+    confusion = confusions.trouver(ctx, i, ctx.lexique)
+    if confusion is None:
+        return None
+    return appliquer_casse(ctx.brut(i), confusion.voulu)
+
+
+# ---------------------------------------------------------------------------
+# Doublons
+# ---------------------------------------------------------------------------
+
+# Ces mots se repetent legitimement : « il a a peine mangé » est faux, mais
+# « nous nous levons », « vous vous trompez » et « c'est très très bon » ne
+# le sont pas.
+DOUBLONS_LEGITIMES = {
+    "nous", "vous", "se", "très", "bien", "plus", "moins", "tout", "si",
+    "non", "oui", "eh", "ah", "oh", "ha", "ho", "hi", "na", "chut",
+    # Les nombres et les lettres se repetent en enumerant.
+    "un", "une", "deux", "a", "à", "y", "en",
+}
+
+
+@regle("DOUBLON", "ce mot est écrit deux fois de suite")
+def _doublon(ctx: Contexte, i: int):
+    """« je vais vais partir » — la faute de frappe la plus banale qui soit.
+
+    On n'y touche que dans une meme phrase et sans ponctuation entre les
+    deux : « bon, bon » est une insistance, pas une faute, et « il a dit :
+    dit-il » n'est pas un doublon.
+    """
+    mot = ctx.mot(i)
+    if not mot or mot != ctx.mot(i + 1):
+        return None
+    if mot in DOUBLONS_LEGITIMES or len(mot) < 2:
+        return None
+    # Une ponctuation ou un retour a la ligne entre les deux : c'est voulu.
+    if ctx.separateur(i) != " ":
+        return None
+    # Une majuscule au second signale un debut de phrase, donc une coupure.
+    if ctx.brut(i + 1)[:1].isupper() and not ctx.brut(i)[:1].isupper():
+        return None
+    return (ctx.brut(i), 2)
+
+
+# ---------------------------------------------------------------------------
+# Traits d'union
+# ---------------------------------------------------------------------------
+
+# Mots composes que l'on ecrit couramment en deux morceaux. Chaque entree est
+# une suite de mots, et ce qu'elle doit devenir. Les suites longues passent
+# avant les courtes : « c'est à dire » avant « à dire ».
+COMPOSES = {
+    ("rendez", "vous"): "rendez-vous",
+    ("peut", "etre"): "peut-être",
+    ("peut", "être"): "peut-être",
+    ("au", "dessus"): "au-dessus",
+    ("au", "dessous"): "au-dessous",
+    ("au", "delà"): "au-delà",
+    ("là", "bas"): "là-bas",
+    ("la", "bas"): "là-bas",
+    ("là", "haut"): "là-haut",
+    ("ci", "dessus"): "ci-dessus",
+    ("ci", "dessous"): "ci-dessous",
+    ("ci", "joint"): "ci-joint",
+    ("week", "end"): "week-end",
+    ("après", "midi"): "après-midi",
+    ("apres", "midi"): "après-midi",
+    ("avant", "hier"): "avant-hier",
+    ("aujourd'hui",): "aujourd'hui",
+    ("quelque", "part"): "quelque part",   # sans trait d'union, justement
+}
+
+# Celles-la comptent trois mots.
+COMPOSES_LONGS = {
+    ("c'est", "à", "dire"): "c'est-à-dire",
+    ("c'est", "a", "dire"): "c'est-à-dire",
+    ("qu'est", "ce", "que"): "qu'est-ce que",
+    ("qu'est", "ce", "qui"): "qu'est-ce qui",
+    ("est", "ce", "que"): "est-ce que",
+    ("est", "ce", "qui"): "est-ce qui",
+    ("vis", "à", "vis"): "vis-à-vis",
+    ("par", "ci", "par"): None,            # reserve, voir plus bas
+}
+
+
+@regle("TRAIT_UNION_COMPOSE", "ce mot composé prend un trait d'union")
+def _trait_union_compose(ctx: Contexte, i: int):
+    """« rendez vous », « peut etre », « c'est à dire »."""
+    if ctx.separateur(i) != " ":
+        return None
+
+    trois = (ctx.mot(i), ctx.mot(i + 1), ctx.mot(i + 2))
+    if trois in COMPOSES_LONGS and COMPOSES_LONGS[trois] is not None:
+        if ctx.separateur(i + 1) != " ":
+            return None
+        return (appliquer_casse(ctx.brut(i), COMPOSES_LONGS[trois]), 3)
+
+    deux = (ctx.mot(i), ctx.mot(i + 1))
+    if deux in COMPOSES:
+        remplacement = COMPOSES[deux]
+        if remplacement == " ".join(deux):
+            return None
+        # « peut être » peut etre le verbe : « il peut être là ». Un sujet
+        # devant, et on ne touche a rien.
+        if deux[0] == "peut" and ctx.mot(i - 1) in PRONOMS_SUJETS:
+            return None
+        # « rendez-vous » : « rendez vous compte » est un imperatif.
+        if deux == ("rendez", "vous") and ctx.mot(i + 2) in (
+                "compte", "service", "la", "le", "les", "à", "a"):
+            return None
+        return (appliquer_casse(ctx.brut(i), remplacement), 2)
+    return None
+
+
+# Un imperatif suivi d'un pronom prend un trait d'union : « dis-moi »,
+# « envoie-moi », « donne-lui », « vas-y ». Les formes sont listees plutot
+# que devinees : « dis moi » est un imperatif, « je dis moi aussi » non.
+IMPERATIFS_AVEC_PRONOM = {
+    "dis", "dites", "donne", "donnez", "envoie", "envoyez", "montre",
+    "montrez", "passe", "passez", "prends", "prenez", "laisse", "laissez",
+    "rappelle", "rappelez", "explique", "expliquez", "excuse", "excusez",
+    "aide", "aidez", "attends", "attendez", "regarde", "regardez",
+    "écoute", "écoutez", "raconte", "racontez", "appelle", "appelez",
+    "va", "vas", "allez", "viens", "venez", "tiens", "tenez", "suis",
+    "arrête", "arrêtez", "occupe", "occupez", "amuse", "amusez",
+}
+
+PRONOMS_APRES_IMPERATIF = {"moi", "toi", "lui", "nous", "vous", "leur",
+                           "le", "la", "les", "y", "en"}
+
+
+@regle("TRAIT_UNION_IMPERATIF",
+       "l'impératif et son pronom prennent un trait d'union")
+def _trait_union_imperatif(ctx: Contexte, i: int):
+    """« dis moi » -> « dis-moi », « vas y » -> « vas-y »."""
+    if ctx.separateur(i) != " ":
+        return None
+    verbe, pronom = ctx.mot(i), ctx.mot(i + 1)
+    if verbe not in IMPERATIFS_AVEC_PRONOM:
+        return None
+    if pronom not in PRONOMS_APRES_IMPERATIF:
+        return None
+    # Un sujet devant, et ce n'est plus un imperatif : « je dis moi aussi »,
+    # « tu envoies le lien ».
+    if ctx.mot(i - 1) in PRONOMS_SUJETS or ctx.elision(i - 1) in SUJETS_ELIDES:
+        return None
+    # « allez les bleus », « va la chercher » : le pronom y est complement
+    # d'un verbe qui suit, pas de l'imperatif.
+    if pronom in ("le", "la", "les") and ctx.mot(i + 2):
+        return None
+    # « vas y » demande un « s » ; « va y » n'existe pas.
+    if verbe == "va" and pronom == "y":
+        return (appliquer_casse(ctx.brut(i), "vas-y"), 2)
+    return (appliquer_casse(ctx.brut(i), f"{ctx.brut(i)}-{pronom}"), 2)

@@ -21,6 +21,15 @@ DEFAUTS = {
     # texte.
     "delai_oubli": 5.0,
 
+    # Propose la suite du mot en cours, comme un clavier de telephone, dans
+    # une bulle posee dans un coin de l'ecran.
+    "prediction": True,
+    # Touche qui accepte la proposition. Elle n'est detournee que pendant que
+    # la bulle est affichee : ailleurs, la tabulation garde son role.
+    "touche_prediction": "tab",
+    # Ou poser la bulle : bas-droite, bas-gauche, haut-droite, haut-gauche.
+    "position_bulle": "bas-droite",
+
     # -- correction a la demande --------------------------------------------
     # Raccourci global. Syntaxe de la bibliotheque `keyboard`.
     "raccourci": "ctrl+alt+c",

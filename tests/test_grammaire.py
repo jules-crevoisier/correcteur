@@ -160,3 +160,83 @@ def test_le_soutenu_ne_confond_pas_ne_que_et_que(correcteur_soutenu):
 def test_ca_va_reste_ca_va(correcteur_soutenu):
     """Personne n'ecrit « cela va ? »."""
     assert correcteur_soutenu.corriger("ça va ?")[0] == "Ça va ?"
+
+
+# -- les mots justes qui en cachent un autre --------------------------------
+
+def test_un_mot_reel_mais_improbable_est_corrige(correcteur):
+    """« commet » est le verbe commettre — mais pas en tête de phrase."""
+    assert correcteur.corriger("commet ça va")[0] == "comment ça va"
+
+
+def test_le_meme_mot_reste_quand_il_est_a_sa_place(correcteur):
+    assert correcteur.corriger("il commet une erreur")[0] == "il commet une erreur"
+
+
+def test_un_mot_rare_ne_masque_plus_la_faute(correcteur):
+    """« sui » est au dictionnaire ; « je sui » n'en reste pas moins faux."""
+    assert correcteur.corriger("je sui en route")[0] == "je suis en route"
+    assert correcteur.corriger("il fau qu'on parle")[0] == "il faut qu'on parle"
+
+
+def test_l_elision_ne_cache_pas_l_auxiliaire(correcteur):
+    """« j'ai » doit compter comme « ai » pour la condition qui le cherche."""
+    assert correcteur.corriger("j'ai pri le bus")[0] == "j'ai pris le bus"
+
+
+def test_un_nom_apres_determinant_reste_intact(correcteur):
+    assert correcteur.corriger("le pri est correct")[0] == "le pri est correct"
+
+
+# -- doublons ---------------------------------------------------------------
+
+def test_un_mot_ecrit_deux_fois_est_reduit(correcteur):
+    assert correcteur.corriger("je vais vais partir")[0] == "je vais partir"
+    assert correcteur.corriger("c'est le le meilleur")[0] == "c'est le meilleur"
+
+
+def test_les_doublons_legitimes_survivent(correcteur):
+    """« nous nous levons » n'est pas une faute de frappe."""
+    for phrase in ("nous nous levons tôt", "vous vous trompez",
+                   "c'est très très bon", "il se se"):
+        assert "  " not in correcteur.corriger(phrase)[0]
+    assert correcteur.corriger("nous nous levons tôt")[0] == "nous nous levons tôt"
+    assert correcteur.corriger("vous vous trompez")[0] == "vous vous trompez"
+
+
+def test_une_ponctuation_entre_les_deux_protege_la_repetition(correcteur):
+    """« bon, bon » est une insistance, pas une faute."""
+    assert correcteur.corriger("bon, bon")[0] == "bon, bon"
+
+
+# -- traits d'union ---------------------------------------------------------
+
+@pytest.mark.parametrize("faute,attendu", [
+    ("on prend rendez vous quand", "on prend rendez-vous quand"),
+    ("peut etre que oui", "peut-être que oui"),
+    ("c'est a dire quoi", "c'est-à-dire quoi"),
+    ("qu'est ce que tu fais", "qu'est-ce que tu fais"),
+    ("au dessus de la porte", "au-dessus de la porte"),
+    ("il est la bas", "il est là-bas"),
+])
+def test_les_composes_prennent_leur_trait_d_union(correcteur, faute, attendu):
+    assert correcteur.corriger(faute)[0] == attendu
+
+
+def test_le_verbe_pouvoir_garde_ses_deux_mots(correcteur):
+    """« il peut être là » n'est pas « il peut-être là »."""
+    assert correcteur.corriger("il peut être là")[0] == "il peut être là"
+
+
+@pytest.mark.parametrize("faute,attendu", [
+    ("dis moi tout", "dis-moi tout"),
+    ("envoie moi le lien", "envoie-moi le lien"),
+    ("vas y doucement", "vas-y doucement"),
+])
+def test_l_imperatif_et_son_pronom_se_lient(correcteur, faute, attendu):
+    assert correcteur.corriger(faute)[0] == attendu
+
+
+def test_un_sujet_devant_empeche_la_liaison(correcteur):
+    """« je dis moi aussi » n'est pas un impératif."""
+    assert correcteur.corriger("je dis moi aussi")[0] == "je dis moi aussi"

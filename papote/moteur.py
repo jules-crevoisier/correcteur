@@ -161,7 +161,12 @@ class Correcteur:
             # « ny » fait exception — « n'y » est trop courant pour le manquer.
             if len(reste) < 2 and reste != "y":
                 continue
-            if self.lexique.connait(reste):
+            # Le morceau de droite doit etre un mot **courant**, pas
+            # seulement un mot du dictionnaire : « ab » y figure (9 539e), et
+            # « tab » devenait « t'ab ». « ny » -> « n'y » fait exception,
+            # « y » n'etant pas dans la liste de frequences.
+            if self.lexique.connait(reste) and (
+                    reste == "y" or self.lexique.rang(reste) <= RANG_COURANT):
                 return mot[: len(tete)] + "'" + reste
             # « cetait » -> « c'était » : le morceau de droite a le droit
             # d'avoir perdu ses accents.

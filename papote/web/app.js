@@ -126,6 +126,28 @@ function bascule(actif, surChangement) {
   return bouton;
 }
 
+/* Un contrôle segmenté : plusieurs choix, un seul retenu. Il sert au ton
+   comme à la position de la bulle ; les écrire deux fois, c'était les voir
+   diverger. */
+function segments(zone, choix, reglage) {
+  vider(zone);
+  choix.forEach((option) => {
+    const bouton = creer("button", "segment", option.nom);
+    if (option.explication) bouton.title = option.explication;
+    bouton.setAttribute("aria-pressed",
+                        String(etat.reglages[reglage] === option.cle));
+    bouton.addEventListener("click", async () => {
+      etat.reglages[reglage] = option.cle;
+      zone.querySelectorAll(".segment").forEach((autre) => {
+        autre.setAttribute("aria-pressed", String(autre === bouton));
+      });
+      repondre(await appeler("regler", reglage, option.cle));
+    });
+    zone.appendChild(bouton);
+  });
+}
+
+
 function ligne(titre, explication, controle) {
   const rangee = creer("div", "ligne-action");
   const textes = creer("div");
@@ -380,21 +402,9 @@ function construireReglages() {
       })));
   });
 
-  const registre = vider($("#registre"));
-  etat.registres.forEach((choix) => {
-    const bouton = creer("button", "segment", choix.nom);
-    bouton.title = choix.explication;
-    bouton.setAttribute("aria-pressed",
-                        String(etat.reglages.registre === choix.cle));
-    bouton.addEventListener("click", async () => {
-      etat.reglages.registre = choix.cle;
-      registre.querySelectorAll(".segment").forEach((autre) => {
-        autre.setAttribute("aria-pressed", String(autre === bouton));
-      });
-      repondre(await appeler("regler", "registre", choix.cle));
-    });
-    registre.appendChild(bouton);
-  });
+  segments($("#registre"), etat.registres, "registre");
+
+  segments($("#position-bulle"), etat.positions_bulle, "position_bulle");
 
   const raccourcis = vider($("#raccourcis"));
   etat.raccourcis.forEach((raccourci) => {
