@@ -269,6 +269,39 @@ def test_la_mise_a_jour_prete_s_annonce_aussi_dans_la_colonne(fenetre):
     assert fenetre.bandeau_maj.winfo_children()
 
 
+def test_une_mise_a_jour_deja_la_se_propose_des_l_ouverture(application,
+                                                           monkeypatch,
+                                                           tmp_path):
+    """Le telechargement se fait souvent dans l'autre processus, celui de l'icone.
+
+    La fenetre ne l'apprend qu'en regardant a cote de l'executable — sans
+    quoi il fallait aller ouvrir les reglages pour decouvrir qu'une version
+    attendait.
+    """
+    monkeypatch.setattr(maj, "compilee", lambda: True)
+    monkeypatch.setattr(maj, "en_attente", lambda: tmp_path / "Papote.nouveau.exe")
+    monkeypatch.setattr(maj, "numero_en_attente", lambda: "v9.9.9")
+
+    fenetre = Fenetre(application)
+    assert fenetre.bandeau_maj.winfo_children(), "aucune proposition de redemarrage"
+    assert any("Redémarrer" in libelle
+               for libelle in _libelles(fenetre.bandeau_maj))
+
+
+def test_plus_tard_renvoie_la_proposition(fenetre):
+    """Refuser le redemarrage doit etre possible : on ecrit peut-etre."""
+    fenetre._maj_prete(maj.Version("v9.9.9", "https://exemple/Papote.exe"))
+    assert fenetre.bandeau_maj.winfo_children()
+    fenetre._remettre_maj()
+    assert not fenetre.bandeau_maj.winfo_children()
+
+
+def test_le_bandeau_propose_de_remettre_a_plus_tard(fenetre):
+    fenetre._maj_prete(maj.Version("v9.9.9", "https://exemple/Papote.exe"))
+    assert any("Plus tard" in libelle
+               for libelle in _libelles(fenetre.bandeau_maj))
+
+
 def test_redemarrer_pose_le_marqueur(fenetre, tmp_path):
     fenetre._redemarrer()
     assert (tmp_path / maj.MARQUEUR).is_file()

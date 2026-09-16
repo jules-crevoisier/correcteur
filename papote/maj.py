@@ -42,6 +42,12 @@ DELAI = 15  # secondes
 NOUVEAU = "Papote.nouveau.exe"
 ANCIEN = "Papote.ancien.exe"
 
+# Le numero de la version telechargee, note a cote d'elle. L'icone et la
+# fenetre vivent dans deux processus : celui qui n'a pas fait le
+# telechargement doit quand meme pouvoir dire « redemarrer pour installer
+# la 1.0.28 » plutot qu'un vague « la mise a jour ».
+NUMERO = "Papote.nouveau.txt"
+
 
 class MiseAJourImpossible(RuntimeError):
     """Le serveur n'a pas repondu, ou sa reponse est inexploitable."""
@@ -174,7 +180,18 @@ def telecharger(version: Version, destination: Path | None = None) -> Path:
 
     _verifier_empreinte(provisoire, version.empreinte)
     provisoire.replace(cible)
+    _noter_numero(version.numero, cible)
     return cible
+
+
+def _noter_numero(numero: str, cible: Path) -> None:
+    """Note le numero a cote du fichier telecharge, pour qui voudra le lire."""
+    try:
+        (cible.parent / NUMERO).write_text(numero, encoding="utf-8")
+    except OSError:
+        # Le numero n'est qu'un confort d'affichage : son absence ne doit
+        # jamais faire echouer une mise a jour deja telechargee.
+        pass
 
 
 # Marqueur pose par la fenetre pour demander a l'icone de se relancer. Les
@@ -216,6 +233,17 @@ def en_attente() -> Path | None:
     return candidat if candidat.is_file() else None
 
 
+def numero_en_attente() -> str | None:
+    """Le numero de la version telechargee, s'il a pu etre note."""
+    if en_attente() is None:
+        return None
+    try:
+        numero = (dossier() / NUMERO).read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    return numero or None
+
+
 # ---------------------------------------------------------------------------
 # Mettre en place
 # ---------------------------------------------------------------------------
@@ -229,6 +257,10 @@ def nettoyer() -> None:
         ancien.unlink(missing_ok=True)
     except OSError:
         # Toujours verrouillee ? Elle partira au prochain demarrage.
+        pass
+    try:
+        (dossier() / NUMERO).unlink(missing_ok=True)
+    except OSError:
         pass
 
 
