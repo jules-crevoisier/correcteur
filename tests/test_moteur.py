@@ -267,3 +267,64 @@ def test_les_vraies_fautes_de_frappe_restent_corrigees(correcteur, faute,
     """La séparation est nette : aucune faute de frappe ne figure dans la
     liste de fréquences, et tous les mots réels y sont."""
     assert correcteur.corriger(faute)[0] == attendu
+
+
+# -- trois fautes inventées dans un vrai message -----------------------------
+
+def test_un_pseudo_n_est_pas_corrige_jusqu_au_bout(correcteur):
+    """« @ma_rion.prrx » est un nom. S'arrêter au point en faisait « prix »."""
+    texte = "merci @ma_rion.prrx pour l'affiche"
+    assert correcteur.corriger(texte)[0] == texte
+    assert correcteur.corriger("écris à #salon-général")[0] == "écris à #salon-général"
+
+
+def test_un_pseudo_ne_mange_pas_le_point_de_la_phrase(correcteur):
+    """Le motif doit finir sur une lettre, pas sur la ponctuation."""
+    sortie = correcteur.corriger("c'est @marion. bonjour")[0]
+    assert "@marion." in sortie
+
+
+def test_un_adjectif_antepose_n_est_pas_un_sujet(correcteur):
+    """« les dernières affiche » : « affiche » est le nom, pas le verbe.
+
+    Il devenait « les dernières affichent ».
+    """
+    sortie = correcteur.corriger("les dernières affiche")[0]
+    assert "affichent" not in sortie
+
+
+def test_le_sujet_nominal_garde_ses_accords(correcteur):
+    """Le garde-fou ne doit pas emporter ce qui marchait."""
+    assert correcteur.corriger("les gens pense")[0] == "les gens pensent"
+
+
+def test_une_correction_lointaine_ne_tranche_pas_un_doute_proche(correcteur):
+    """« délay » avait « delà » et « délai » à une frappe — trop proches pour
+    trancher — et « déjà », à deux frappes, l'emportait par la bande."""
+    assert "déjà" not in correcteur.corriger("le délay est court")[0]
+
+
+def test_le_determinant_pluriel_tranche_ce_que_la_frequence_ne_savait_pas(
+        correcteur):
+    """« les délay » : « delà » n'a pas de pluriel, « délai » si.
+
+    Le doute que la fréquence ne savait pas lever — 1 183ᵉ contre 2 638ᵉ —
+    disparaît dès qu'on regarde le déterminant. Et ce n'est pas « délai »
+    qu'il faut écrire après « les », c'est « délais ».
+    """
+    assert correcteur.corriger("les délay sont courts")[0] == \
+        "les délais sont courts"
+    assert correcteur.corriger("des délay trop longs")[0] == \
+        "des délais trop longs"
+
+
+def test_le_pluriel_du_contexte_s_applique_aussi_aux_fautes_de_frappe(
+        correcteur):
+    assert correcteur.corriger("les bureua")[0] == "les bureaux"
+    assert correcteur.corriger("les menbre du staff")[0] == \
+        "les membres du staff"
+
+
+def test_sans_determinant_pluriel_le_doute_reste_entier(correcteur):
+    """Au singulier, rien ne départage « delà » et « délai » : on se tait."""
+    assert correcteur.corriger("le délay est court")[0] == "le délay est court"

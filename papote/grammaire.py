@@ -1098,6 +1098,31 @@ def _accord_determinant_nom(ctx: Contexte, i: int):
     return None
 
 
+# Les seuls adjectifs qui se placent *avant* le nom en francais. La liste
+# est courte et fermee, ce qui la rend sure : dans « les dernières affiches »,
+# « dernières » ne peut pas etre le sujet, et « affiches » est donc un nom.
+# Sans elle, « les dernières affiche » devenait « les dernières affichent ».
+ADJECTIFS_ANTEPOSES = {
+    "dernier", "premier", "second", "prochain", "grand", "petit", "gros",
+    "bon", "mauvais", "beau", "joli", "nouveau", "vieux", "jeune", "long",
+    "autre", "même", "seul", "vrai", "faux", "certain", "propre", "ancien",
+    "haut", "large", "court", "meilleur", "moindre", "double", "demi",
+}
+
+
+def _adjectif_antepose(mot: str) -> bool:
+    """Ce mot est-il un adjectif qui se place avant son nom ?"""
+    for terminaison in ("ières", "ière", "iers", "ier", "elles", "elle",
+                        "eaux", "eau", "les", "es", "s", "x", "e", ""):
+        if terminaison and not mot.endswith(terminaison):
+            continue
+        racine = mot[: len(mot) - len(terminaison)] if terminaison else mot
+        for retour in ("", "ier", "eau", "el", "l", "e"):
+            if racine + retour in ADJECTIFS_ANTEPOSES:
+                return True
+    return mot in ADJECTIFS_ANTEPOSES
+
+
 @regle("ACCORD_SUJET_NOMINAL",
        "le verbe s'accorde avec son sujet au pluriel")
 def _accord_sujet_nominal(ctx: Contexte, i: int):
@@ -1105,6 +1130,10 @@ def _accord_sujet_nominal(ctx: Contexte, i: int):
     if ctx.elision(i):
         return None
     if not _est_pluriel(ctx, ctx.mot(i - 1)) or not _determinant_pluriel(ctx, i - 2):
+        return None
+    # « les dernières affiche » : ce qui precede est un adjectif antepose,
+    # donc le mot en position i est le nom — pas le verbe.
+    if _adjectif_antepose(ctx.mot(i - 1)):
         return None
 
     mot = ctx.mot(i)

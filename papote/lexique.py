@@ -88,6 +88,7 @@ RANG_MAXIMAL = (None, 20_000, 20_000)
 # demande une garantie supplementaire.
 RANG_COURANT = 3_000
 
+
 # Un accent ne se tape pas par hasard. Celui qui ecrit « pasé » a voulu un
 # « é » : lui proposer « pas », qui est pourtant cent fois plus courant, c'est
 # lui retirer un mot.
@@ -464,9 +465,15 @@ class Lexique:
                     recale = meilleur
                 continue
 
-            if recale is not None and recale.rang < meilleur.rang * ecart_exige:
-                # La classe plus sure gardait un candidat comparable : on ne
-                # lui prefere pas une correction plus lointaine.
+            if recale is not None:
+                # La classe plus sure gardait des candidats plausibles, sans
+                # savoir lequel choisir. Une correction plus lointaine ne
+                # tranche pas ce doute : elle le contourne.
+                #
+                # « délay » avait « delà » et « délai » a une frappe — trop
+                # proches pour trancher — et « déjà », a deux frappes,
+                # l'emportait. Or « délay » n'est ni l'un ni l'autre : c'est
+                # un mot anglais, et se taire etait la seule bonne reponse.
                 break
 
             return _meme_casse(mot, meilleur.mot)
