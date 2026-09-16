@@ -305,8 +305,9 @@ quelques fichiers Python et un dictionnaire.
 | Où et comment | `papote/politique.py` | Se taire ici, hausser le ton là |
 | Vos remplacements | `papote/config.py` | Ce que vous lui avez appris passe avant tout |
 | Protection | `papote/regles.py` | Ce qui sort du circuit avant examen |
-| Grammaire | `papote/grammaire.py` | 44 règles de contexte : homonymes, accords, conjugaison |
+| Grammaire | `papote/grammaire.py` | 51 règles de contexte : homonymes, accords, conjugaison |
 | Morphologie | `papote/morphologie.py` | Ce qu'est chaque mot : personne, nombre, genre |
+| Genre des noms | `papote/genres.py` | Ce que le dictionnaire ne dit pas |
 | Orthographe | `papote/lexique.py` | 450 000 formes françaises, accents et fautes de frappe |
 | Frappe | `papote/frappe.py` | Suit ce que vous tapez et décide quand intervenir |
 
@@ -347,7 +348,7 @@ elle ne tranche pas nettement, **le mot est laissé tel quel**.
 ### La grammaire
 
 Le dictionnaire ne voit pas les fautes où les deux graphies existent :
-`sa va`, `ils on mangé`, `j'ai manger`. Quarante-quatre règles regardent les mots
+`sa va`, `ils on mangé`, `j'ai manger`. Cinquante et une règles regardent les mots
 voisins pour trancher, et chacune ne se déclenche que sur un contexte où
 l'autre lecture est impossible :
 
@@ -361,6 +362,10 @@ l'autre lecture est impossible :
 | `tas vu` → `t'as vu` | `un tas de trucs` |
 | `je vais a la gare` → `à la gare` | `il a la flemme` |
 | `les gens pense` → `les gens pensent` | `ces quelques minutes ont suffi` |
+| `tu vas ou` → `tu vas où` | `café ou thé` |
+| `il a du partir` → `il a dû partir` | `il a du pain` |
+| `je suis sur de moi` → `sûr` | `je suis sur la route` |
+| `ces pas grave` → `c'est pas grave` | `ses pas résonnaient` |
 | `les gens finit` → `les gens finissent` | `les chiens court vite` |
 | `ils vient demain` → `ils viennent` | `ce sont des choses qui arrivent` |
 | `les bijou` → `les bijoux` | `la souris est cassée` |
@@ -408,15 +413,34 @@ d'accorder sans déplacer : dans `les gens finit`, on cherche la troisième
 personne du pluriel *dans le temps de `finit`*, ce qui donne `finissent` et non
 `finirent` — un passé simple parfaitement correct, mais hors sujet.
 
-Ce que le dictionnaire ne dit pas, Papote ne l'invente pas : **il ignore le
-genre des noms**. Il connaît celui des paradigmes à deux genres — `chat` /
-`chatte` —, pas celui de `voiture` ni de `cheval`. L'accord se fait donc en
-nombre, et en genre seulement quand le genre est connu :
+### Le genre des noms
+
+Le dictionnaire ne le dit pas. Il connaît celui des paradigmes à deux genres
+— `chat` / `chatte` —, pas celui de `voiture` ni de `cheval`. Tant que
+l'accord se faisait au masculin par défaut, `des voitures blanc` devenait
+`des voitures blancs` : pas une faute laissée, une faute **écrite**.
+
+`papote/genres.py` le reconstitue par trois voies, et assume la quatrième :
 
 | | |
 |---|---|
-| `des chattes gentil` → `gentilles` | le dictionnaire connaît le genre |
-| `des voitures blanc` → `blancs` | il ne le connaît pas : le nombre seul |
+| **la phrase** | `la porte est ouvert` → le déterminant porte déjà le genre |
+| **la terminaison** | `-tion`, `-ité`, `-esse` sont féminins sans exception ; `-ment`, `-isme`, `-oir` masculins. Chacune vient avec ses exceptions nommées : `jument`, `silence`, `eau`, `peau` |
+| **une liste** | les noms courts et courants qu'aucune règle ne couvre : `eau`, `nuit`, `main`, `jour` |
+| **rien** | et alors on se tait |
+
+Se taire est la partie qui compte. Un nom dont le genre reste inconnu ne fait
+pas accorder un adjectif dont le masculin et le féminin diffèrent :
+
+```
+des voitures blanc   ->  des voitures blanches   (« voiture » est dans la liste)
+des trucs blanc      ->  des trucs blanc         (« truc », on ne sait pas)
+des trucs rouge      ->  des trucs rouges        (« rouge » ne change pas)
+```
+
+Les mots qui changent de sens avec leur genre — `le livre` et `la livre`,
+`le poste` et `la poste` — ne figurent nulle part : une table à une colonne
+se tromperait une fois sur deux.
 
 
 Le principe, partout : **mieux vaut sous-corriger que corrompre**. Un message

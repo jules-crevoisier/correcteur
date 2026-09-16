@@ -108,6 +108,20 @@ FAUTES = [
     ("ils sont national", "ils sont nationaux", "accord"),
     ("un chevaux blanc", "un cheval blanc", "accord"),
 
+    # -- accord en genre. Le dictionnaire ne dit pas le genre des noms :
+    #    il vient de la phrase elle-meme, d'une terminaison sure, ou d'une
+    #    liste ecrite a la main. Quand il reste inconnu, on se tait.
+    ("des voitures blanc", "des voitures blanches", "accord"),
+    ("des portes ouvert", "des portes ouvertes", "accord"),
+    ("des chaises vert", "des chaises vertes", "accord"),
+    ("la porte est ouvert", "la porte est ouverte", "accord"),
+    ("la voiture est garé", "la voiture est garée", "accord"),
+    ("les tables sont rond", "les tables sont rondes", "accord"),
+    ("mes soeurs sont grand", "mes sœurs sont grandes", "accord"),
+    ("les routes sont long", "les routes sont longues", "accord"),
+    ("les femmes sont content", "les femmes sont contentes", "accord"),
+    ("les hommes sont content", "les hommes sont contents", "accord"),
+
     # -- homophones : les paires dont les deux membres sont trop courants
     #    pour se departager sur la frequence. Seul le contexte tranche.
     ("je sais pas ou il est", "je sais pas où il est", "homophone"),
@@ -171,7 +185,9 @@ FAUTES = [
     ("ils se sont trompé", "ils se sont trompés", "accord"),
     ("elle s'est levé tôt", "elle s'est levée tôt", "accord"),
     ("nous nous sommes perdu", "nous nous sommes perdus", "accord"),
-    ("les filles son parti", "les filles sont partis", "accord"),
+    # Le masculin etait ce que le correcteur savait faire, pas ce que le
+    # francais demande. Il connait le genre de « fille » maintenant.
+    ("les filles son parti", "les filles sont parties", "accord"),
     ("les enfant sont la", "les enfants sont là", "accord"),
     ("mes ami arrivent", "mes amis arrivent", "accord"),
     ("quelques minute", "quelques minutes", "accord"),
@@ -234,6 +250,13 @@ INTOUCHABLES = [
     # demandent des corrections opposees : « les chiens courts » ou « les
     # chiens courent ». Devant ce partage, le correcteur n'invente pas.
     "les chiens court vite",
+    # Genre inconnu : l'adjectif differe au masculin et au feminin, et
+    # l'ecrire au masculin serait un coup de des. Mieux vaut ne rien faire.
+    "des trucs blanc",
+    "des machins vert",
+    "le livre est ouvert",
+    "la nuit est calme",
+    "le film est fini",
     # Les deux lectures de chaque paire d'homophones, cote « ne pas
     # toucher ». Une regle qui les abime coute plus cher qu'elle ne rapporte.
     "café ou thé",

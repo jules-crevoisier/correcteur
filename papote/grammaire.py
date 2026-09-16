@@ -1383,19 +1383,33 @@ def _accord_participe_etre(ctx: Contexte, i: int):
     return appliquer_casse(ctx.brut(i), accorde)
 
 
-def _accord_sujet_nominal_etre(ctx: Contexte, i: int) -> str | None:
-    """« les enfants sont content » : le sujet est un nom, et il est pluriel.
+ETRE_PLURIEL = {"sont", "sommes", "étaient", "étions", "seront", "serons"}
+ETRE_SINGULIER = {"est", "était", "sera", "serait", "soit"}
 
-    Le genre reste inconnu — le dictionnaire ne le dit pas — donc on ne
-    propose que le pluriel masculin, celui qui vaut aussi pour un groupe
-    mixte.
+
+def _accord_sujet_nominal_etre(ctx: Contexte, i: int) -> str | None:
+    """« les enfants sont content », « la porte est ouvert ».
+
+    Le sujet est un nom : c'est l'auxiliaire qui donne le nombre, et le nom
+    qui donne le genre — quand on le connait. Sans le genre, on s'en tient
+    au masculin pluriel, qui vaut aussi pour un groupe mixte ; au singulier,
+    ou le masculin ne se rattrape pas, on se tait.
     """
-    if ctx.noyau(i - 1) not in ("sont", "sommes", "étaient", "étions",
-                                "seront", "serons"):
-        return None
-    if not _est_pluriel(ctx, ctx.mot(i - 2)):
-        return None
-    return "s"
+    auxiliaire = ctx.noyau(i - 1)
+    if auxiliaire in ETRE_PLURIEL:
+        if not _est_pluriel(ctx, ctx.mot(i - 2)):
+            return None
+        return "es" if genre_du_nom(ctx, i - 2) == "f" else "s"
+
+    if auxiliaire in ETRE_SINGULIER:
+        nom = ctx.mot(i - 2)
+        if nom in PRONOMS_SUJETS or not ctx.morphologie.singulier(nom):
+            return None
+        if ctx.mot(i - 3) not in DETERMINANTS_SINGULIERS \
+                and ctx.elision(i - 2) != "l'":
+            return None
+        return "e" if genre_du_nom(ctx, i - 2) == "f" else None
+    return None
 
 
 NOMBRES_PLURIELS = {"deux", "trois", "quatre", "cinq", "six", "sept", "huit",
@@ -1420,6 +1434,57 @@ MOTS_INVARIABLES = {
     "dehors", "dedans", "dessus", "dessous", "jusque", "jusqu", "afin",
     "autour", "auprès", "grâce", "face", "quant", "soit", "tant", "tellement",
 }
+
+
+# Determinants qui portent le genre. « les », « des », « ces » ne le
+# portent pas, et c'est justement dans ces groupes-la qu'on en a besoin.
+DETERMINANTS_GENRES = {
+    "le": "m", "un": "m", "ce": "m", "cet": "m", "mon": "m", "ton": "m",
+    "son": "m", "du": "m", "au": "m", "quel": "m",
+    "la": "f", "une": "f", "cette": "f", "ma": "f", "ta": "f", "sa": "f",
+    "quelle": "f",
+}
+
+
+def genre_du_nom(ctx: "Contexte", i: int) -> str | None:
+    """Le genre du nom en position i, par tout ce qui peut le dire.
+
+    Quatre sources, de la plus sure a la moins precise :
+
+    1. le dictionnaire, quand le nom a deux genres — « chatte » est un
+       feminin, il le dit lui-meme ;
+    2. le determinant, quand il en porte un — « la porte », « une maison » ;
+    3. un adjectif deja accorde dans le groupe — « une belle maison » le dit
+       deux fois avant qu'on ait besoin d'une troisieme ;
+    4. la table de `genres.py`, terminaisons et liste.
+
+    Rien du tout est une reponse : elle fait taire les regles qui en
+    dependent, ce qui vaut mieux que d'ecrire un masculin au hasard.
+    """
+    mot = ctx.mot(i)
+    if not mot:
+        return None
+
+    traits = ctx.morphologie.traits(mot)
+    if traits & {"ms", "mp"} and not traits & {"fs", "fp"}:
+        return "m"
+    if traits & {"fs", "fp"} and not traits & {"ms", "mp"}:
+        return "f"
+
+    for recul in (1, 2):
+        precedent = ctx.mot(i - recul)
+        if precedent in DETERMINANTS_GENRES:
+            return DETERMINANTS_GENRES[precedent]
+        # « une belle maison » : l'adjectif antepose porte deja l'accord.
+        voisins = ctx.morphologie.traits(precedent)
+        if _adjectif_antepose(precedent) and voisins & {"fs", "fp"} \
+                and not voisins & {"ms", "mp"}:
+            return "f"
+
+    from .genres import genre
+
+    lemmes = ctx.morphologie.lemmes(mot)
+    return genre(lemmes[0] if lemmes else mot)
 
 
 def _est_participe_seulement(ctx: "Contexte", mot: str) -> bool:
@@ -1664,25 +1729,30 @@ def _accord_adjectif_pluriel(ctx: Contexte, i: int):
     if ctx.morphologie.verbe(mot):
         return None
 
-    nom = ""
+    indice_du_nom = None
     if _est_pluriel(ctx, ctx.mot(i - 1)) and _determinant_pluriel(ctx, i - 2):
-        nom = ctx.mot(i - 1)
+        indice_du_nom = i - 1
     elif _determinant_pluriel(ctx, i - 1) and _est_pluriel(ctx, ctx.mot(i + 1)):
-        nom = ctx.mot(i + 1)
-    if not nom:
+        indice_du_nom = i + 1
+    if indice_du_nom is None:
         return None
 
-    # Quand le dictionnaire connait le genre du nom, l'adjectif le suit :
-    # « des chattes content » veut « contentes », pas « contents ». Il ne le
-    # connait que des noms a deux genres — « chat »/« chatte » — et la
-    # plupart n'en ont qu'un seul, qu'il ne dit pas. L'accord se fait alors
-    # en nombre seulement, au masculin.
-    genre = ctx.morphologie.traits(nom) & {"mp", "fp"}
-    if genre:
-        accorde = ctx.morphologie.accorder(
-            mot, genre | {"p" + g for g in genre})
-        if accorde is not None and ctx.connait(accorde):
-            return appliquer_casse(ctx.brut(i), accorde)
+    # L'adjectif suit le genre du nom. Quand ce genre reste inconnu, deux
+    # cas : ou bien l'adjectif s'ecrit pareil aux deux genres — « rouges »,
+    # « faciles » — et le nombre suffit ; ou bien il differe, et l'ecrire au
+    # masculin serait un coup de des. « des voitures blanc » devenait « des
+    # voitures blancs » : une faute laissee vaut mieux qu'une faute ecrite.
+    voulu = genre_du_nom(ctx, indice_du_nom)
+    masculin = ctx.morphologie.accorder(mot, {"mp", "pmp"})
+    feminin = ctx.morphologie.accorder(mot, {"fp", "pfp"})
+
+    if voulu == "f" and feminin is not None:
+        return appliquer_casse(ctx.brut(i), feminin)
+    if voulu == "m" and masculin is not None:
+        return appliquer_casse(ctx.brut(i), masculin)
+    if voulu is None and masculin is not None and feminin is not None \
+            and masculin != feminin:
+        return None
 
     for pluriel in _pluriels(ctx, mot):
         if ctx.connait(pluriel):
