@@ -100,10 +100,14 @@ jobs:
 
       # WiX fabrique le MSI. La version lui est passee telle quelle : c'est
       # elle qui apparait dans la liste des programmes installes.
+      # WiX est epingle en version 5 : a partir de la 6, l'outil demande
+      # d'accepter l'« Open Source Maintenance Fee », un engagement de licence
+      # qui ne se prend pas au detour d'un script de compilation. La 5 est
+      # sous licence MIT, et comprend le meme format de recette.
       - name: Installer WiX
         run: |
-          dotnet tool install --global wix
-          wix extension add -g WixToolset.UI.wixext
+          dotnet tool install --global wix --version 5.0.2
+          wix extension add -g WixToolset.UI.wixext/5.0.2
 
       - name: Construire l'installateur
         shell: pwsh
