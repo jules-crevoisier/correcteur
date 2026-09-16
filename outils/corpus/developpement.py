@@ -108,6 +108,13 @@ FAUTES = [
     ("ils sont national", "ils sont nationaux", "accord"),
     ("un chevaux blanc", "un cheval blanc", "accord"),
 
+    # -- des mots francais que la protection anglaise interdisait d'accentuer
+    ("une decision importante", "une décision importante", "accent"),
+    ("le president a parle", "le président a parlé", "accent"),
+    ("son role est clair", "son rôle est clair", "accent"),
+    ("une belle experience", "une belle expérience", "accent"),
+    ("la difference est nette", "la différence est nette", "accent"),
+
     # -- le sujet n'est pas toujours colle a son verbe
     ("beaucoup de gens pense ça", "beaucoup de gens pensent ça", "accord"),
     ("les gens qui pense ça", "les gens qui pensent ça", "accord"),
@@ -185,10 +192,34 @@ FAUTES = [
 
 # Phrases correctes : elles doivent ressortir a l'identique.
 INTOUCHABLES = [
+    # Trois phrases venues du corpus tenu a l'ecart, ou elles ont trouve
+    # trois bugs d'un coup. Les avoir lues les a brulees : elles viennent
+    # donc ici, ou l'on a le droit de travailler dessus.
+    #
+    #   « c'est la même chose » devenait « c'est là même chose », et avec
+    #   lui « c'est la vie », « c'est la fin », « il est la preuve ». La
+    #   fin de segment se reconnaissait a un motif qui acceptait une simple
+    #   espace : presque tout mot passait pour une fin de phrase.
+    "Tous les jours c'est la même chose.",
+    #   « repo » devenait « repos ».
+    "le repo est sur github",
+    #   « config.json » devenait « config.j'son », et « vide » « vidé ».
+    "le fichier config.json est vide",
     # « court » est un adjectif autant qu'un verbe, et les deux lectures
     # demandent des corrections opposees : « les chiens courts » ou « les
     # chiens courent ». Devant ce partage, le correcteur n'invente pas.
     "les chiens court vite",
+    # La fin de phrase se reconnait a une ponctuation, pas a une espace.
+    "c'est la vie",
+    "c'est la fin",
+    "il est la preuve",
+    "elle est la meilleure",
+    # Du vocabulaire de developpement et des noms de fichiers.
+    "ouvre app.py pour voir",
+    "le deploy a échoué hier soir",
+    "j'ai fait un git push ce matin",
+    "le verre est vide",
+    "i said no and left",
     "des tickets restaurant",
     "je les mange tous les jours",
     "beaucoup de monde est venu",

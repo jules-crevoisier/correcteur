@@ -155,7 +155,14 @@ DETERMINANTS_PLURIELS = {
     "plusieurs", "quelques", "certains", "certaines", "différents", "divers",
 }
 
-FIN_DE_SEGMENT = re.compile(r"^\s*($|[.!?,;:…\n)\]»\"])")
+# Ce qui ferme un membre de phrase. Le motif porte sur le *separateur* entre
+# deux mots : une ponctuation, un retour a la ligne, une parenthese fermante.
+#
+# Il s'y trouvait un « $ », pour le dernier mot du texte. Or un separateur
+# d'un seul espace satisfait « ^\s*$ » : tout mot suivi d'une espace passait
+# donc pour une fin de phrase, et « c'est la vie » devenait « c'est là vie ».
+# Le dernier mot est deja traite a part, juste en dessous.
+FIN_DE_SEGMENT = re.compile(r"^\s*[.!?,;:…\n)\]»\"]")
 DEBUT_DE_SEGMENT = re.compile(r"[.!?,;:…\n]")
 
 # Mots qui ouvrent un membre de phrase sans en etre le sujet.
@@ -886,13 +893,34 @@ AVANT_LA_ACCENT = {
 }
 
 
+def _peut_suivre_un_article(ctx: "Contexte", i: int) -> bool:
+    """Le mot en position i peut-il venir juste apres « la » ?
+
+    C'est la question qui separe l'article de l'adverbe : dans « c'est la
+    vie », « vie » est un nom, donc « la » est un article ; dans « il est la
+    depuis hier », rien ne suit que « la » puisse determiner, et c'est
+    « là ».
+
+    Le dictionnaire ne dit pas la nature des mots — « aussi » et « vie » y
+    sont tous deux de simples entrees. Mais il dit leur **pluriel**, et
+    seuls les noms et les adjectifs en ont un : « vies » existe, « aussis »
+    non. C'est ce detour qui repond a la question.
+    """
+    mot = ctx.mot(i)
+    if not mot or mot in MOTS_INVARIABLES:
+        return False
+    if mot in DETERMINANTS or _adjectif_antepose(mot):
+        return True
+    return ctx.morphologie.au_pluriel(mot) is not None
+
+
 @regle("LA_ACCENT", "« là » designe le lieu ; « la » est un article")
 def _la_accent(ctx: Contexte, i: int):
     if ctx.mot(i) != "la":
         return None
     if ctx.mot(i + 1) == "bas" and ctx.separateur(i) == " ":
         return (appliquer_casse(ctx.brut(i), "là-bas"), 2)
-    if ctx.noyau(i - 1) in AVANT_LA_ACCENT and ctx.fin_de_segment(i):
+    if ctx.noyau(i - 1) in AVANT_LA_ACCENT and not _peut_suivre_un_article(ctx, i + 1):
         return appliquer_casse(ctx.brut(i), "là")
     return None
 
@@ -1022,6 +1050,12 @@ def _participe_sans_accent(ctx: Contexte, i: int):
     # « contenter » : quand le mot prive de son « e » existe deja, c'est un
     # adjectif ou un nom, et l'auxiliaire ne prouve rien.
     if ctx.connait(mot[:-1]):
+        return None
+
+    # « le fichier est vide » : « vide » est un adjectif, et l'auxiliaire ne
+    # le rend pas participe. La regle du « e » manquant ne le voyait pas,
+    # « vid » n'etant pas un mot ; le dictionnaire, lui, le sait.
+    if ctx.morphologie.nom(mot):
         return None
 
     infinitif = infinitif_premier_groupe(ctx, mot)
