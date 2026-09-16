@@ -66,6 +66,22 @@ class Journal:
             return
         self.corrections[f"{avant.strip()} → {apres.strip()}"] += 1
         self.modifie = True
+        self._elaguer()
+
+    def _elaguer(self) -> None:
+        """Ramene les compteurs a ce qu'on garde de toute facon.
+
+        Le fichier ne retient que les `MEMOIRE` premieres entrees : c'est
+        `en_dictionnaire` qui coupe. En memoire, rien ne coupait — et Papote
+        tourne des semaines d'affilee. Le compteur enflait pour des paires
+        vues une seule fois, qui ne seraient jamais ecrites nulle part.
+
+        On laisse de la marge avant d'elaguer : couper a chaque correction
+        ferait perdre des entrees qui montaient.
+        """
+        if len(self.corrections) <= MEMOIRE * 4:
+            return
+        self.corrections = Counter(dict(self.corrections.most_common(MEMOIRE)))
 
     def correction_annulee(self, mot: str, regle: str = "") -> list[Lecon]:
         """Enregistre un refus, et renvoie ce qu'il faut en conclure."""

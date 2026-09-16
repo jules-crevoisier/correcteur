@@ -123,3 +123,26 @@ def test_rien_a_ecrire_n_ecrit_rien(tmp_path, journal):
     chemin = tmp_path / "apprentissage.json"
     journal.enregistrer(chemin)
     assert not chemin.exists()
+
+
+# ---------------------------------------------------------------------------
+# Ce qui enfle pendant que Papote tourne
+#
+# Le fichier ne retient que les MEMOIRE premieres entrees. En memoire, rien
+# ne coupait — et Papote tourne des semaines d'affilee.
+# ---------------------------------------------------------------------------
+
+def test_les_compteurs_ne_grossissent_pas_sans_fin():
+    journal = apprentissage.Journal()
+    for i in range(apprentissage.MEMOIRE * 6):
+        journal.correction_appliquee(f"faute{i}", f"correction{i}")
+    assert len(journal.corrections) <= apprentissage.MEMOIRE * 4
+
+
+def test_l_elagage_garde_les_plus_frequentes():
+    journal = apprentissage.Journal()
+    for _ in range(50):
+        journal.correction_appliquee("sa", "ça")
+    for i in range(apprentissage.MEMOIRE * 6):
+        journal.correction_appliquee(f"faute{i}", f"correction{i}")
+    assert journal.corrections["sa → ça"] == 50

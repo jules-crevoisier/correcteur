@@ -519,6 +519,9 @@ class EcouteClavier:
             with self._verrou:
                 self.frappe.oublier()
                 self._defaisable = None
+                # Un clic peut avoir change de fenetre autant que de
+                # position dans la meme.
+                self._oublier_l_application()
             self._retirer_la_bulle()
         except Exception:                          # noqa: BLE001
             pass
@@ -554,6 +557,10 @@ class EcouteClavier:
         self._branchement = None
 
     # -- reception des touches ----------------------------------------------
+
+    def _oublier_l_application(self) -> None:
+        """Force la prochaine lecture a interroger le systeme."""
+        self._application_vue = 0.0
 
     def _application(self) -> str | None:
         """L'application au premier plan, sans harceler le systeme."""
@@ -748,6 +755,13 @@ class EcouteClavier:
         # (AltGr se presente comme ctrl+alt : on prefere l'ecarter aussi.)
         if any(keyboard.is_pressed(touche) for touche in ("ctrl", "alt", "windows")):
             self.frappe.oublier()
+            # Alt+Tab et la touche Windows changent de fenetre. Le nom de
+            # l'application au premier plan est garde une demi-seconde pour
+            # ne pas harceler le systeme — et pendant cette demi-seconde, la
+            # premiere frappe du terminal qu'on vient d'ouvrir se faisait
+            # corriger. On perime donc le cache : la prochaine touche
+            # redemandera au systeme ou l'on est.
+            self._oublier_l_application()
             return None
 
         if nom == "backspace":

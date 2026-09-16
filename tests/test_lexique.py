@@ -8,6 +8,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from papote import lexique as lexique_mod  # noqa: E402
 from papote.lexique import (  # noqa: E402
     CLASSE_ACCENT,
     CLASSE_EDITION,
@@ -204,3 +205,24 @@ def test_une_majuscule_ne_bloque_pas_sa_jumelle(lexique):
     """« reunion » vaut « réunion » — l'ile ne compte pas comme concurrente."""
     assert lexique.suggestion("reunion") == "réunion"
 
+
+
+def test_le_cache_des_candidats_est_borne(mini, monkeypatch):
+    """Papote tourne des semaines : un cache sans borne retenait chaque mot
+    jamais tape, avec sa liste d'objets."""
+    monkeypatch.setattr(lexique_mod, "MEMOIRE_CANDIDATS", 8)
+    for i in range(40):
+        mini.candidats(f"motinconnu{i}")
+    assert len(mini._cache) <= 8
+
+
+def test_le_cache_garde_les_plus_recents(mini, monkeypatch):
+    monkeypatch.setattr(lexique_mod, "MEMOIRE_CANDIDATS", 3)
+    for mot in ("aaa", "bbb", "ccc"):
+        mini.candidats(mot)
+    # On redemande « aaa » : il redevient le plus recent.
+    mini.candidats("aaa")
+    mini.candidats("ddd")
+    cles = {cle[0] for cle in mini._cache}
+    assert "aaa" in cles
+    assert "bbb" not in cles

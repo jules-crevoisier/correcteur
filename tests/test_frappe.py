@@ -984,3 +984,48 @@ def test_hors_de_windows_le_verrou_est_ignore(correcteur, clavier,
 
     monkeypatch.setattr(os_mod, "name", "posix")
     assert ecoute(correcteur)._verrou_majuscule() is False
+
+
+# ---------------------------------------------------------------------------
+# Le cache de l'application au premier plan
+#
+# Le nom de la fenetre active est garde une demi-seconde pour ne pas harceler
+# le systeme. Mais Alt+Tab change de fenetre en bien moins que cela : la
+# premiere frappe du terminal qu'on vient d'ouvrir se faisait corriger.
+# ---------------------------------------------------------------------------
+
+def test_un_raccourci_perime_le_cache_de_l_application(correcteur, clavier):
+    demandes = []
+    ecouteur = EcouteClavier(Frappe(correcteur),
+                             application=lambda: demandes.append(1) or "a.exe")
+    ecouteur.actif = True
+    ecouteur._application()
+    assert len(demandes) == 1
+    # Sans raccourci, la reponse est reprise du cache.
+    ecouteur._application()
+    assert len(demandes) == 1
+
+    clavier.enfonces.add("alt")
+    ecouteur._traduire(FauxEvenement("tab"))
+    clavier.enfonces.discard("alt")
+
+    ecouteur._application()
+    assert len(demandes) == 2
+
+
+def test_un_clic_perime_le_cache_de_l_application(correcteur, clavier):
+    demandes = []
+    ecouteur = EcouteClavier(Frappe(correcteur),
+                             application=lambda: demandes.append(1) or "a.exe")
+    ecouteur.actif = True
+    ecouteur._application()
+    assert len(demandes) == 1
+
+    class Clic:
+        pass
+
+    Clic.__name__ = "ButtonEvent"
+    ecouteur._sur_clic(Clic())
+
+    ecouteur._application()
+    assert len(demandes) == 2
