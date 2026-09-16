@@ -117,6 +117,11 @@ FAUTES = [
     ("les enfants sont content", "les enfants sont contents", "accord"),
     ("des jolies fleur", "des jolies fleurs", "accord"),
     ("trois petit chats", "trois petits chats", "accord"),
+
+    # -- trouvees en lisant un vrai message, ecrit avec le correcteur
+    ("on voudrrait un overlay", "on voudrait un overlay", "frappe"),
+    ("un system de prédiction", "un système de prédiction", "accent"),
+    ("les claviers telephone", "les claviers téléphone", "accent"),
 ]
 
 # Phrases correctes : elles doivent ressortir a l'identique.
@@ -252,6 +257,11 @@ INTOUCHABLES = [
     "Je me souviens très bien de ce jour-là.",
     "Il a plus de temps que moi.",
     "À plus tard !",
+    # -- mots anglais courts qu'une apostrophe abimait
+    "appuie sur tab pour valider",
+    "le mode dev est actif",
+    "un bug dans le back",
+
     # -- anglais et code au milieu du francais
     "the game is over",
     "check this out",

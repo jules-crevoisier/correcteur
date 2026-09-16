@@ -337,9 +337,23 @@ def conjuguer(ctx: "Contexte", infinitif: str, terminaison: str) -> str | None:
     for candidat in (radical + terminaison,
                      radical + "e" + terminaison,
                      radical + "è" + terminaison):
-        if ctx.connait(candidat):
+        if ctx.connait(candidat) and _vaut_la_peine(ctx, candidat):
             return candidat
     return None
+
+
+def _vaut_la_peine(ctx: "Contexte", candidat: str) -> bool:
+    """La forme conjuguee est-elle employee par quelqu'un ?
+
+    « les claviers telephone » : l'orthographe rend « téléphone » (797e mot
+    du francais), puis l'accord le conjugue en « téléphonent » — une forme
+    qui existe au dictionnaire mais que personne n'ecrit, et le nom devient
+    un verbe. Une forme absente des cinquante mille mots les plus employes
+    ne remplace pas un mot qui, lui, en fait partie.
+    """
+    from .lexique import RANG_INCONNU
+
+    return ctx.lexique.rang(candidat) != RANG_INCONNU
 
 
 def sujet_avant(ctx: "Contexte", i: int) -> str:
