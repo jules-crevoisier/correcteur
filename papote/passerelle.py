@@ -284,10 +284,19 @@ class Passerelle:
         return {"message": f"« {mot} » ne compte plus.", "fautes": self.fautes()}
 
     def effacer_historique(self) -> dict:
+        """Vide tout ce que Papote a retenu de vous, d'un seul geste.
+
+        Les fautes comptees et les tournures apprises partent ensemble :
+        proposer deux boutons pour deux fichiers qu'on ne distingue pas de
+        l'exterieur serait une fausse precision.
+        """
         habitudes = getattr(self.app, "apprentissage", None)
         if habitudes is not None:
             habitudes.vider()
-            _sans_bruit(self.app.enregistrer_habitudes, None)
+        memoire = getattr(self.app, "memoire_frappe", None)
+        if memoire is not None:
+            memoire.vide()
+        _sans_bruit(self.app.enregistrer_habitudes, None)
         return {"message": "Historique effacé.", "fautes": self.fautes()}
 
     # -- page « Applications » ----------------------------------------------

@@ -105,11 +105,14 @@ class Frappe:
     def __init__(self, correcteur, longueur_max: int = 400,
                  effacement_max: int = 40,
                  effacement_relecture: int = 90,
-                 predicteur=None):
+                 predicteur=None, memoire=None):
         self.correcteur = correcteur
         # Facultatif : sans lui, `prediction()` ne rend rien et personne ne
         # s'en apercoit.
         self.predicteur = predicteur
+        # Facultative aussi : c'est elle qui apprend vos tournures, et qui
+        # fait passer « désolé » devant « désormais ».
+        self.memoire = memoire
         self.longueur_max = longueur_max
         # Au-dela, la correction porte trop loin en arriere : la rafale de
         # retours arriere serait visible, et une desynchronisation couteuse.
@@ -143,11 +146,14 @@ class Frappe:
             # evite de croire qu'on suit un texte qu'on ne suit pas.
             return None
 
+        avant = self.texte
         self.texte += caractere
         self._raccourcir()
 
         if caractere not in SEPARATEURS:
             return None
+
+        self._retenir(avant)
 
         remplacement = self._examiner(caractere)
 
@@ -157,6 +163,29 @@ class Frappe:
             self.oublier()
 
         return remplacement
+
+    def _retenir(self, avant: str) -> None:
+        """Note le mot qui vient de s'achever, et ce qui le precede.
+
+        Seuls les mots du dictionnaire sont retenus : un mot de passe tape
+        dans la mauvaise fenetre, un numero, un nom propre n'ont rien a faire
+        dans un fichier qui traine.
+        """
+        if self.memoire is None:
+            return
+        mots = avant.split()
+        if not mots:
+            return
+        mot = mots[-1].lower().strip("'\u2019-")
+        if len(mot) < 2 or not self.correcteur.lexique.connait(mot):
+            return
+        precedent = mots[-2].lower().strip("'\u2019-") if len(mots) > 1 else ""
+        if precedent and not self.correcteur.lexique.connait(precedent):
+            precedent = ""
+        try:
+            self.memoire.noter(precedent, mot)
+        except Exception:
+            pass
 
     # -- decision -----------------------------------------------------------
 
@@ -212,6 +241,19 @@ class Frappe:
 
     # -- prediction du mot en cours -------------------------------------------
 
+    def mot_precedent(self) -> str:
+        """Le mot acheve juste avant celui qu'on tape.
+
+        C'est tout le contexte dont dispose la prediction : apres « bonne »,
+        quelqu'un qui ecrit souvent « bonne journée » doit voir « journée »
+        passer devant « jours ».
+        """
+        avant = self.texte[:self._debut_du_mot_en_cours()].rstrip(SEPARATEURS)
+        for i in range(len(avant) - 1, -1, -1):
+            if avant[i] in SEPARATEURS:
+                return avant[i + 1:].lower()
+        return avant.lower()
+
     def mot_en_cours(self) -> str:
         """Le debut de mot que l'on est en train de taper.
 
@@ -228,7 +270,8 @@ class Frappe:
         """
         if self.predicteur is None:
             return []
-        return self.predicteur.completer(self.mot_en_cours())
+        return self.predicteur.completer(self.mot_en_cours(),
+                                         precedent=self.mot_precedent())
 
     def accepter_prediction(self) -> Remplacement | None:
         """Ce qu'il faut taper pour completer le mot, si la suite s'ajoute.
@@ -239,7 +282,8 @@ class Frappe:
         """
         if self.predicteur is None:
             return None
-        suite = self.predicteur.suite(self.mot_en_cours())
+        suite = self.predicteur.suite(self.mot_en_cours(),
+                                      precedent=self.mot_precedent())
         if not suite:
             return None
         self.texte += suite

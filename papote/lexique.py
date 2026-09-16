@@ -47,7 +47,28 @@ CLASSE_EDITION_DOUBLE = 2
 
 # En dessous de cette longueur, une lettre d'ecart ne veut plus rien dire :
 # « tt » deviendrait « et », « ct » deviendrait « cet ».
-LONGUEUR_MINIMALE_EDITION = 4
+LONGUEUR_MINIMALE_EDITION = 3
+
+# A trois lettres, la distance d'edition ouvre sur la moitie du dictionnaire :
+# n'importe quel mot etranger ou technique y est a une substitution d'un mot
+# francais tres courant. « tab » deviendrait « ta », « dev » deviendrait
+# « des », « git » deviendrait « dit ».
+#
+# On n'y accepte donc qu'une seule sorte de correction : **les memes lettres
+# dans le desordre**. « qeu » est « que », « aps » est « pas » — l'utilisateur
+# a tape les bonnes touches, dans le mauvais ordre, ce qui arrive tout le
+# temps et ne ressemble a rien d'autre. Un mot qui demande une lettre
+# differente reste tel quel.
+#
+# S'y ajoute un rang tres bas : meme anagramme, un mot rare ne vaut pas le
+# pari.
+RANG_MAXIMAL_MOT_COURT = 400
+LONGUEUR_MOT_COURT = 3
+
+# Rendre son accent a un mot court est bien moins risque que d'y changer une
+# lettre : « tot » est « tôt » (885e) sans que rien d'autre soit possible. On
+# y met tout de meme un plafond, sans quoi « git » deviendrait « gît ».
+RANG_MAXIMAL_ACCENT_COURT = 3_000
 
 # Deux lettres d'ecart, il en faut bien davantage : sur « tmp », la distance
 # deux propose « temps », « type », « tome » et cinquante autres. A partir de
@@ -331,10 +352,17 @@ class Lexique:
         # « pasé » peut devenir « passé », jamais « pas ».
         garder_accent = accentue(minuscule)
 
+        # Sur un mot de trois lettres, seules les lettres interverties sont
+        # recevables : « qeu » vaut « que », jamais « qu » ni « peu ».
+        court = len(nu) <= LONGUEUR_MOT_COURT
+        lettres = sorted(nu) if court else None
+
         def recueillir(squelettes, classe):
             for voisin in squelettes:
                 for forme in self.formes(voisin):
                     if garder_accent and not accentue(forme):
+                        continue
+                    if court and sorted(squelette(forme)) != lettres:
                         continue
                     trouves.setdefault(forme, classe)
 
@@ -414,6 +442,12 @@ class Lexique:
             # Une faute de frappe dans un mot rare : la coincidence est plus
             # probable que l'intention.
             plafond = RANG_MAXIMAL[classe]
+            if len(mot) <= LONGUEUR_MOT_COURT:
+                # Trois lettres : la restitution d'accents garde une marge
+                # confortable — « tot » est « tôt » —, l'edition presque
+                # aucune.
+                plafond = (RANG_MAXIMAL_ACCENT_COURT if classe == CLASSE_ACCENT
+                           else RANG_MAXIMAL_MOT_COURT)
             if plafond is not None and meilleur.rang > plafond:
                 break
 

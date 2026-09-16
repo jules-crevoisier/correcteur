@@ -240,3 +240,67 @@ def test_l_imperatif_et_son_pronom_se_lient(correcteur, faute, attendu):
 def test_un_sujet_devant_empeche_la_liaison(correcteur):
     """« je dis moi aussi » n'est pas un impératif."""
     assert correcteur.corriger("je dis moi aussi")[0] == "je dis moi aussi"
+
+
+# -- l'accent oublie sur un mot qui existe quand meme ------------------------
+
+@pytest.mark.parametrize("faute,attendu", [
+    ("par pole ou pas", "par pôle ou pas"),
+    ("la moitie des gens", "la moitié des gens"),
+    ("le comite se réunit", "le comité se réunit"),
+    ("voila le résultat", "voilà le résultat"),
+    ("une foret dense", "une forêt dense"),
+])
+def test_un_mot_sans_accent_qui_en_cache_un_autre(correcteur, faute, attendu):
+    """« pole » est au dictionnaire — c'est la « pole position »."""
+    assert correcteur.corriger(faute)[0] == attendu
+
+
+@pytest.mark.parametrize("phrase", [
+    "il prive son fils de sortie",
+    "tu cites un exemple",
+    "on publie demain",
+    "je le cite souvent",
+    "il la prive de dessert",
+])
+def test_un_verbe_conjugue_garde_sa_graphie(correcteur, phrase):
+    """« il prive » n'est pas « il privé » : un sujet devant, on ne touche pas."""
+    assert correcteur.corriger(phrase)[0] == phrase
+
+
+def test_deux_participes_qui_se_ressemblent_ne_se_tranchent_pas(correcteur):
+    """« elles sont reparties » : elles sont parties de nouveau, on ne les a
+    pas réparties."""
+    assert "réparties" not in correcteur.corriger("elles sont reparties")[0]
+
+
+def test_un_mot_a_plusieurs_accents_possibles_reste_intact(correcteur):
+    """« cote » peut être « côte », « côté » ou « coté » : rien ne tranche."""
+    assert correcteur.corriger("du cote de chez moi")[0] == "du cote de chez moi"
+
+
+# -- un determinant singulier veut un nom singulier -------------------------
+
+@pytest.mark.parametrize("faute,attendu", [
+    ("au niveaux du serveur", "au niveau du serveur"),
+    ("une choses à faire", "une chose à faire"),
+])
+def test_le_nom_suit_son_determinant(correcteur, faute, attendu):
+    assert correcteur.corriger(faute)[0] == attendu
+
+
+@pytest.mark.parametrize("phrase", [
+    "le temps passe vite",
+    "un pays lointain",
+    "le prix est correct",
+    "au niveau du serveur",
+    "les niveaux sont hauts",
+])
+def test_les_noms_invariables_et_les_vrais_pluriels_survivent(correcteur,
+                                                               phrase):
+    assert correcteur.corriger(phrase)[0] == phrase
+
+
+def test_un_pronom_avant_le_determinant_annule_la_regle(correcteur):
+    """« elles son parties » : c'est « sont » qu'il fallait lire."""
+    assert correcteur.corriger("elles son parties")[0] == "elles sont parties"

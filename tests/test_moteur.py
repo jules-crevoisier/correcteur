@@ -188,3 +188,43 @@ def test_les_mots_incertains_sont_proposes_sans_etre_imposes(correcteur):
     assert "ourné" in correcteur.corriger("une bonne ourné")[0]
     assert correcteur.propositions("ourné")[0] == "journée"
 
+
+
+# -- l'espace sautee ---------------------------------------------------------
+
+@pytest.mark.parametrize("colle,attendu", [
+    ("ilfaut voir", "il faut voir"),
+    ("commenttesté", "comment testé"),
+    ("bonjourtout le monde", "bonjour tout le monde"),
+    ("jevais partir", "je vais partir"),
+    ("parcontre", "par contre"),
+])
+def test_deux_mots_colles_se_separent(correcteur, colle, attendu):
+    """L'espace est la touche la plus large du clavier, et la plus manquée."""
+    assert correcteur.corriger(colle)[0] == attendu
+
+
+def test_la_coupure_passe_avant_la_faute_de_frappe(correcteur):
+    """« ilfaut » devenait « faut » : la distance d'édition escamotait un mot."""
+    assert correcteur.corriger("ilfaut")[0] == "il faut"
+
+
+@pytest.mark.parametrize("mot", ["github", "facebook", "portable", "important"])
+def test_un_mot_entier_ne_se_coupe_pas(correcteur, mot):
+    """« hub » est au dictionnaire, 18 000e — cela ne suffit pas à couper."""
+    assert correcteur.corriger(f"sur {mot} demain")[0] == f"sur {mot} demain"
+
+
+def test_un_mot_qui_hesite_sur_ses_accents_ne_se_coupe_pas(correcteur):
+    """« decolle » est « décolle » ou « décollé », pas « de colle »."""
+    assert "de colle" not in correcteur.corriger("l'avion decolle")[0]
+
+
+def test_l_apostrophe_ne_passe_pas_devant_une_hesitation_d_accent(correcteur):
+    assert "d'école" not in correcteur.corriger("l'avion decolle")[0]
+
+
+def test_un_mot_trop_court_ne_se_coupe_pas(correcteur):
+    """Sur quatre lettres, la coupure est plus souvent une coïncidence."""
+    for mot in ("cela", "sont", "dont"):
+        assert correcteur.corriger(mot)[0] == mot
