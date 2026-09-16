@@ -129,6 +129,11 @@ FAUTES = [
     ("bonjourtout le monde", "bonjour tout le monde", "espace"),
     ("jevais partir", "je vais partir", "espace"),
     ("parcontre je sais pas", "par contre je sais pas", "espace"),
+
+    # -- trois lettres interverties
+    ("qeu est ce que tu fais", "que est-ce que tu fais", "frappe"),
+    ("aps de souci", "pas de souci", "frappe"),
+    ("jai dse soucis", "j'ai des soucis", "frappe"),
 ]
 
 # Phrases correctes : elles doivent ressortir a l'identique.
@@ -264,6 +269,13 @@ INTOUCHABLES = [
     "Je me souviens très bien de ce jour-là.",
     "Il a plus de temps que moi.",
     "À plus tard !",
+    # -- trois lettres que rien ne doit toucher
+    "le mode dev est actif",
+    "git pull puis npm run build",
+    "le fichier est en css",
+    "une requête sql",
+    "il faut rentrer tôt",
+
     # -- mots qu'une coupure abimerait
     "on se parle sur github",
     "un message sur facebook",

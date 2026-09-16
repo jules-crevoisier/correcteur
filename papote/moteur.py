@@ -32,6 +32,14 @@ from .lexique import (
 )
 from .politique import PARLE, SOUTENU
 
+# Ce qui ne suit jamais une apostrophe : les formes qui la precedent
+# (« se », « de », « le »...) et les abreviations que le dictionnaire connait
+# pour de mauvaises raisons — « st » y figure a cause de « St. ».
+RESTES_IMPOSSIBLES = {
+    "st", "se", "ce", "de", "le", "la", "les", "me", "te", "ne", "je",
+    "que", "des", "du", "au", "aux", "ma", "ta", "sa", "mes", "tes", "ses",
+}
+
 # Un mot colle plus court que cela ne vaut pas la peine d'etre coupe : la
 # coupure y serait plus souvent une coincidence qu'une intention.
 LONGUEUR_MINIMALE_COUPURE = 6
@@ -174,6 +182,11 @@ class Correcteur:
             # « ca » ne doit pas devenir « c'a » : il faut un vrai mot derriere.
             # « ny » fait exception — « n'y » est trop courant pour le manquer.
             if len(reste) < 2 and reste != "y":
+                continue
+            # Ces mots-la ne suivent jamais une apostrophe : ce sont
+            # eux-memes des elisions, ou des abreviations. Sans cette liste,
+            # « dse » devenait « d'se » et « cst » devenait « c'st ».
+            if reste in RESTES_IMPOSSIBLES:
                 continue
             # Le morceau de droite doit etre un mot **courant**, pas
             # seulement un mot du dictionnaire : « ab » y figure (9 539e), et

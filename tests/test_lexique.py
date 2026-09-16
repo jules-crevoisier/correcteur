@@ -127,10 +127,28 @@ def test_deux_frappes_d_ecart(lexique, faute, attendu):
     assert lexique.suggestion(faute) == attendu
 
 
-def test_les_mots_courts_echappent_a_la_double_edition(lexique):
-    """Sur « temp », la distance deux proposerait « même » ou « tête »."""
-    candidats = [c.mot for c in lexique.candidats("abc")]
-    assert candidats == []
+def test_sur_trois_lettres_seules_les_lettres_interverties_comptent(lexique):
+    """N'importe quel mot technique est a une substitution d'un mot francais.
+
+    « tab » deviendrait « ta », « dev » deviendrait « des », « git »
+    deviendrait « dit ». On n'accepte donc que les memes lettres dans le
+    desordre : l'utilisateur a tape les bonnes touches, dans le mauvais
+    ordre.
+    """
+    assert lexique.suggestion("qeu") == "que"
+    assert lexique.suggestion("aps") == "pas"
+    for technique in ("tab", "dev", "git", "npm", "css", "sql"):
+        assert lexique.suggestion(technique) is None, technique
+
+
+def test_les_candidats_courts_sont_tous_des_anagrammes(lexique):
+    for candidat in lexique.candidats("abc"):
+        assert sorted(candidat.mot) == sorted("abc"), candidat.mot
+
+
+def test_un_anagramme_rare_ne_suffit_pas(lexique):
+    """« abc » a bien « bac » pour anagramme — 2 156e, trop rare pour parier."""
+    assert lexique.suggestion("abc") is None
 
 
 def test_un_accent_tape_ne_se_perd_pas(lexique):
