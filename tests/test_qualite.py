@@ -39,7 +39,7 @@ RAPPEL_MINIMAL_DEV = 0.95
 # Le rappel sur le corpus tenu a l'ecart, mesure le jour ou il a ete ecrit.
 # Il monte a chaque progres du moteur, et ce chiffre monte avec lui. Il ne
 # redescend jamais : le faire baisser, c'est avouer une regression.
-RAPPEL_MINIMAL_A_PART = 0.49
+RAPPEL_MINIMAL_A_PART = 0.63
 
 # Une phrase correcte abimee est un defaut grave. On en tolere une seule ici,
 # heritee du jour de l'ecriture du corpus, et ce plafond ne monte pas.
