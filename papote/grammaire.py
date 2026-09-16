@@ -28,6 +28,9 @@ from dataclasses import dataclass
 from typing import Callable
 
 from .lexique import ACCENTUEES, accentue as accentue_mot, sans_accents
+from .morphologie import (
+    CONJUGUES, NOMS_PLURIELS, PARTICIPES, PARTICIPES_MASCULINS, Morphologie,
+)
 from . import confusions
 from .politique import PARLE, SOUTENU
 
@@ -202,10 +205,16 @@ def regle(nom: str, message: str, registre: str = "tous"):
 class Contexte:
     """Le texte decoupe, plus les quelques services dont les regles ont besoin."""
 
-    def __init__(self, texte: str, jetons: list[Jeton], lexique):
+    def __init__(self, texte: str, jetons: list[Jeton], lexique,
+                 morphologie=None):
         self.texte = texte
         self.jetons = jetons
         self.lexique = lexique
+        # Sans elle, les regles d'accord se taisent : une table vide ne
+        # connait aucun mot, et `connait` est la premiere question qu'elles
+        # posent.
+        self.morphologie = (morphologie if morphologie is not None
+                            else Morphologie(analyses=[], flexions=[]))
 
     # -- lecture des mots ---------------------------------------------------
 
@@ -486,6 +495,76 @@ def _accord_auxiliaire_nous_vous(ctx: Contexte, i: int):
     if correcte is None:
         return None
     return appliquer_casse(ctx.brut(i), correcte)
+
+
+# Ce qu'un pronom sujet impose au verbe qui le suit. « ce » n'y figure pas :
+# « ce sont des choses qui arrivent » est du francais, et le pronom y
+# commande un pluriel.
+PERSONNE_DU_SUJET = {
+    "je": "1s", "tu": "2s",
+    "il": "3s", "elle": "3s", "on": "3s", "ça": "3s",
+    "nous": "1p", "vous": "2p",
+    "ils": "3p", "elles": "3p",
+}
+
+# Devant un pronom, elles en font un sujet multiple : « lui et elle sont
+# partis » se conjugue au pluriel, meme si le pronom, lui, est singulier.
+COORDINATIONS = {"et", "ou", "ni"}
+
+
+def accorder_le_verbe(ctx: "Contexte", i: int, personne: str) -> str | None:
+    """La forme du verbe en position i qui porte cette personne.
+
+    C'est la question que posaient, chacune a sa maniere et avec ses propres
+    listes, une demi-douzaine de regles : celle-ci la pose une fois, au
+    dictionnaire.
+
+    Trois conditions, toutes necessaires :
+
+    - le mot doit etre une forme **conjuguee** connue. Un nom, un participe,
+      un infinitif ne s'accordent pas avec un sujet ;
+    - il ne doit pas **deja** porter la personne demandee. « je pense » est
+      juste, et « pense » est aussi une 3e personne : ne regarder que le
+      sujet ferait corriger des phrases correctes ;
+    - la forme de remplacement doit etre employee par quelqu'un. Le
+      dictionnaire conjugue tout, y compris ce que personne n'ecrit.
+    """
+    mot = ctx.mot(i)
+    if ctx.elision(i) or mot in PRONOMS_COMPLEMENTS or mot in MOTS_INVARIABLES:
+        return None
+
+    traits = ctx.morphologie.traits(mot)
+    if not traits or not traits & CONJUGUES or personne in traits:
+        return None
+
+    accorde = ctx.morphologie.accorder(mot, personne)
+    if accorde is None or accorde == mot or not _vaut_la_peine(ctx, accorde):
+        return None
+    return appliquer_casse(ctx.brut(i), accorde)
+
+
+@regle("ACCORD_PRONOM_VERBE",
+       "le verbe s'accorde avec son pronom sujet")
+def _accord_pronom_verbe(ctx: Contexte, i: int):
+    """« je peut » -> « je peux », « ils vient » -> « ils viennent ».
+
+    Une seule regle pour les neuf pronoms et pour tous les verbes, la ou il
+    fallait auparavant une table par personne et un modele de conjugaison
+    par groupe — soit, en pratique, les verbes en « -er » et rien d'autre.
+    """
+    sujet = sujet_avant(ctx, i)
+    personne = PERSONNE_DU_SUJET.get(sujet)
+    if personne is None:
+        return None
+    # « il nous parle » : « nous » y est complement, le verbe a raison.
+    if personne in ("1p", "2p") and ctx.mot(i - 2) in PRONOMS_SUJETS:
+        return None
+    # « lui et elle sont partis », « toi et moi on verra » : le sujet ne se
+    # limite pas au pronom qu'on voit. La conjonction est juste avant lui,
+    # ou un mot plus loin quand un pronom s'est glisse entre les deux.
+    if (ctx.mot(i - 2) in COORDINATIONS or ctx.mot(i - 3) in COORDINATIONS):
+        return None
+    return accorder_le_verbe(ctx, i, personne)
 
 
 @regle("ACCORD_NOUS_VOUS",
@@ -894,6 +973,32 @@ def _participe_apres_auxiliaire(ctx: Contexte, i: int):
     return None
 
 
+@regle("PARTICIPE_APRES_AUXILIAIRE_CONJUGUE",
+       "apres l'auxiliaire, le verbe se met au participe")
+def _participe_apres_auxiliaire_conjugue(ctx: Contexte, i: int):
+    """« ils ont prit le train » -> « ils ont pris le train ».
+
+    La regle d'au-dessus ne connait que les infinitifs en « -er ». Celle-ci
+    s'appuie sur le dictionnaire : apres un auxiliaire, une forme conjuguee
+    est forcement un participe mal ecrit, quel que soit le verbe.
+
+    Le participe se cherche dans tout le paradigme, pas dans le temps du mot
+    ecrit : « prit » est un passe simple, « pris » n'en fait pas partie.
+    """
+    mot = ctx.mot(i)
+    if ctx.elision(i) or not _auxiliaire_avant(ctx, i):
+        return None
+    traits = ctx.morphologie.traits(mot)
+    # Une forme conjuguee, et rien d'autre : ni nom, ni participe deja
+    # correct, ni infinitif.
+    if not traits or not traits <= CONJUGUES:
+        return None
+    participe = ctx.morphologie.forme(mot, PARTICIPES_MASCULINS)
+    if participe is None or participe == mot:
+        return None
+    return appliquer_casse(ctx.brut(i), participe)
+
+
 @regle("PARTICIPE_SANS_ACCENT",
        "apres l'auxiliaire, le participe prend son accent")
 def _participe_sans_accent(ctx: Contexte, i: int):
@@ -961,6 +1066,15 @@ ACCORDS_ETRE = {
     ("nous", "sommes"): "s",
 }
 
+# Les memes accords, dits au dictionnaire plutot qu'ecrits a la main. Il
+# connait les formes que l'ajout d'une lettre ne donne pas : « ils sont
+# national » veut « nationaux », pas « nationals ».
+TRAITS_ETRE = {
+    "e": ("pfs", "fs"),
+    "es": ("pfp", "fp"),
+    "s": ("pmp", "mp"),
+}
+
 
 @regle("ACCORD_PARTICIPE_ETRE",
        "avec l'auxiliaire « etre », le participe s'accorde avec le sujet")
@@ -988,8 +1102,13 @@ def _accord_participe_etre(ctx: Contexte, i: int):
     if terminaison is None:
         return None
 
-    accorde = mot + terminaison
-    if mot.endswith(("s", "x", "e")) or not ctx.connait(accorde):
+    if mot.endswith(("s", "x", "e")):
+        return None
+
+    accorde = ctx.morphologie.forme(mot, TRAITS_ETRE[terminaison])
+    if accorde is None:
+        accorde = mot + terminaison
+    if accorde == mot or not ctx.connait(accorde):
         return None
     return appliquer_casse(ctx.brut(i), accorde)
 
@@ -1029,32 +1148,98 @@ MOTS_INVARIABLES = {
 }
 
 
+def _est_participe_seulement(ctx: "Contexte", mot: str) -> bool:
+    """« fermé » est un participe et rien d'autre ; « mange » est un verbe."""
+    traits = ctx.morphologie.traits(mot)
+    return bool(traits) and traits <= PARTICIPES
+
+
 def _est_adjectif(ctx: "Contexte", mot: str) -> bool:
     """Le mot peut-il s'accorder comme un adjectif ?
 
     Un adjectif a un feminin — « content » / « contente » — ou se termine
     deja par un « e » qui lui en tient lieu — « rouge ». Cette question
-    posee au dictionnaire suffit a ecarter « avant », « contre » et les
-    autres invariables qui ont un pluriel pour d'autres raisons.
+    ecarte « avant », « contre » et les autres invariables qui ont un
+    pluriel pour d'autres raisons, et surtout les noms : « restaurant » n'a
+    pas de feminin, donc « des tickets restaurant » ne s'accorde pas.
+
+    Ajouter un « e » a la fin ne suffisait pas a la poser. « blanc » fait
+    « blanche », « long » fait « longue », « fermé » fait « fermée » : le
+    dictionnaire connait ces feminins-la, la regle de terminaison non, et
+    « des chevaux blanc » restait tel quel.
     """
     if mot in MOTS_INVARIABLES or not ctx.connait(mot):
         return False
-    return mot.endswith("e") or ctx.connait(mot + "e")
+    if mot.endswith("e"):
+        return True
+    traits = ctx.morphologie.traits(mot)
+    if traits & {"ms", "pms"}:
+        # `accorder` cherche le feminin dans le paradigme ou le mot figure
+        # au masculin. « content » est aussi la 3e personne du pluriel de
+        # « conter » : chercher partout rendrait « contée » aussi bien que
+        # « contente », et le doute ferait tout taire.
+        return ctx.morphologie.accorder(mot, {"fs", "pfs"}) is not None
+    if traits:
+        # Le dictionnaire connait ce mot et ne lui voit pas de feminin.
+        return False
+    return ctx.connait(mot + "e")
 
 
 def _est_pluriel(ctx: "Contexte", mot: str) -> bool:
-    """Le mot est-il un nom au pluriel ?
+    """Le mot peut-il etre un nom au pluriel ?
 
     « quelques » et « plusieurs » portent bien la marque du pluriel, mais ce
     sont des determinants : les prendre pour le nom du groupe ferait chercher
     le verbe un mot trop loin.
+
+    Le dictionnaire repond mieux que la terminaison : il sait que « chevaux »
+    est un pluriel, que « le prix » et « les prix » s'ecrivent pareil, et que
+    « finis » est un verbe et non le pluriel de quoi que ce soit.
     """
-    if not mot or not mot.endswith(("s", "x")):
+    if not mot:
         return False
     if (mot in DETERMINANTS_PLURIELS or mot in NOMBRES_PLURIELS
             or mot in MOTS_INVARIABLES or mot in PRONOMS_SUJETS):
         return False
-    return ctx.connait(mot)
+    traits = ctx.morphologie.traits(mot)
+    if traits:
+        return bool(traits & NOMS_PLURIELS)
+    return mot.endswith(("s", "x")) and ctx.connait(mot)
+
+
+# Quantites suivies de « de » : elles commandent le pluriel aussi surement
+# qu'un determinant. « beaucoup de gens pensent », « plein de trucs
+# trainent ».
+QUANTITES = {"beaucoup", "plein", "peu", "tant", "autant", "plupart",
+             "combien", "assez", "trop", "moins", "plus"}
+
+
+def _sujet_pluriel_avant(ctx: "Contexte", i: int) -> bool:
+    """Le verbe en position i a-t-il un sujet nominal au pluriel ?
+
+    Trois facons de l'ecrire, et le correcteur n'en voyait qu'une :
+
+        les gens pensent              un determinant, un nom
+        beaucoup de gens pensent      une quantite, « de », un nom
+        les gens qui pensent          le meme groupe, derriere « qui »
+
+    Chacune demande que le nom soit un pluriel et que ce qui l'annonce en
+    soit un aussi : sans ces deux appuis, « les » pourrait etre un pronom
+    (« je les mange ») et le nom pourrait etre le verbe.
+    """
+    # « les gens qui pensent » : le pronom relatif reprend le groupe d'avant.
+    recul = 1
+    if ctx.mot(i - 1) == "qui":
+        recul = 2
+
+    nom = ctx.mot(i - recul)
+    if not _est_pluriel(ctx, nom) or _adjectif_antepose(nom):
+        return False
+    if _determinant_pluriel(ctx, i - recul - 1):
+        return True
+    # « beaucoup de gens » : la quantite est deux mots plus loin.
+    return (ctx.noyau(i - recul - 1) in ("de", "d'")
+            and ctx.mot(i - recul - 2) in QUANTITES)
 
 
 def _determinant_pluriel(ctx: "Contexte", i: int) -> bool:
@@ -1069,8 +1254,17 @@ def _determinant_pluriel(ctx: "Contexte", i: int) -> bool:
     return mot == "les" and ctx.mot(i - 1) not in PRONOMS_SUJETS
 
 
-def _pluriels(mot: str) -> list[str]:
-    """Les pluriels envisageables d'un nom singulier."""
+def _pluriels(ctx: "Contexte", mot: str) -> list[str]:
+    """Les pluriels envisageables d'un nom singulier.
+
+    Le dictionnaire connait le sien — « bijou » fait « bijoux », « pneu »
+    fait « pneus », et aucune regle de terminaison ne distingue les deux.
+    Quand il ignore le mot, on retombe sur ces regles, qui ont le merite de
+    ne rien demander.
+    """
+    lu = ctx.morphologie.au_pluriel(mot)
+    if lu is not None:
+        return [lu]
     if mot.endswith("al"):
         return [mot[:-2] + "aux", mot + "s"]
     if mot.endswith(("eau", "eu")):
@@ -1084,15 +1278,24 @@ def _accord_determinant_nom(ctx: Contexte, i: int):
     mot = ctx.mot(i)
     determinant = ctx.mot(i - 1)
 
-    if determinant not in DETERMINANTS_PLURIELS:
+    if determinant in DETERMINANTS_PLURIELS | NOMBRES_PLURIELS:
+        pass
+    elif determinant == "les" and ctx.mot(i - 2) not in PRONOMS_SUJETS:
+        pass
+    elif _adjectif_antepose(determinant) and _est_pluriel(ctx, determinant) \
+            and _determinant_pluriel(ctx, i - 2):
+        # « des jolies fleur », « les dernières affiche » : entre le
+        # determinant et le nom se glisse un adjectif, et il n'y en a qu'une
+        # petite classe fermee qui se place la.
+        pass
+    else:
         # « les » est aussi un pronom : « je les mange » n'a pas de nom.
-        if determinant != "les" or ctx.mot(i - 2) in PRONOMS_SUJETS:
-            return None
+        return None
 
     if ctx.elision(i) or mot.endswith(("s", "x", "z")) or not ctx.connait(mot):
         return None
 
-    for pluriel in _pluriels(mot):
+    for pluriel in _pluriels(ctx, mot):
         if ctx.connait(pluriel):
             return appliquer_casse(ctx.brut(i), pluriel)
     return None
@@ -1127,23 +1330,33 @@ def _adjectif_antepose(mot: str) -> bool:
        "le verbe s'accorde avec son sujet au pluriel")
 def _accord_sujet_nominal(ctx: Contexte, i: int):
     """« les gens pense » -> « les gens pensent »."""
-    if ctx.elision(i):
-        return None
-    if not _est_pluriel(ctx, ctx.mot(i - 1)) or not _determinant_pluriel(ctx, i - 2):
-        return None
-    # « les dernières affiche » : ce qui precede est un adjectif antepose,
-    # donc le mot en position i est le nom — pas le verbe.
-    if _adjectif_antepose(ctx.mot(i - 1)):
+    if ctx.elision(i) or not _sujet_pluriel_avant(ctx, i):
         return None
 
     mot = ctx.mot(i)
-    if mot.endswith("ent") or mot in PRONOMS_COMPLEMENTS:
-        return None
-    # « ces quelques minutes » : un nom deja au pluriel n'est pas le verbe
-    # qu'on cherche, meme si « minuter » existe.
-    if mot.endswith(("s", "x")) and ctx.connait(mot[:-1]):
+    if mot in PRONOMS_COMPLEMENTS:
         return None
 
+    # Le dictionnaire sait conjuguer tous les verbes, pas seulement ceux du
+    # 1er groupe : « les gens finit » devient « les gens finissent ».
+    #
+    # On ne le suit toutefois que sur les mots qui ne peuvent **pas** etre
+    # des noms. Un seul mot au pluriel devant lui ne suffit pas a faire d'un
+    # nom un verbe — « les dernières affiche » l'a montre une fois — et les
+    # noms, eux, restent traites par la voie d'en dessous, plus etroite et
+    # eprouvee.
+    if not ctx.morphologie.nom(mot):
+        accorde = accorder_le_verbe(ctx, i, "3p")
+        if accorde is not None:
+            return accorde
+        if ctx.morphologie.connait(mot):
+            # Il sait ce qu'est ce mot, et sa reponse est « non ».
+            return None
+
+    if mot.endswith("ent"):
+        return None
+    if mot.endswith(("s", "x")) and ctx.connait(mot[:-1]):
+        return None
     infinitif = infinitif_premier_groupe(ctx, mot)
     if infinitif is None:
         return None
@@ -1165,18 +1378,39 @@ def _accord_adjectif_pluriel(ctx: Contexte, i: int):
         return None
     if mot in PRONOMS_COMPLEMENTS or not _est_adjectif(ctx, mot):
         return None
-    # Un verbe s'accorde autrement : ACCORD_SUJET_NOMINAL s'en charge.
-    if infinitif_premier_groupe(ctx, mot) is not None:
+    # Un verbe s'accorde autrement : ACCORD_SUJET_NOMINAL s'en charge. Un
+    # participe, lui, s'accorde bien comme un adjectif — « les yeux fermé »
+    # veut « fermés » — et la terminaison seule les confondait.
+    if (infinitif_premier_groupe(ctx, mot) is not None
+            and not _est_participe_seulement(ctx, mot)):
+        return None
+    # « les chiens court vite » : « court » est un adjectif autant qu'un
+    # verbe, et les deux lectures demandent des corrections opposees —
+    # « courts » ou « courent ». Devant ce partage, on n'invente pas.
+    if ctx.morphologie.verbe(mot):
         return None
 
-    apres_le_nom = (_est_pluriel(ctx, ctx.mot(i - 1))
-                    and _determinant_pluriel(ctx, i - 2))
-    avant_le_nom = (_determinant_pluriel(ctx, i - 1)
-                    and _est_pluriel(ctx, ctx.mot(i + 1)))
-    if not (apres_le_nom or avant_le_nom):
+    nom = ""
+    if _est_pluriel(ctx, ctx.mot(i - 1)) and _determinant_pluriel(ctx, i - 2):
+        nom = ctx.mot(i - 1)
+    elif _determinant_pluriel(ctx, i - 1) and _est_pluriel(ctx, ctx.mot(i + 1)):
+        nom = ctx.mot(i + 1)
+    if not nom:
         return None
 
-    for pluriel in _pluriels(mot):
+    # Quand le dictionnaire connait le genre du nom, l'adjectif le suit :
+    # « des chattes content » veut « contentes », pas « contents ». Il ne le
+    # connait que des noms a deux genres — « chat »/« chatte » — et la
+    # plupart n'en ont qu'un seul, qu'il ne dit pas. L'accord se fait alors
+    # en nombre seulement, au masculin.
+    genre = ctx.morphologie.traits(nom) & {"mp", "fp"}
+    if genre:
+        accorde = ctx.morphologie.accorder(
+            mot, genre | {"p" + g for g in genre})
+        if accorde is not None and ctx.connait(accorde):
+            return appliquer_casse(ctx.brut(i), accorde)
+
+    for pluriel in _pluriels(ctx, mot):
         if ctx.connait(pluriel):
             return appliquer_casse(ctx.brut(i), pluriel)
     return None
@@ -1260,9 +1494,9 @@ def _leur_leurs(ctx: Contexte, i: int):
 
 def analyser(texte: str, jetons: list[Jeton], lexique,
              regles_ignorees: set[str] = frozenset(),
-             registre: str = PARLE) -> list[Suggestion]:
+             registre: str = PARLE, morphologie=None) -> list[Suggestion]:
     """Passe toutes les regles sur le texte et renvoie leurs propositions."""
-    ctx = Contexte(texte, jetons, lexique)
+    ctx = Contexte(texte, jetons, lexique, morphologie)
     applicables = [
         r for r in REGLES
         if r.registre == "tous" or (r.registre == SOUTENU and registre == SOUTENU)
@@ -1670,13 +1904,20 @@ def _accord_determinant_singulier(ctx: Contexte, i: int):
     if ctx.mot(i - 1) not in DETERMINANTS_SINGULIERS:
         return None
 
+    # Le mot doit vraiment etre un pluriel. « la souris », « le prix », « le
+    # temps » finissent par « s » et n'en sont pas, et la liste ecrite a la
+    # main n'en voyait jamais la fin : le dictionnaire, lui, les connait
+    # tous.
+    if ctx.morphologie.connait(mot) and not ctx.morphologie.nom_pluriel(mot):
+        return None
+
     # Un pronom sujet juste avant le determinant : ce n'en est pas un.
     # « elles son parties » n'est pas « elles son partie » — c'est « sont »
     # qu'il fallait lire, et une autre regle s'en charge.
     if ctx.mot(i - 2) in PRONOMS_SUJETS:
         return None
 
-    singulier = mot[:-1]
+    singulier = ctx.morphologie.au_singulier(mot) or mot[:-1]
     if not ctx.connait(singulier):
         return None
     # Le singulier doit etre la forme courante : « le temps » n'est pas

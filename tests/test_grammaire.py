@@ -43,7 +43,9 @@ CORRIGES = [
     ("je peut pas", "je peux pas", "ACCORD_SUJET_VERBE"),
     ("je croit pas", "je crois pas", "ACCORD_JE_TU_S"),
     ("tu mange quoi", "tu manges quoi", "ACCORD_TU_S"),
-    ("ils mange trop", "ils mangent trop", "ACCORD_ILS_ENT"),
+    ("ils mange trop", "ils mangent trop", "ACCORD_PRONOM_VERBE"),
+    ("ils vient demain", "ils viennent demain", "ACCORD_PRONOM_VERBE"),
+    ("les gens finit tard", "les gens finissent tard", "ACCORD_SUJET_NOMINAL"),
 ]
 
 # Phrases correctes que les regles ci-dessus pourraient abimer.
@@ -304,3 +306,71 @@ def test_les_noms_invariables_et_les_vrais_pluriels_survivent(correcteur,
 def test_un_pronom_avant_le_determinant_annule_la_regle(correcteur):
     """« elles son parties » : c'est « sont » qu'il fallait lire."""
     assert correcteur.corriger("elles son parties")[0] == "elles sont parties"
+
+
+# ---------------------------------------------------------------------------
+# Ce que la morphologie a ouvert
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("avant, apres", [
+    # Tous les groupes, la ou seul le 1er etait conjugable.
+    ("les gens finit tard", "les gens finissent tard"),
+    ("les enfants dort déjà", "les enfants dorment déjà"),
+    ("les gens prend le bus", "les gens prennent le bus"),
+    ("ils vient demain", "ils viennent demain"),
+    ("tu dort encore", "tu dors encore"),
+    ("je part demain", "je pars demain"),
+    ("il sortais hier", "il sortait hier"),
+    # Le sujet n'est pas toujours colle a son verbe.
+    ("beaucoup de gens pense ça", "beaucoup de gens pensent ça"),
+    ("les gens qui pense ça", "les gens qui pensent ça"),
+    # Les pluriels qu'aucune terminaison ne devine.
+    ("les bijou brillent", "les bijoux brillent"),
+    ("les cheval courent", "les chevaux courent"),
+    ("un chevaux blanc", "un cheval blanc"),
+    # Les feminins irreguliers, que « mot + e » ne trouvait pas.
+    ("des chevaux blanc", "des chevaux blancs"),
+    ("les yeux fermé", "les yeux fermés"),
+    ("ils sont national", "ils sont nationaux"),
+    # Le participe, cherche hors du temps du mot ecrit.
+    ("ils ont prit le train", "ils ont pris le train"),
+    ("elle a mit la table", "elle a mis la table"),
+])
+def test_la_morphologie_etend_les_accords(correcteur, avant, apres):
+    assert correcteur.corriger(avant)[0] == apres
+
+
+@pytest.mark.parametrize("phrase", [
+    # « court » est un adjectif autant qu'un verbe, et les deux lectures
+    # demandent des corrections opposees : « courts » ou « courent ».
+    "les chiens court vite",
+    # Ils finissent par « s » sans etre des pluriels : la terminaison le
+    # croyait, le dictionnaire non.
+    "le prix est correct",
+    "la souris est cassée",
+    "le temps passe vite",
+    # « ce » commande un pluriel, contrairement aux autres pronoms sujets.
+    "ce sont des choses qui arrivent",
+    # Le sujet ne se limite pas au pronom qu'on voit.
+    "lui et elle sont partis",
+    # « restaurant » n'a pas de feminin : ce n'est pas un adjectif.
+    "des tickets restaurant",
+    # « les » y est un pronom complement, pas un determinant.
+    "je les mange tous les jours",
+    # Une quantite suivie d'un nom indenombrable reste au singulier.
+    "beaucoup de monde est venu",
+])
+def test_la_morphologie_fait_taire_aussi(correcteur, phrase):
+    assert correcteur.corriger(phrase)[0] == phrase
+
+
+def test_le_genre_du_nom_guide_l_adjectif_quand_il_est_connu(correcteur):
+    """Le dictionnaire connait le genre des noms a deux genres, et d'eux seuls."""
+    assert correcteur.corriger("des chattes gentil")[0] == "des chattes gentilles"
+    assert correcteur.corriger("des chats gentil")[0] == "des chats gentils"
+
+
+def test_l_accord_reste_dans_le_temps(correcteur):
+    """« les gens finit » est un present : sa 3e personne du pluriel aussi."""
+    assert correcteur.corriger("les gens finit")[0] == "les gens finissent"
+    assert correcteur.corriger("les gens pensait")[0] == "les gens pensaient"

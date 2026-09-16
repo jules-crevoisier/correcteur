@@ -30,6 +30,7 @@ from .lexique import (
     CLASSE_ACCENT, CLASSE_EDITION, CLASSE_EDITION_DOUBLE, RANG_COURANT,
     RANG_INCONNU, Lexique, sans_accents,
 )
+from .morphologie import Morphologie
 from .politique import PARLE, SOUTENU
 
 # Ce qui ne suit jamais une apostrophe : les formes qui la precedent
@@ -109,8 +110,11 @@ class Correcteur:
                  regles_optionnelles: dict[str, bool] | None = None,
                  mots_perso: list[str] | None = None,
                  remplacements_perso: dict[str, str] | None = None,
-                 registre: str = PARLE):
+                 registre: str = PARLE,
+                 morphologie: Morphologie | None = None):
         self.lexique = lexique if lexique is not None else Lexique()
+        self.morphologie = (morphologie if morphologie is not None
+                            else Morphologie())
         self.registre = registre if registre in (PARLE, SOUTENU) else PARLE
 
         actives = dict(regles.REGLES_OPTIONNELLES)
@@ -143,6 +147,7 @@ class Correcteur:
     def prechauffer(self) -> None:
         """Lit les fichiers de donnees maintenant plutot qu'a la 1re correction."""
         self.lexique.charger()
+        self.morphologie.charger()
 
     # -- protection ---------------------------------------------------------
 
@@ -310,6 +315,13 @@ class Correcteur:
         for candidat in self.lexique.candidats(mot):
             if candidat.rang == RANG_INCONNU or candidat.classe > CLASSE_EDITION:
                 continue
+            # Le pluriel se lit dans le dictionnaire : « bijou » fait
+            # « bijoux », « pneu » fait « pneus », et aucune terminaison ne
+            # distingue les deux.
+            pluriel = self.morphologie.au_pluriel(candidat.mot)
+            if pluriel is not None:
+                recevables.append((candidat.rang, pluriel))
+                continue
             for pluriel in (candidat.mot + "s", candidat.mot + "x",
                             candidat.mot):
                 if self.lexique.connait(pluriel) and pluriel != candidat.mot:
@@ -414,7 +426,8 @@ class Correcteur:
 
         # -- grammaire : elle voit le contexte, elle passe en premier.
         for suggestion in grammaire.analyser(
-            texte, jetons, self.lexique, self.regles_ignorees, self.registre
+            texte, jetons, self.lexique, self.regles_ignorees, self.registre,
+            self.morphologie,
         ):
             indices = range(suggestion.index, suggestion.index + suggestion.portee)
             if traites.intersection(indices):
@@ -590,8 +603,14 @@ def construire(regles_optionnelles: dict[str, bool] | None = None,
 
 
 def depuis_config(config: dict, lexique: Lexique | None = None,
-                  registre: str | None = None) -> Correcteur:
-    """Le correcteur decrit par un fichier de reglages."""
+                  registre: str | None = None,
+                  morphologie: Morphologie | None = None) -> Correcteur:
+    """Le correcteur decrit par un fichier de reglages.
+
+    `lexique` et `morphologie` se passent de l'exterieur pour que les deux
+    registres partagent les memes tables : elles pesent quelques dizaines de
+    megaoctets, et les charger deux fois n'apporterait rien.
+    """
     return Correcteur(
         lexique if lexique is not None else Lexique(),
         regles_optionnelles=config.get("regles_optionnelles"),
@@ -599,4 +618,5 @@ def depuis_config(config: dict, lexique: Lexique | None = None,
         remplacements_perso=config.get("remplacements_perso"),
         registre=registre if registre is not None
         else config.get("registre", PARLE),
+        morphologie=morphologie,
     )
