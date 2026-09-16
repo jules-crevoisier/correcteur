@@ -150,6 +150,72 @@
         </div>
       </section>
 
+      <!-- ---------- Dicter ---------- -->
+      <section class="page" data-page="dicter">
+
+        <!-- Ce qui manque, dit avant d'offrir un bouton qui échouerait. -->
+        <div class="carte" id="dictee-installation" hidden>
+          <h2>Un modèle à installer, une fois</h2>
+          <p class="aide">Papote transcrit <strong>sur votre machine</strong>,
+            sans rien envoyer nulle part. Cela demande de télécharger le
+            modèle qui entend le français — et, pour le mode réunion, celui
+            qui distingue les voix. C'est la seule fois où Papote a besoin
+            d'Internet pour cette fonction.</p>
+          <ul class="liste" id="dictee-modeles"></ul>
+          <div class="ligne-boutons">
+            <button class="bouton principal" id="installer-modeles">
+              Installer (54 Mo)
+            </button>
+            <span class="compteur" id="dictee-avancement"></span>
+          </div>
+        </div>
+
+        <!-- Quand la bibliothèque manque : on le dit, on n'offre rien. -->
+        <div class="carte" id="dictee-indisponible" hidden>
+          <h2>La dictée n'est pas disponible ici</h2>
+          <p class="aide" id="dictee-pourquoi"></p>
+        </div>
+
+        <div class="carte" id="dictee-commandes" hidden>
+          <div class="ligne-boutons">
+            <button class="bouton principal" id="dicter-demarrer">
+              Commencer à dicter
+            </button>
+            <button class="bouton" id="reunion-demarrer">
+              Mode réunion
+            </button>
+            <button class="bouton danger" id="dicter-arreter" hidden>
+              Arrêter
+            </button>
+            <span class="pousse"></span>
+            <span class="compteur" id="dictee-etat"></span>
+          </div>
+          <p class="aide" id="dictee-aide">
+            En mode réunion, Papote distingue les voix et signe chaque prise
+            de parole. Il ne sait pas <em>qui</em> parle — seulement que ce
+            n'est plus la même personne. Vous nommez les voix vous-même.
+          </p>
+          <label class="case" id="dictee-boucle-ligne" hidden>
+            <input type="checkbox" id="dictee-boucle">
+            <span>Capter aussi les autres participants (réunion en ligne)</span>
+          </label>
+        </div>
+
+        <div class="carte" id="dictee-resultat" hidden>
+          <h2>Transcription</h2>
+          <div id="dictee-tours" class="tours"></div>
+          <div class="ligne-boutons">
+            <input type="text" id="dictee-titre" class="champ-ligne"
+                   placeholder="Titre du compte rendu">
+            <button class="bouton principal" id="dictee-compte-rendu">
+              Compte rendu
+            </button>
+            <button class="bouton" id="dictee-copier">Copier</button>
+            <button class="bouton discret" id="dictee-oublier">Effacer</button>
+          </div>
+        </div>
+      </section>
+
       <!-- ---------- Réglages ---------- -->
       <section class="page" data-page="reglages">
         <div class="carte">

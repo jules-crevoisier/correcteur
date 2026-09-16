@@ -711,3 +711,100 @@ input::placeholder { color: var(--texte-eteint); }
 }
 .toast.succes::before { background: var(--succes); }
 .toast.alerte::before { background: var(--alerte); }
+
+/* -------------------------------------------------------------------------
+   Dicter
+
+   Une transcription se lit comme une piece de theatre : le nom en retrait,
+   la replique en dessous. Le nom est un bouton parce qu'il en est un — c'est
+   la qu'on dit qui parlait.
+   ------------------------------------------------------------------------- */
+
+.ligne-boutons {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+
+.champ-ligne {
+  flex: 1 1 200px;
+  min-width: 0;
+  padding: 9px 12px;
+  border-radius: var(--rond-petit, 8px);
+  border: 1px solid var(--bord);
+  background: var(--fond-champ, var(--fond-carte));
+  color: var(--texte);
+  font: inherit;
+}
+
+.champ-ligne:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.liste {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.liste li {
+  color: var(--texte-doux);
+  font-size: 13px;
+}
+
+.liste li.fait { color: var(--accent); }
+
+.tours {
+  display: grid;
+  gap: 16px;
+  margin-top: 6px;
+  max-height: 46vh;
+  overflow-y: auto;
+}
+
+.tour p {
+  margin: 4px 0 0;
+  line-height: 1.55;
+}
+
+.locuteur {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--accent);
+  cursor: pointer;
+  border-bottom: 1px dashed transparent;
+}
+
+.locuteur:hover { border-bottom-color: currentColor; }
+
+.bouton.danger {
+  border-color: color-mix(in srgb, var(--alerte, #e5484d) 45%, transparent);
+  color: var(--alerte, #e5484d);
+}
+
+/* Une case a cocher ordinaire : « .bascule » est un interrupteur, ce n'est
+   pas la meme chose et cela ne se dessine pas pareil. */
+.case {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 12px;
+  color: var(--texte-doux);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.case input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}

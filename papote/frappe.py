@@ -35,6 +35,7 @@ import time
 from dataclasses import dataclass
 from typing import Callable
 
+from . import bulle as bulle_mod
 from . import politique as politique_mod
 
 # Un mot se termine sur l'un de ces caracteres. Ni l'apostrophe ni le trait
@@ -42,7 +43,12 @@ from . import politique as politique_mod
 SEPARATEURS = " \t\n.,;:!?…\"()[]{}«»/\\|"
 
 # Apres l'un de ceux-la, la phrase est finie : on repart a zero.
-FINS_DE_PHRASE = ".!?…\n"
+#
+# La tabulation en fait partie, et pas seulement par gout de la propriete :
+# dans un formulaire, elle change de champ. Sans elle, « sa » tape dans un
+# champ puis « va » dans le suivant donnait une correction de six retours
+# arriere envoyee dans le second champ, qui n'en contenait que trois.
+FINS_DE_PHRASE = ".!?…\n\t"
 
 # Touches qui deplacent le curseur : ce qui est a l'ecran nous echappe.
 TOUCHES_DE_DEPLACEMENT = {
@@ -409,6 +415,9 @@ class EcouteClavier:
         self.bulle = bulle
         self.touche_prediction = touche_prediction
         self._piege_prediction = None
+        # Quand la bulle a ete montree, pour la retirer — et rendre la
+        # touche de validation — apres un silence.
+        self._montree_a: float | None = None
         self.delai_oubli = delai_oubli
         self.sur_correction = sur_correction
         self.sur_annulation = sur_annulation
@@ -423,6 +432,7 @@ class EcouteClavier:
         self.derniere_application: str | None = None
         self._registre = politique_mod.PARLE
         self._application_vue = 0.0
+        self._branchement_souris = None
         self._en_ecriture = False
         self._touche_pendant_ecriture = False
         self._derniere_touche = 0.0
@@ -449,10 +459,60 @@ class EcouteClavier:
         self.frappe.oublier()
         self._defaisable = None
         self._branchement = keyboard.hook(self._sur_evenement)
+        self._ecouter_la_souris()
         self.actif = True
         self._arret.clear()
         self._guetteur = threading.Thread(target=self._guetter, daemon=True)
         self._guetteur.start()
+
+    # Passe ce delai sans frappe, on ne sait plus ou est le curseur : une
+    # annulation taperait au hasard.
+    DELAI_ANNULATION = 20.0
+
+    def _annulation_encore_possible(self) -> bool:
+        """Le curseur est-il encore la ou la correction a eu lieu ?
+
+        On ne peut pas le savoir ; on peut savoir qu'il n'a pas eu
+        l'occasion de bouger. C'est ce que disent ces deux conditions.
+        """
+        if self.frappe.texte.strip() == "" and self._defaisable is None:
+            # Le tampon a ete oublie — changement de fenetre, clic, fleche.
+            return False
+        if time.monotonic() - self._derniere_touche > self.DELAI_ANNULATION:
+            return False
+        return self.politique.corrige_ici(self._application())
+
+    def _ecouter_la_souris(self) -> None:
+        """Un clic deplace le curseur, et aucune touche ne le signale.
+
+        Les fleches etaient surveillees, la souris non : cliquer ailleurs
+        puis reprendre la frappe faisait corriger a partir d'un tampon qui
+        decrivait un autre endroit du texte — « sa », clic, « va » posait la
+        correction au milieu de la phrase visee.
+
+        On n'ecoute pas *ou* l'on clique, seulement qu'on a clique : cela
+        suffit a oublier la phrase, et cela ne regarde rien.
+        """
+        try:
+            import mouse
+
+            self._branchement_souris = mouse.hook(self._sur_clic)
+        except Exception:                          # noqa: BLE001
+            # La bibliotheque manque : on garde le clavier, qui marche.
+            self._branchement_souris = None
+
+    def _sur_clic(self, evenement) -> None:
+        if not self.actif or self._en_ecriture:
+            return
+        if type(evenement).__name__ != "ButtonEvent":
+            # Les molettes et les deplacements ne bougent pas le curseur.
+            return
+        try:
+            self.frappe.oublier()
+            self._defaisable = None
+            self._retirer_la_bulle()
+        except Exception:                          # noqa: BLE001
+            pass
 
     def desactiver(self) -> None:
         import keyboard
@@ -470,6 +530,14 @@ class EcouteClavier:
             keyboard.unhook(self._branchement)
         except (KeyError, ValueError):
             pass
+        if getattr(self, "_branchement_souris", None) is not None:
+            try:
+                import mouse
+
+                mouse.unhook(self._branchement_souris)
+            except Exception:                      # noqa: BLE001
+                pass
+            self._branchement_souris = None
         self._branchement = None
 
     # -- reception des touches ----------------------------------------------
@@ -502,6 +570,25 @@ class EcouteClavier:
         self.frappe.correcteur = self.correcteur_pour(registre)
 
     def _sur_evenement(self, evenement) -> None:
+        """Le crochet clavier. Rien ne doit en sortir.
+
+        Sous Windows, une exception qui traverse un crochet bas niveau le
+        fait supprimer par le systeme : Papote devient muet, et ne le dit
+        pas. Le corps entier est donc protege — y compris l'appel a
+        `sur_correction`, qui ecrit sur le disque et peut echouer pour un
+        disque plein ou un antivirus qui verrouille un fichier.
+        """
+        try:
+            self._sur_evenement_sans_filet(evenement)
+        except Exception:                          # noqa: BLE001
+            # Au moindre doute, on oublie la phrase : mieux vaut rater une
+            # correction que corriger a partir d'un tampon faux.
+            try:
+                self.frappe.oublier()
+            except Exception:                      # noqa: BLE001
+                pass
+
+    def _sur_evenement_sans_filet(self, evenement) -> None:
         if not self.actif:
             return
 
@@ -583,6 +670,7 @@ class EcouteClavier:
 
         self.bulle.montrer(self.frappe.mot_en_cours(), propositions,
                            self.touche_prediction.title())
+        self._montree_a = time.monotonic()
         self._armer_la_touche()
 
     def _armer_la_touche(self) -> None:
@@ -606,6 +694,7 @@ class EcouteClavier:
             self._piege_prediction = None
 
     def _retirer_la_bulle(self) -> None:
+        self._montree_a = None
         if self.bulle is not None:
             self.bulle.cacher()
         self._desarmer_la_touche()
@@ -683,9 +772,26 @@ class EcouteClavier:
         while not self._arret.wait(self.BATTEMENT):
             try:
                 self._relire_si_pause()
+                self._perimer_la_bulle()
             except Exception:
                 # Une relecture ratee ne doit jamais emporter le clavier.
                 self.frappe.oublier()
+
+    def _perimer_la_bulle(self) -> None:
+        """Retire la bulle, et la touche avec elle, apres un silence.
+
+        Une bulle oubliee a l'ecran est une bulle qui ment — elle propose un
+        mot qu'on n'est plus en train d'ecrire. Mais le vrai danger n'est pas
+        la : c'est la touche de validation, detournee tant que la bulle est
+        visible. Quelqu'un qui commence a taper un identifiant, voit la bulle
+        apparaitre et appuie sur Tab pour passer au mot de passe verrait sa
+        tabulation avalee. Passe ce delai, la touche redevient la touche.
+        """
+        if self._montree_a is None:
+            return
+        if time.monotonic() - self._montree_a < bulle_mod.DUREE_MAXIMALE:
+            return
+        self._retirer_la_bulle()
 
     def _relire_si_pause(self) -> None:
         if not self.actif or self._relu or self._en_ecriture:
@@ -719,7 +825,8 @@ class EcouteClavier:
         self.annulables.append(remplacement)
         del self.annulables[:-self.profondeur_annulation]
         self._defaisable = remplacement
-        self._separateur_en_attente = remplacement.ecrire[-1:] in SEPARATEURS
+        self._separateur_en_attente = bool(remplacement.ecrire) and \
+            remplacement.ecrire[-1] in SEPARATEURS
         if self.sur_correction is not None:
             self.sur_correction(remplacement)
         self._taper_ailleurs(remplacement)
@@ -731,7 +838,8 @@ class EcouteClavier:
 
     def _defaire(self, remplacement: Remplacement) -> None:
         """Annule la correction que le retour arriere vient d'entamer."""
-        separateur_retire = (remplacement.ecrire[-1:] in SEPARATEURS
+        separateur_retire = (bool(remplacement.ecrire)
+                             and remplacement.ecrire[-1] in SEPARATEURS
                              and not self._separateur_en_attente)
         self._defaisable = None
         self._separateur_en_attente = False
@@ -764,8 +872,18 @@ class EcouteClavier:
     # -- annulation ---------------------------------------------------------
 
     def annuler(self) -> Remplacement | None:
-        """Remet ce qui etait ecrit avant la derniere correction automatique."""
-        if not self.annulables:
+        """Remet ce qui etait ecrit avant la derniere correction automatique.
+
+        Le raccourci est global : rien n'empeche de l'actionner trois mots
+        plus loin, ou dans une autre fenetre. Or l'annulation tape a
+        l'endroit ou se trouve le curseur — pas la ou la correction a eu
+        lieu. « ça va bien » + Ctrl+Alt+Z donnait « ça vsa va ».
+
+        On n'annule donc que tant que rien n'a ete tape depuis, et dans la
+        meme application. Passe ce delai, mieux vaut ne rien faire et le
+        dire.
+        """
+        if not self.annulables or not self._annulation_encore_possible():
             return None
         remplacement = self.annulables.pop()
         self._defaisable = None

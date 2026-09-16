@@ -560,3 +560,59 @@ def test_un_nom_propre_prend_sa_majuscule(correcteur, avant, apres):
 ])
 def test_une_majuscule_incertaine_ne_s_ajoute_pas(correcteur, phrase):
     assert correcteur.corriger(phrase)[0] == phrase
+
+
+# ---------------------------------------------------------------------------
+# Ce qu'un testeur à l'aveugle a trouvé
+#
+# Trois familles de fautes que Papote **écrivait**. Les deux premières
+# venaient d'être introduites le jour même : une table de mots composés avec
+# des entrées vides, et une règle de participe qui ignorait le trait d'union.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("phrase", [
+    # Le moteur levait une exception, et tout le texte etait perdu.
+    "À tout à l'heure !",
+    "Tout à coup il est parti.",
+    "On a tout à perdre.",
+    "C'est tout à son honneur.",
+    # « il est peut-être malade » -> « il est pu-être malade »
+    "Il est peut-être malade.",
+    "Elle est peut-être partie.",
+    "Ils sont peut-être déjà partis.",
+    # L'inverse, tout aussi faux : « cela peut être » n'est pas « peut-être ».
+    "Cela peut être dangereux.",
+    "Le résultat peut être faux.",
+    # « nous » et « vous » sont complements des qu'un sujet les precede.
+    "Le prof nous a rendu les copies.",
+    "Ma voisine nous a apporté des tomates.",
+    "La directrice vous a reçus ?",
+    "L'équipe vous remercie de votre patience.",
+    "Notre entreprise vous accompagne au quotidien.",
+    "Le service client vous répond sous 48h.",
+    "Personne ne nous croit.",
+])
+def test_ce_que_le_correcteur_ecrivait(correcteur, phrase):
+    assert correcteur.corriger(phrase)[0] == phrase
+
+
+def test_le_moteur_ne_leve_jamais_sur_une_locution(correcteur):
+    """Une phrase qu'on ne sait pas traiter se rend telle quelle.
+
+    Une exception non rattrapee fait perdre le texte entier a
+    l'utilisateur — c'est le pire qui puisse arriver a un correcteur.
+    """
+    for phrase in ["tout à l'heure", "tout à coup", "tout à fait",
+                   "arc en ciel", "tout à l'envers", "face à face"]:
+        correcteur.corriger(phrase)
+
+
+@pytest.mark.parametrize("avant, apres", [
+    # Les memes regles, du cote ou elles servent.
+    ("nous mange ensemble", "nous mangeons ensemble"),
+    ("vous parle trop vite", "vous parlez trop vite"),
+    ("nous somme en retard", "nous sommes en retard"),
+    ("peut être que oui", "peut-être que oui"),
+])
+def test_les_regles_corrigent_toujours_ce_qu_elles_doivent(correcteur, avant, apres):
+    assert correcteur.corriger(avant)[0] == apres

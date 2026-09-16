@@ -28,6 +28,7 @@ import re
 
 from . import __version__, config as config_mod
 from . import demarrage, grammaire, journal as journal_mod, logo, maj, regles
+from .dictee import Dictee
 from .lexique import LexiqueIntrouvable
 from .politique import PARLE, REGISTRES, SOUTENU
 
@@ -42,6 +43,8 @@ PAGES = (
      "soustitre": "Ce que vous corrigez le plus, compté chez vous."},
     {"cle": "applications", "nom": "Applications", "icone": "fenetre",
      "soustitre": "Où se taire, et où hausser le ton."},
+    {"cle": "dicter", "nom": "Dicter", "icone": "micro",
+     "soustitre": "Parlez, Papote écrit. Et relit ce qu'il a écrit."},
     {"cle": "reglages", "nom": "Réglages", "icone": "reglages",
      "soustitre": "Tout ce qui se réglait dans un fichier."},
 )
@@ -94,6 +97,18 @@ class Passerelle:
         # Le dernier texte corrige, pour que « remplacer un mot » sache sur
         # quoi travailler sans que la page ait a le renvoyer en entier.
         self._dernier_texte = ""
+        # La dictee se monte au premier usage : elle charge des modeles de
+        # cinquante megaoctets, et neuf personnes sur dix n'y toucheront pas.
+        self._dictee: Dictee | None = None
+
+    @property
+    def dictee(self) -> "Dictee":
+        if self._dictee is None:
+            self._dictee = Dictee(
+                fabriquer_correcteur=lambda: self.app.correcteur,
+                journal=getattr(self.app, "journal", None),
+            )
+        return self._dictee
 
     # -- au chargement de la page -------------------------------------------
 
@@ -264,7 +279,7 @@ class Passerelle:
     # -- page « Vos fautes » ------------------------------------------------
 
     def fautes(self) -> dict:
-        habitudes = getattr(self.app, "apprentissage", None)
+        habitudes = getattr(self.app, "journal_habitudes", None)
         if habitudes is None:
             return {"total": 0, "frequentes": [], "lecons": []}
         return {
@@ -277,7 +292,7 @@ class Passerelle:
         }
 
     def oublier_faute(self, mot: str) -> dict:
-        habitudes = getattr(self.app, "apprentissage", None)
+        habitudes = getattr(self.app, "journal_habitudes", None)
         if habitudes is not None:
             habitudes.oublier_mot(mot)
             _sans_bruit(self.app.enregistrer_habitudes, None)
@@ -290,7 +305,7 @@ class Passerelle:
         proposer deux boutons pour deux fichiers qu'on ne distingue pas de
         l'exterieur serait une fausse precision.
         """
-        habitudes = getattr(self.app, "apprentissage", None)
+        habitudes = getattr(self.app, "journal_habitudes", None)
         if habitudes is not None:
             habitudes.vider()
         memoire = getattr(self.app, "memoire_frappe", None)
@@ -371,7 +386,7 @@ class Passerelle:
 
     def basculer_demarrage(self, actif: bool) -> dict:
         try:
-            demarrage.installer() if actif else demarrage.retirer()
+            demarrage.activer() if actif else demarrage.desactiver()
         except Exception as e:                       # noqa: BLE001
             return {"erreur": f"Impossible : {e}"}
         return {"message": "Papote se lancera avec Windows." if actif
@@ -416,6 +431,44 @@ class Passerelle:
                            "Cette fenêtre peut être fermée."}
 
     # -- journal ------------------------------------------------------------
+
+    # -- dicter --------------------------------------------------------------
+
+    def etat_dictee(self) -> dict:
+        """Tout ce que la page « Dicter » a besoin de savoir."""
+        return _sans_bruit(self.dictee.etat, {"disponible": {}, "tours": []})
+
+    def installer_modeles(self, pour_reunion: bool = True) -> dict:
+        """Telecharge les modeles. Long : la page previent avant d'appeler."""
+        return _sans_bruit(
+            lambda: self.dictee.installer(bool(pour_reunion)),
+            {"ok": False, "erreur": "Le téléchargement a échoué."})
+
+    def commencer_dictee(self, reunion: bool = False,
+                         capter_les_autres: bool = False) -> dict:
+        return _sans_bruit(
+            lambda: self.dictee.commencer(bool(reunion),
+                                          capter_les_autres=bool(capter_les_autres)),
+            {"ok": False, "erreur": "Le micro n'a pas pu être ouvert."})
+
+    def arreter_dictee(self) -> dict:
+        return _sans_bruit(self.dictee.arreter, {"ok": True, "tours": []})
+
+    def tours_dictee(self) -> dict:
+        return {"tours": _sans_bruit(self.dictee.tours, [])}
+
+    def renommer_locuteur(self, ancien: str, nouveau: str) -> dict:
+        return _sans_bruit(
+            lambda: self.dictee.renommer(str(ancien), str(nouveau)),
+            {"ok": False, "erreur": "Le renommage a échoué."})
+
+    def compte_rendu(self, titre: str = "", date: str = "") -> dict:
+        return _sans_bruit(
+            lambda: self.dictee.compte_rendu(str(titre), str(date)),
+            {"ok": False, "erreur": "Le compte rendu a échoué."})
+
+    def oublier_dictee(self) -> dict:
+        return _sans_bruit(self.dictee.oublier, {"ok": True})
 
     def journal(self) -> dict:
         return {

@@ -34,6 +34,12 @@ LARGEUR, HAUTEUR = 980, 700
 
 
 def _donnees() -> dict:
+    """Les reponses que la doublure sert a la page.
+
+    La page « Dicter » est montree dans son etat le plus interessant : les
+    modeles installes, une reunion deja transcrite. C'est celui qu'on veut
+    regarder quand on dessine.
+    """
     """Ce que la passerelle rendrait, sur une configuration d'exemple.
 
     L'exemple est garni : une fenetre vide est facile a trouver belle, et ne
@@ -81,6 +87,32 @@ def _donnees() -> dict:
                 {"mot": "tous le monde", "compte": 4},
             ],
         },
+        "dictee": {
+            "disponible": {"vosk": True, "sounddevice": True},
+            "en_cours": False,
+            "reunion": True,
+            "erreur": "",
+            "modeles": [
+                {"nom": "vosk-model-small-fr-0.22",
+                 "role": "entendre le français",
+                 "taille": 41_000_000, "installe": True},
+                {"nom": "vosk-model-spk-0.4",
+                 "role": "distinguer les voix",
+                 "taille": 13_000_000, "installe": True},
+            ],
+            "poids_installe": 54_000_000,
+            "participants": ["Marion", "Personne 2"],
+            "tours": [
+                {"locuteur": "Marion", "debut": 0.0, "fin": 12.0,
+                 "texte": "Bonjour à tous. Moi c'est Marion. On passe au "
+                          "budget de janvier. Est-ce qu'on a les chiffres ?"},
+                {"locuteur": "Personne 2", "debut": 12.0, "fin": 31.0,
+                 "texte": "Pas encore. Je m'occupe de relancer la compta "
+                          "d'ici vendredi."},
+                {"locuteur": "Marion", "debut": 31.0, "fin": 48.0,
+                 "texte": "Très bien. Donc on part sur la deuxième option."},
+            ],
+        },
         "journal": {
             "chemin": r"C:\Users\vous\AppData\Roaming\Papote\journal.log",
             "contenu": "2026-09-16 14:02:11  [info]  Papote démarre (v1.0.30)\n"
@@ -119,6 +151,13 @@ DOUBLURE = """
     redemarrer: async () => rien,
     effacer_historique: async () => rien,
     vider_journal: async () => rien,
+    etat_dictee: async () => donnees.dictee,
+    installer_modeles: async () => rien,
+    commencer_dictee: async () => rien,
+    arreter_dictee: async () => rien,
+    renommer_locuteur: async () => rien,
+    compte_rendu: async () => ({ ok: true, texte: "# Compte rendu" }),
+    oublier_dictee: async () => rien,
   };
   window.pywebview = { api };
 })();

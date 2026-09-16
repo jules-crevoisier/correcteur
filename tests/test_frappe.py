@@ -18,6 +18,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from papote import bulle as bulle_mod  # noqa: E402
 from papote.frappe import EcouteClavier, Frappe, Remplacement  # noqa: E402
 from papote.moteur import Correcteur  # noqa: E402
 
@@ -759,3 +760,105 @@ def test_la_bulle_muette_ne_fait_rien():
     muette.cacher()
     muette.fermer()
     assert muette.visible is False
+
+
+def test_la_bulle_se_perime_et_rend_la_touche(correcteur):
+    """Une bulle oubliee a l'ecran garde la touche de validation detournee.
+
+    Quelqu'un qui commence a taper un identifiant, voit la bulle apparaitre
+    et appuie sur Tab pour passer au mot de passe verrait sa tabulation
+    avalee. Passe le delai, la touche redevient la touche.
+    """
+    ecoute = EcouteClavier(Frappe(correcteur), application=lambda: None)
+    ecoute._montree_a = time.monotonic() - bulle_mod.DUREE_MAXIMALE - 1
+    ecoute._perimer_la_bulle()
+    assert ecoute._montree_a is None
+
+
+def test_une_bulle_recente_reste_affichee(correcteur):
+    ecoute = EcouteClavier(Frappe(correcteur), application=lambda: None)
+    ecoute._montree_a = time.monotonic()
+    ecoute._perimer_la_bulle()
+    assert ecoute._montree_a is not None
+
+
+# ---------------------------------------------------------------------------
+# Ce qu'un testeur a trouvé en pilotant vraiment le clavier
+# ---------------------------------------------------------------------------
+
+def test_un_clic_fait_oublier_la_phrase(correcteur):
+    """Un clic déplace le curseur, et aucune touche ne le signale.
+
+    Les flèches étaient surveillées, la souris non : cliquer ailleurs puis
+    reprendre la frappe faisait corriger à partir d'un tampon qui décrivait
+    un autre endroit du texte.
+    """
+    ecoute = EcouteClavier(Frappe(correcteur), application=lambda: None)
+    ecoute.actif = True
+    for caractere in "sa ":
+        ecoute.frappe.caractere(caractere)
+    ecoute._sur_clic(type("ButtonEvent", (), {})())
+    assert ecoute.frappe.texte == ""
+
+
+def test_la_molette_ne_fait_rien_oublier(correcteur):
+    """Elle fait défiler, elle ne déplace pas le curseur."""
+    ecoute = EcouteClavier(Frappe(correcteur), application=lambda: None)
+    ecoute.actif = True
+    for caractere in "sa ":
+        ecoute.frappe.caractere(caractere)
+    ecoute._sur_clic(type("WheelEvent", (), {})())
+    assert ecoute.frappe.texte == "sa "
+
+
+def test_une_annulation_trop_tardive_ne_tape_rien(correcteur):
+    """Le raccourci est global : rien n'empêche de l'actionner ailleurs.
+
+    L'annulation tape là où est le curseur, pas là où la correction a eu
+    lieu : « ça va bien » + Ctrl+Alt+Z donnait « ça vsa va ».
+    """
+    ecoute = EcouteClavier(Frappe(correcteur), application=lambda: None)
+    ecoute.annulables.append(Remplacement(5, "ça va", "sa va"))
+    ecoute._derniere_touche = time.monotonic() - 100
+    assert ecoute.annuler() is None
+    # Elle reste disponible : on n'a rien perdu, on a seulement refusé de
+    # taper à l'aveugle.
+    assert ecoute.annulables
+
+
+def test_une_tabulation_ferme_la_phrase(correcteur):
+    """Dans un formulaire, la tabulation change de champ.
+
+    Sans cela, « sa » tapé dans un champ puis « va » dans le suivant
+    donnait six retours arrière envoyés au second champ, qui n'en
+    contenait que trois.
+    """
+    frappe = Frappe(correcteur)
+    for caractere in "sa":
+        frappe.caractere(caractere)
+    frappe.caractere("\t")
+    correction = None
+    for caractere in "va ":
+        correction = frappe.caractere(caractere) or correction
+    assert correction is None
+
+
+def test_une_exception_dans_le_rappel_ne_tue_pas_l_ecoute(correcteur):
+    """Sous Windows, une exception qui traverse le crochet le fait supprimer.
+
+    Papote devient alors muet sans le dire. `sur_correction` écrit sur le
+    disque : un disque plein suffisait.
+    """
+    ecoute = EcouteClavier(Frappe(correcteur), application=lambda: None,
+                           sur_correction=lambda _r: 1 / 0)
+    ecoute.actif = True
+    for caractere in "sa va ":
+        ecoute._sur_evenement(_touche(caractere))
+    # On est encore là, et le tampon a été oublié par prudence.
+    assert ecoute.frappe.texte == ""
+
+
+def _touche(caractere: str):
+    nom = "space" if caractere == " " else caractere
+    return type("E", (), {"event_type": "down", "name": nom,
+                          "scan_code": 0})()

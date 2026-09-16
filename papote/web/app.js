@@ -29,6 +29,9 @@ const ICONES = {
   barres: "M5 20V11 M12 20V4 M19 20v-6",
   fenetre: "M3.5 6.5A2 2 0 0 1 5.5 4.5h13a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2h-13"
          + "a2 2 0 0 1-2-2v-11Z M3.5 9h17",
+  micro: "M12 3.5a2.6 2.6 0 0 1 2.6 2.6v5.4a2.6 2.6 0 1 1-5.2 0V6.1"
+       + "A2.6 2.6 0 0 1 12 3.5Z M5.8 10.6a6.2 6.2 0 0 0 12.4 0 M12 16.8V20"
+       + " M9 20h6",
   reglages: "M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z "
           + "M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1"
           + "a1.6 1.6 0 0 0-2.7 1.1 2 2 0 1 1-4 0 1.6 1.6 0 0 0-2.7-1.1"
@@ -181,6 +184,7 @@ const RAFRAICHIR = {
   dictionnaire: chargerDictionnaire,
   fautes: chargerFautes,
   applications: chargerApplications,
+  dicter: chargerDictee,
   reglages: chargerJournal,
 };
 
@@ -657,8 +661,148 @@ async function demarrer() {
 
   construireReglages();
   brancher();
+  brancherDictee();
   afficher("corriger");
   $("#champ").focus();
+}
+
+
+/* -------------------------------------------------------------------------
+   Dicter
+
+   Deux modes, une seule page. Tant que les modeles ne sont pas la, la page
+   ne montre que ce qu'il faut faire pour qu'ils y soient — un bouton qui
+   echouerait vaut moins qu'une phrase qui explique.
+   ------------------------------------------------------------------------- */
+
+let minuterieDictee = null;
+
+async function chargerDictee() {
+  const etatDictee = await appeler("etat_dictee");
+  if (!etatDictee || etatDictee.erreur) return;
+  montrerDictee(etatDictee);
+}
+
+function montrerDictee(d) {
+  const manque = Object.entries(d.disponible || {})
+    .filter(([, present]) => !present)
+    .map(([nom]) => nom);
+
+  $("#dictee-indisponible").hidden = manque.length === 0;
+  if (manque.length) {
+    $("#dictee-pourquoi").textContent =
+      "Cette installation de Papote n'embarque pas " + manque.join(" ni ")
+      + ". La dictée demande la version installée depuis Papote.msi.";
+  }
+
+  const modeles = d.modeles || [];
+  const aInstaller = modeles.filter((m) => !m.installe);
+  $("#dictee-installation").hidden = manque.length > 0 || aInstaller.length === 0;
+  const liste = vider($("#dictee-modeles"));
+  modeles.forEach((m) => {
+    const ligne = creer("li", m.installe ? "fait" : null);
+    ligne.textContent = (m.installe ? "✓ " : "· ") + m.role
+      + " — " + Math.round(m.taille / 1e6) + " Mo";
+    liste.appendChild(ligne);
+  });
+
+  $("#dictee-commandes").hidden = manque.length > 0;
+  $("#dicter-demarrer").hidden = d.en_cours;
+  $("#reunion-demarrer").hidden = d.en_cours;
+  $("#dicter-arreter").hidden = !d.en_cours;
+  $("#dictee-boucle-ligne").hidden = d.en_cours;
+  $("#dictee-etat").textContent = d.en_cours
+    ? (d.reunion ? "Réunion en cours…" : "Dictée en cours…")
+    : (d.erreur || "");
+
+  const tours = d.tours || [];
+  $("#dictee-resultat").hidden = tours.length === 0;
+  const zone = vider($("#dictee-tours"));
+  tours.forEach((tour) => {
+    const bloc = creer("div", "tour");
+    const nom = creer("button", "locuteur", tour.locuteur);
+    nom.title = "Cliquez pour renommer cette voix";
+    nom.addEventListener("click", () => renommerLocuteur(tour.locuteur));
+    bloc.appendChild(nom);
+    bloc.appendChild(creer("p", null, tour.texte));
+    zone.appendChild(bloc);
+  });
+}
+
+async function renommerLocuteur(ancien) {
+  const nouveau = window.prompt("Qui est « " + ancien + " » ?", ancien);
+  if (!nouveau || nouveau === ancien) return;
+  await appeler("renommer_locuteur", ancien, nouveau);
+  chargerDictee();
+}
+
+function suivreLaDictee(actif) {
+  clearInterval(minuterieDictee);
+  minuterieDictee = actif ? setInterval(chargerDictee, 1500) : null;
+}
+
+function brancherDictee() {
+  $("#installer-modeles").addEventListener("click", async (evenement) => {
+    const bouton = evenement.currentTarget;
+    bouton.disabled = true;
+    $("#dictee-avancement").textContent = "Téléchargement…";
+    const reponse = await appeler("installer_modeles", true);
+    bouton.disabled = false;
+    $("#dictee-avancement").textContent = "";
+    dire(reponse && reponse.ok ? (reponse.message || "Installé.")
+                               : (reponse && reponse.erreur) || "Échec.");
+    chargerDictee();
+  });
+
+  const lancer = async (reunion) => {
+    const boucle = reunion && $("#dictee-boucle").checked;
+    const reponse = await appeler("commencer_dictee", reunion, boucle);
+    if (reponse && reponse.avertissement) dire(reponse.avertissement);
+    else if (!reponse || !reponse.ok) dire((reponse && reponse.erreur) || "Échec.");
+    suivreLaDictee(Boolean(reponse && reponse.ok));
+    chargerDictee();
+  };
+  $("#dicter-demarrer").addEventListener("click", () => lancer(false));
+  $("#reunion-demarrer").addEventListener("click", () => lancer(true));
+
+  $("#dicter-arreter").addEventListener("click", async () => {
+    await appeler("arreter_dictee");
+    suivreLaDictee(false);
+    chargerDictee();
+  });
+
+  $("#dictee-compte-rendu").addEventListener("click", async () => {
+    const reponse = await appeler("compte_rendu", $("#dictee-titre").value, "");
+    if (!reponse || !reponse.ok) {
+      dire((reponse && reponse.erreur) || "Échec.");
+      return;
+    }
+    /* Le compte rendu part dans la page « Corriger » : c'est là qu'on relit
+       et qu'on copie, et il n'y a pas de raison d'avoir deux éditeurs. */
+    $("#champ").value = reponse.texte;
+    afficher("corriger");
+    dire("Compte rendu prêt — relisez-le avant de l'envoyer.");
+  });
+
+  $("#dictee-copier").addEventListener("click", async () => {
+    const reponse = await appeler("compte_rendu", $("#dictee-titre").value, "");
+    if (!reponse || !reponse.ok) {
+      dire((reponse && reponse.erreur) || "Échec.");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(reponse.texte);
+      dire("Compte rendu copié.");
+    } catch (e) {
+      dire("La copie a échoué.");
+    }
+  });
+
+  $("#dictee-oublier").addEventListener("click", async () => {
+    await appeler("oublier_dictee");
+    suivreLaDictee(false);
+    chargerDictee();
+  });
 }
 
 demarrer();

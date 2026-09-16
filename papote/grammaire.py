@@ -386,6 +386,30 @@ def sujet_avant(ctx: "Contexte", i: int) -> str:
     return precedent
 
 
+def _sujet_avant_le_pronom(ctx: "Contexte", i: int) -> bool:
+    """Quelque chose peut-il etre le sujet, devant « nous » ou « vous » ?
+
+    « nous » et « vous » sont sujets ou complements, et rien dans leur forme
+    ne le dit. Ce qui le dit, c'est ce qu'il y a devant : un pronom, un nom,
+    n'importe quoi qui puisse commander le verbe. « Le prof nous a rendu les
+    copies » devenait « le prof nous avons rendu les copies ».
+    """
+    for recul in (2, 3):
+        mot = ctx.mot(i - recul)
+        if not mot:
+            continue
+        # « l'équipe vous remercie » : l'elision fait partie du jeton, et
+        # c'est le noyau qui porte le nom.
+        if ctx.elision(i - recul) in ("l'", "c'", "d'"):
+            return True
+        noyau = ctx.noyau(i - recul)
+        if mot in PRONOMS_SUJETS or mot in DETERMINANTS:
+            return True
+        if ctx.morphologie.nom(noyau):
+            return True
+    return False
+
+
 def appliquer_casse(modele: str, mot: str) -> str:
     """Garde la majuscule du mot d'origine : « On » -> « Ont »."""
     if modele[:1].isupper():
@@ -496,8 +520,9 @@ def _accord_auxiliaire_nous_vous(ctx: Contexte, i: int):
     formes = AUXILIAIRES_NOUS_VOUS.get(ctx.noyau(i - 1))
     if formes is None or ctx.elision(i):
         return None
-    # « il nous a dit » : « nous » y est complement.
-    if ctx.mot(i - 2) in PRONOMS_SUJETS:
+    # « il nous a dit », « le prof nous a rendu les copies » : « nous » y
+    # est complement, et le verbe a raison.
+    if _sujet_avant_le_pronom(ctx, i):
         return None
     correcte = formes.get(ctx.mot(i))
     if correcte is None:
@@ -564,8 +589,10 @@ def _accord_pronom_verbe(ctx: Contexte, i: int):
     personne = PERSONNE_DU_SUJET.get(sujet)
     if personne is None:
         return None
-    # « il nous parle » : « nous » y est complement, le verbe a raison.
-    if personne in ("1p", "2p") and ctx.mot(i - 2) in PRONOMS_SUJETS:
+    # « il nous parle », « le prof nous a rendu les copies » : « nous » y
+    # est complement, et le verbe a raison. Tout ce qui peut etre un sujet
+    # devant lui — un pronom comme un nom — le prive de ce role.
+    if personne in ("1p", "2p") and _sujet_avant_le_pronom(ctx, i):
         return None
     # « lui et elle sont partis », « toi et moi on verra » : le sujet ne se
     # limite pas au pronom qu'on voit. La conjonction est juste avant lui,
@@ -584,8 +611,9 @@ def _accord_nous_vous(ctx: Contexte, i: int):
     if terminaison is None or ctx.elision(i):
         return None
 
-    # « il nous parle » : « nous » y est complement, le verbe a raison.
-    if ctx.mot(i - 2) in PRONOMS_SUJETS:
+    # « il nous parle », « l'équipe vous remercie » : « nous » y est
+    # complement, et le verbe a raison.
+    if _sujet_avant_le_pronom(ctx, i):
         return None
 
     mot = ctx.mot(i)
@@ -621,7 +649,7 @@ def _accord_il_singulier(ctx: Contexte, i: int):
 
 
 @regle("ACCORD_IMPARFAIT",
-       "a l'imparfait, « je » et « tu » prennent « -ais », « il » prend « -ait »")
+       "à l'imparfait, « je » et « tu » prennent « -ais », « il » prend « -ait »")
 def _accord_imparfait(ctx: Contexte, i: int):
     """« il mangeais » -> « il mangeait », « je mangeait » -> « je mangeais »."""
     sujet = sujet_avant(ctx, i)
@@ -704,6 +732,18 @@ def _apostrophe_avant_participe(ctx: Contexte, i: int):
     return appliquer_casse(ctx.brut(i), remplacement)
 
 
+def _dans_un_compose(ctx: "Contexte", i: int) -> bool:
+    """Le mot en position i est-il attache au suivant par un trait d'union ?
+
+    Le decoupage en mots ignore le trait d'union : « peut-être » donne deux
+    jetons. Sans cette question, « il est peut-être malade » devenait « il
+    est pu-être malade » — la regle du participe prenait « peut » pour un
+    verbe isole derriere un auxiliaire.
+    """
+    return ctx.separateur(i).startswith("-") or \
+        ctx.separateur(i - 1).endswith("-")
+
+
 def _dans_une_locution(ctx: "Contexte", i: int) -> bool:
     """Le mot en position i fait-il partie d'une locution figee ?
 
@@ -720,9 +760,16 @@ def _dans_une_locution(ctx: "Contexte", i: int) -> bool:
     return False
 
 
-@regle("IL_A", "apres un pronom sujet, « a » est le verbe avoir : pas d'accent")
+@regle("IL_A", "après un pronom sujet, « a » est le verbe avoir : pas d'accent")
 def _il_a(ctx: Contexte, i: int):
     if _dans_une_locution(ctx, i):
+        return None
+    # « on a tout à perdre », « c'est tout à son honneur » : « tout »
+    # ressemble a un sujet, mais le verbe est deja passe. Un sujet ne vient
+    # pas apres son verbe. Le noyau, parce que « c'est » porte le sien
+    # derriere une elision.
+    if ctx.morphologie.verbe(ctx.noyau(i - 2)) or \
+            ctx.morphologie.verbe(ctx.mot(i - 2)):
         return None
     if ctx.mot(i) != "à":
         return None
@@ -768,7 +815,7 @@ APRES_A_ACCENT_FINAL = {"plus", "demain", "bientôt", "toute", "tantôt"}
 AVANT_A_VERBE = PRONOMS_SUJETS | {"ça", "ce", "qui", "y", "en", "n'", "qu'"}
 
 
-@regle("A_ACCENT", "ici « a » est la preposition « à »")
+@regle("A_ACCENT", "ici « a » est la préposition « à »")
 def _a_accent(ctx: Contexte, i: int):
     if ctx.mot(i) != "a":
         return None
@@ -799,7 +846,7 @@ def _nom_propre(ctx: "Contexte", i: int) -> bool:
     return ctx.lexique.majuscule_obligatoire(brut.lower()) is not None
 
 
-@regle("ET_EST", "apres un pronom sujet, c'est le verbe « est »")
+@regle("ET_EST", "après un pronom sujet, c'est le verbe « est »")
 def _et_est(ctx: Contexte, i: int):
     if ctx.noyau(i) != "et":
         return None
@@ -811,14 +858,14 @@ def _et_est(ctx: Contexte, i: int):
     return None
 
 
-@regle("ILS_ONT", "« ils on » : le verbe avoir s'ecrit « ont »")
+@regle("ILS_ONT", "« ils on » : le verbe avoir s'écrit « ont »")
 def _ils_ont(ctx: Contexte, i: int):
     if ctx.mot(i) == "on" and ctx.mot(i - 1) in PRONOMS_PLURIEL:
         return appliquer_casse(ctx.brut(i), "ont")
     return None
 
 
-@regle("ILS_SONT", "« ils son » : le verbe etre s'ecrit « sont »")
+@regle("ILS_SONT", "« ils son » : le verbe être s'écrit « sont »")
 def _ils_sont(ctx: Contexte, i: int):
     if ctx.mot(i) != "son":
         return None
@@ -851,7 +898,7 @@ def _peut_etre_verbe(mot: str) -> bool:
     return mot.endswith(TERMINAISONS_VERBALES)
 
 
-@regle("SE_CE", "« se » annonce un verbe ; ici c'est le demonstratif « ce »")
+@regle("SE_CE", "« se » annonce un verbe ; ici c'est le démonstratif « ce »")
 def _se_ce(ctx: Contexte, i: int):
     if ctx.mot(i) != "se":
         return None
@@ -924,7 +971,7 @@ VERBES_D_INTERROGATION = {
 
 
 @regle("C_EST_S_EST",
-       "apres un pronom sujet, « c'est » est le pronominal « s'est »")
+       "après un pronom sujet, « c'est » est le pronominal « s'est »")
 def _c_est_s_est(ctx: Contexte, i: int):
     """« il c'est trompe » -> « il s'est trompé ».
 
@@ -1012,7 +1059,7 @@ ADJECTIFS_APRES_C_EST = {
 }
 
 
-@regle("CES_C_EST", "« ces » est un determinant ; ici c'est « c'est »")
+@regle("CES_C_EST", "« ces » est un déterminant ; ici c'est « c'est »")
 def _ces_c_est(ctx: Contexte, i: int):
     """« ces pas grave » -> « c'est pas grave ».
 
@@ -1048,7 +1095,7 @@ def _ces_c_est(ctx: Contexte, i: int):
     return appliquer_casse(ctx.brut(i), "c'est")
 
 
-@regle("OU_ACCENT", "« où » designe le lieu ; « ou » relie deux choix")
+@regle("OU_ACCENT", "« où » désigne le lieu ; « ou » relie deux choix")
 def _ou_accent(ctx: Contexte, i: int):
     if ctx.mot(i) != "ou":
         return None
@@ -1171,7 +1218,7 @@ AUXILIAIRES_AVOIR = {
 }
 
 
-@regle("SUR_ACCENT", "« sûr » veut dire certain ; « sur » est la preposition")
+@regle("SUR_ACCENT", "« sûr » veut dire certain ; « sur » est la préposition")
 def _sur_accent(ctx: Contexte, i: int):
     """« je suis sur de moi » -> « sûr », « bien sur » -> « bien sûr ».
 
@@ -1225,7 +1272,7 @@ def _peu_peut(ctx: Contexte, i: int):
     return appliquer_casse(ctx.brut(i), accorde)
 
 
-@regle("PEUT_ETRE", "« peut-être » s'ecrit avec un trait d'union")
+@regle("PEUT_ETRE", "« peut-être » s'écrit avec un trait d'union")
 def _peut_etre(ctx: Contexte, i: int):
     """« peu etre que oui » -> « peut-être que oui ».
 
@@ -1257,7 +1304,7 @@ def _voire_voir(ctx: Contexte, i: int):
     return appliquer_casse(ctx.brut(i), "voir")
 
 
-@regle("LA_ACCENT", "« là » designe le lieu ; « la » est un article")
+@regle("LA_ACCENT", "« là » désigne le lieu ; « la » est un article")
 def _la_accent(ctx: Contexte, i: int):
     if ctx.mot(i) != "la":
         return None
@@ -1272,7 +1319,7 @@ def _la_accent(ctx: Contexte, i: int):
     return None
 
 
-@regle("TOUT_TOUS", "devant un determinant pluriel, « tout » s'ecrit « tous »")
+@regle("TOUT_TOUS", "devant un déterminant pluriel, « tout » s'écrit « tous »")
 def _tout_tous(ctx: Contexte, i: int):
     if ctx.mot(i) != "tout":
         return None
@@ -1306,7 +1353,7 @@ MOTS_INTERROGATIFS = {"qui", "où", "quand", "comment", "pourquoi", "combien",
                       "quel", "quelle", "quels", "quelles", "que"}
 
 
-@regle("EST_CE", "« est-ce » s'ecrit avec un trait d'union")
+@regle("EST_CE", "« est-ce » s'écrit avec un trait d'union")
 def _est_ce(ctx: Contexte, i: int):
     if ctx.mot(i) != "est" or ctx.mot(i + 1) != "ce" or ctx.separateur(i) != " ":
         return None
@@ -1335,7 +1382,7 @@ def _auxiliaire_avant(ctx: Contexte, i: int) -> bool:
 
 
 @regle("PARTICIPE_APRES_AUXILIAIRE",
-       "apres l'auxiliaire, le verbe prend « -é » et non « -er »")
+       "après l'auxiliaire, le verbe prend « -é » et non « -er »")
 def _participe_apres_auxiliaire(ctx: Contexte, i: int):
     mot = ctx.mot(i)
     if not mot.endswith("er") or ctx.elision(i):
@@ -1349,7 +1396,7 @@ def _participe_apres_auxiliaire(ctx: Contexte, i: int):
 
 
 @regle("PARTICIPE_APRES_AUXILIAIRE_CONJUGUE",
-       "apres l'auxiliaire, le verbe se met au participe")
+       "après l'auxiliaire, le verbe se met au participe")
 def _participe_apres_auxiliaire_conjugue(ctx: Contexte, i: int):
     """« ils ont prit le train » -> « ils ont pris le train ».
 
@@ -1362,6 +1409,8 @@ def _participe_apres_auxiliaire_conjugue(ctx: Contexte, i: int):
     """
     mot = ctx.mot(i)
     if ctx.elision(i) or not _auxiliaire_avant(ctx, i):
+        return None
+    if _dans_un_compose(ctx, i):
         return None
     traits = ctx.morphologie.traits(mot)
     # Une forme conjuguee ou un imperatif, et rien d'autre : ni nom, ni
@@ -1381,7 +1430,7 @@ def _participe_apres_auxiliaire_conjugue(ctx: Contexte, i: int):
 
 
 @regle("PARTICIPE_SANS_ACCENT",
-       "apres l'auxiliaire, le participe prend son accent")
+       "après l'auxiliaire, le participe prend son accent")
 def _participe_sans_accent(ctx: Contexte, i: int):
     """« j'ai mange » -> « j'ai mangé ».
 
@@ -1424,7 +1473,7 @@ def _participe_sans_accent(ctx: Contexte, i: int):
 
 
 @regle("INFINITIF_APRES_SEMI_AUXILIAIRE",
-       "apres ce verbe, le suivant reste a l'infinitif : « -er »")
+       "après ce verbe, le suivant reste à l'infinitif : « -er »")
 def _infinitif_apres_semi_auxiliaire(ctx: Contexte, i: int):
     mot = ctx.mot(i)
     if not mot.endswith("é") or mot in NOMS_EN_E or ctx.elision(i):
@@ -1464,7 +1513,7 @@ TRAITS_ETRE = {
 
 
 @regle("ACCORD_PARTICIPE_ETRE",
-       "avec l'auxiliaire « etre », le participe s'accorde avec le sujet")
+       "avec l'auxiliaire « être », le participe s'accorde avec le sujet")
 def _accord_participe_etre(ctx: Contexte, i: int):
     mot = ctx.mot(i)
     if ctx.elision(i):
@@ -1736,7 +1785,7 @@ def _pluriels(ctx: "Contexte", mot: str) -> list[str]:
 
 
 @regle("ACCORD_DETERMINANT_NOM",
-       "le nom s'accorde avec son determinant pluriel")
+       "le nom s'accorde avec son déterminant pluriel")
 def _accord_determinant_nom(ctx: Contexte, i: int):
     mot = ctx.mot(i)
     determinant = ctx.mot(i - 1)
@@ -1909,7 +1958,7 @@ TERMINAISONS_CONDITIONNEL = ("rais", "rait", "raient", "rions", "riez")
 
 
 @regle("SI_CONDITIONNEL",
-       "apres « si », le verbe se met a l'imparfait, jamais au conditionnel")
+       "après « si », le verbe se met à l'imparfait, jamais au conditionnel")
 def _si_conditionnel(ctx: Contexte, i: int):
     """« si j'aurais su » -> « si j'avais su », « si tu pourrais » -> « pouvais »."""
     # Le sujet peut s'intercaler : « si tu pourrais ».
@@ -2032,7 +2081,7 @@ def _negation(verbe: str) -> str:
 
 
 @regle("NEGATION_COMPLETE",
-       "a l'ecrit soutenu, la negation garde son « ne »", registre=SOUTENU)
+       "à l'écrit soutenu, la négation garde son « ne »", registre=SOUTENU)
 def _negation_complete(ctx: Contexte, i: int):
     """« j'ai pas » -> « je n'ai pas », « y a pas » -> « n'y a pas ».
 
@@ -2071,7 +2120,7 @@ def _negation_complete(ctx: Contexte, i: int):
 
 
 @regle("SUJET_IMPERSONNEL",
-       "a l'ecrit soutenu, le sujet impersonnel s'ecrit", registre=SOUTENU)
+       "à l'écrit soutenu, le sujet impersonnel s'écrit", registre=SOUTENU)
 def _sujet_impersonnel(ctx: Contexte, i: int):
     """« faut y aller » -> « il faut y aller », « y a » -> « il y a »."""
     if not ctx.debut_de_segment(i):
@@ -2084,7 +2133,7 @@ def _sujet_impersonnel(ctx: Contexte, i: int):
     return None
 
 
-@regle("CA_CELA", "a l'ecrit soutenu, « ça » devient « cela »", registre=SOUTENU)
+@regle("CA_CELA", "à l'écrit soutenu, « ça » devient « cela »", registre=SOUTENU)
 def _ca_cela(ctx: Contexte, i: int):
     if ctx.mot(i) != "ça" or ctx.elision(i):
         return None
@@ -2194,7 +2243,6 @@ COMPOSES = {
     ("aller", "retour"): "aller-retour",
     ("allers", "retours"): "allers-retours",
     ("porte", "monnaie"): "porte-monnaie",
-    ("arc", "en"): None,                   # « arc-en-ciel » : trois mots
     ("grand", "mère"): "grand-mère",
     ("grand", "père"): "grand-père",
     ("belle", "mère"): "belle-mère",
@@ -2203,7 +2251,6 @@ COMPOSES = {
     ("quatre", "vingt"): "quatre-vingts",
     ("quatre", "vingts"): "quatre-vingts",
     ("sur", "place"): "sur place",         # sans trait d'union, justement
-    ("tout", "à"): None,
     ("aujourd'hui",): "aujourd'hui",
     ("quelque", "part"): "quelque part",   # sans trait d'union, justement
 }
@@ -2221,8 +2268,23 @@ COMPOSES_LONGS = {
     ("quatre", "vingt", "dix"): "quatre-vingt-dix",
     ("quatre", "vingts", "dix"): "quatre-vingt-dix",
     ("quatre", "vingt", "un"): "quatre-vingt-un",
-    ("tout", "à", "fait"): "tout à fait",  # sans trait d'union, justement
+    # Ces locutions-la s'ecrivent sans trait d'union, et leur « à » garde son
+    # accent. Elles sont ici pour que les regles du verbe avoir et du
+    # participe les laissent tranquilles : « tout à coup » devenait « tout a
+    # coup », et « on a tout à perdre » devenait « tout eu perdre ».
+    ("tout", "à", "fait"): "tout à fait",
     ("tout", "a", "fait"): "tout à fait",
+    ("tout", "à", "coup"): "tout à coup",
+    ("tout", "a", "coup"): "tout à coup",
+    ("tout", "à", "l'heure"): "tout à l'heure",
+    ("tout", "a", "l'heure"): "tout à l'heure",
+    ("face", "à", "face"): "face à face",
+    ("tête", "à", "tête"): "tête à tête",
+    ("côte", "à", "côte"): "côte à côte",
+    ("petit", "à", "petit"): "petit à petit",
+    ("peu", "à", "peu"): "peu à peu",
+    ("pas", "à", "pas"): "pas à pas",
+    ("mot", "à", "mot"): "mot à mot",
     ("par", "ci", "par"): None,            # reserve, voir plus bas
 }
 
@@ -2321,11 +2383,20 @@ def _trait_union_compose(ctx: Contexte, i: int):
     deux = (ctx.mot(i), ctx.mot(i + 1))
     if deux in COMPOSES:
         remplacement = COMPOSES[deux]
+        if remplacement is None:
+            # Ceinture : une entree sans remplacement ne doit jamais
+            # atteindre `appliquer_casse`, qui tomberait et emporterait
+            # tout le texte avec elle.
+            return None
         if remplacement == " ".join(deux):
             return None
-        # « peut être » peut etre le verbe : « il peut être là ». Un sujet
-        # devant, et on ne touche a rien.
-        if deux[0] == "peut" and ctx.mot(i - 1) in PRONOMS_SUJETS:
+        # « peut être » peut etre le verbe : « il peut être là », « cela
+        # peut être dangereux ». Tout ce qui peut commander ce verbe — un
+        # pronom comme un nom — interdit le trait d'union.
+        if deux[0] == "peut" and (
+                ctx.mot(i - 1) in PRONOMS_SUJETS
+                or ctx.mot(i - 1) in SUJETS_SINGULIER
+                or ctx.morphologie.nom(ctx.noyau(i - 1))):
             return None
         # « rendez-vous » : « rendez vous compte » est un imperatif.
         if deux == ("rendez", "vous") and ctx.mot(i + 2) in (

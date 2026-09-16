@@ -108,6 +108,7 @@ jobs:
         run: |
           dotnet tool install --global wix --version 5.0.2
           wix extension add -g WixToolset.UI.wixext/5.0.2
+          wix extension add -g WixToolset.Util.wixext/5.0.2
 
       - name: Construire l'installateur
         shell: pwsh
@@ -117,6 +118,7 @@ jobs:
             -d Version=$numero `
             -bindpath dist -bindpath installateur `
             -ext WixToolset.UI.wixext `
+            -ext WixToolset.Util.wixext `
             -culture fr-FR `
             -out dist/Papote.msi
           if (-not (Test-Path dist/Papote.msi)) { throw "le MSI n'a pas ete produit" }
