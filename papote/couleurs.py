@@ -23,6 +23,16 @@ TEXTE = "#e9ebf0"
 TEXTE_DOUX = "#8b93a7"
 TEXTE_ETEINT = "#5e6579"
 
+# Le theme clair. Il ne sert qu'a l'installateur : Windows Installer ecrit
+# son propre texte par-dessus nos images, toujours en noir, et une image
+# sombre le rendait invisible. Ce sont les memes valeurs que celles du theme
+# clair de la fenetre — voir « prefers-color-scheme » dans `web/style.css`.
+PAGE = "#ffffff"
+PAGE_BASSE = "#f1f3f7"
+ENCRE = "#11151f"
+ENCRE_DOUCE = "#5a6379"
+BORDURE_CLAIRE = "#dfe3ea"
+
 ACCENT = "#5b8cff"
 ACCENT_VIF = "#7aa2ff"
 ACCENT_SOURD = "#22305c"

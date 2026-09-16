@@ -19,6 +19,13 @@ C'est l'inverse de ce qui se faisait ici : la bulle, posee a gauche en 128
 pixels d'une icone prevue pour seize, chevauchait le texte de Windows et
 montrait ses escaliers.
 
+Et WixUI ecrit ce texte **en noir**, sans qu'on puisse le lui faire changer :
+c'est cable dans le jeu de dialogues. Les images reprenaient la palette
+sombre de la fenetre — le titre de chaque page de l'installateur etait donc
+du noir sur du presque noir, illisible d'un bout a l'autre. Les zones ou
+Windows ecrit sont desormais claires ; la marque garde sa colonne sombre,
+ou c'est nous qui ecrivons.
+
     python outils/images_installateur.py
 """
 
@@ -147,32 +154,39 @@ def construire() -> list[Path]:
     ecrits.append(chemin)
 
     # -- la banniere des pages interieures. Le titre de WixUI occupe la
-    #    gauche : la marque se met a droite, discrete.
-    banniere = _degrade_vertical(BANNIERE, couleurs.SURFACE, couleurs.FOND)
+    #    gauche, et il est ecrit en noir : le fond y est clair. La marque se
+    #    met a droite, discrete.
+    banniere = _degrade_vertical(BANNIERE, couleurs.PAGE, couleurs.PAGE_BASSE)
     marque = logo.dessiner(30)
     banniere.paste(marque, (BANNIERE[0] - 46, 14), marque)
     _ecrire(banniere, "Papote", (BANNIERE[0] - 46 - 62, 21),
-            _police("grasse", 14), couleurs.TEXTE_DOUX)
+            _police("grasse", 14), couleurs.ENCRE_DOUCE)
+    _filet_horizontal(banniere, BANNIERE[1] - 1, couleurs.BORDURE_CLAIRE)
     chemin = DESTINATION / "banniere.bmp"
     banniere.save(chemin)
     ecrits.append(chemin)
 
-    # -- la page d'accueil. Tout le dessin tient dans la colonne de gauche.
-    grand = _degrade_vertical(FOND, couleurs.FOND, couleurs.SURFACE)
-    _halo(grand, (COLONNE // 2, 118), 96, couleurs.ACCENT)
+    # -- la page d'accueil. Le dessin tient dans la colonne de gauche, ou
+    #    c'est nous qui ecrivons : elle reste sombre. Le reste est la page de
+    #    Windows, et Windows y ecrit en noir.
+    grand = _degrade_vertical(FOND, couleurs.PAGE, couleurs.PAGE_BASSE)
+    colonne = _degrade_vertical((COLONNE, FOND[1]),
+                                couleurs.FOND, couleurs.SURFACE)
+    _halo(colonne, (COLONNE // 2, 118), 96, couleurs.ACCENT)
 
     bulle = logo.dessiner(76)
-    grand.paste(bulle, (COLONNE // 2 - 38, 80), bulle)
-    _centrer(grand, "Papote", COLONNE, 172, _police("grasse", 21),
+    colonne.paste(bulle, (COLONNE // 2 - 38, 80), bulle)
+    _centrer(colonne, "Papote", COLONNE, 172, _police("grasse", 21),
              couleurs.TEXTE)
-    _centrer(grand, "le correcteur", COLONNE, 200, _police("normale", 11),
+    _centrer(colonne, "le correcteur", COLONNE, 200, _police("normale", 11),
              couleurs.TEXTE_DOUX)
-    _centrer(grand, "qui vous laisse parler", COLONNE, 215,
+    _centrer(colonne, "qui vous laisse parler", COLONNE, 215,
              _police("normale", 11), couleurs.TEXTE_DOUX)
+    grand.paste(colonne, (0, 0))
 
     # Un filet vertical separe la colonne du texte de Windows : sans lui, le
     # paragraphe semble flotter au milieu de nulle part.
-    _filet(grand, COLONNE, 46, FOND[1] - 46, couleurs.BORDURE)
+    _filet(grand, COLONNE, 0, FOND[1], couleurs.BORDURE_CLAIRE)
 
     chemin = DESTINATION / "fond.bmp"
     grand.save(chemin)
@@ -202,6 +216,18 @@ def _filet(image, x: int, haut: int, bas: int, couleur: str) -> None:
     from PIL import ImageDraw
 
     ImageDraw.Draw(image).line((x, haut, x, bas), fill=_rvb(couleur), width=1)
+
+
+def _filet_horizontal(image, y: int, couleur: str) -> None:
+    """Le trait qui separe la banniere du corps de la page.
+
+    Sur fond clair, sans lui, la banniere et la page se confondent et le
+    titre semble flotter.
+    """
+    from PIL import ImageDraw
+
+    ImageDraw.Draw(image).line((0, y, image.size[0], y),
+                               fill=_rvb(couleur), width=1)
 
 
 def main() -> int:
