@@ -61,8 +61,11 @@ def _sans_accents(mot: str) -> str:
 class Predicteur:
     """Les mots qui commencent comme celui qu'on est en train d'ecrire."""
 
-    def __init__(self, lexique):
+    def __init__(self, lexique, memoire=None):
         self.lexique = lexique
+        # Facultative : sans elle, le classement est celui du francais en
+        # general, et « déso » propose « désormais » plutot que « désolé ».
+        self.memoire = memoire
         self._index: list[tuple[str, str]] | None = None
 
     @property
@@ -81,8 +84,14 @@ class Predicteur:
             )
         return self._index
 
-    def completer(self, prefixe: str, maximum: int = PROPOSITIONS) -> list[str]:
-        """Les suites les plus probables de ce debut de mot."""
+    def completer(self, prefixe: str, maximum: int = PROPOSITIONS,
+                  precedent: str = "") -> list[str]:
+        """Les suites les plus probables de ce debut de mot.
+
+        `precedent` est le mot d'avant. Il ne sert qu'a travers vos
+        habitudes : apres « bonne », quelqu'un qui ecrit souvent « bonne
+        journée » verra « journée » passer devant.
+        """
         if not prefixe or len(prefixe) < LONGUEUR_MINIMALE:
             return []
 
@@ -100,7 +109,7 @@ class Predicteur:
             if squelette == nu and mot.lower() == prefixe.lower():
                 # Le mot deja ecrit : rien a completer.
                 continue
-            candidats.append((self.lexique.rang(mot), mot))
+            candidats.append((self._poids(mot, precedent), mot))
             if len(candidats) > 200:
                 # Un prefixe qui ouvre sur deux cents mots ne designe rien.
                 break
@@ -114,13 +123,25 @@ class Predicteur:
         # elle est franchement plus employee que lui.
         rang_prefixe = self.lexique.rang(prefixe.lower())
         if rang_prefixe <= RANG_MAXIMAL:
-            meilleur = self.lexique.rang(retenus[0])
+            meilleur = self._poids(retenus[0], precedent)
             if meilleur * AVANTAGE_EXIGE > rang_prefixe:
                 return []
 
         return [_meme_casse(prefixe, mot) for mot in retenus]
 
-    def suite(self, prefixe: str) -> str | None:
+    def _poids(self, mot: str, precedent: str = "") -> float:
+        """Le rang du mot, allege de ce que vos habitudes en disent.
+
+        Le rang brut vient du francais en general ; l'avantage vient de vous.
+        Diviser plutot qu'additionner garde l'echelle : un mot deux fois plus
+        courant reste deux fois mieux classe.
+        """
+        rang = self.lexique.rang(mot)
+        if self.memoire is None:
+            return rang
+        return rang / self.memoire.avantage(mot, precedent)
+
+    def suite(self, prefixe: str, precedent: str = "") -> str | None:
         """Ce qu'il resterait a taper pour accepter la premiere proposition.
 
         C'est ce que la touche de validation ecrira : le mot moins ce qui est
@@ -128,7 +149,7 @@ class Predicteur:
         qui est ecrit — un accent ajoute en cours de mot obligerait a effacer,
         ce que la prediction ne fait jamais.
         """
-        propositions = self.completer(prefixe, maximum=1)
+        propositions = self.completer(prefixe, maximum=1, precedent=precedent)
         if not propositions:
             return None
         mot = propositions[0]

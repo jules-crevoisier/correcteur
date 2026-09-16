@@ -11,6 +11,7 @@ import traceback
 from typing import Callable
 
 from . import apprentissage as apprentissage_mod
+from . import memoire as memoire_mod
 from . import config as config_mod
 from . import demarrage, frappe as frappe_mod, journal as journal_mod
 from . import lexique, maj, moteur
@@ -38,6 +39,10 @@ class Application:
 
         self.politique = politique_mod.depuis_config(self.config)
         self.journal_habitudes = apprentissage_mod.charger()
+        # Les mots que vous employez, et ceux qui en suivent
+        # d'autres : c'est tout le contexte dont dispose la
+        # prediction, et il ne sort pas de cette machine.
+        self.memoire_frappe = memoire_mod.charger()
         self._corrections_depuis_sauvegarde = 0
 
         # Les mots que l'utilisateur a retablis a la main : ce sont ceux qu'il
@@ -172,7 +177,8 @@ class Application:
         if self._ecoute is None:
             self._ecoute = frappe_mod.EcouteClavier(
                 frappe_mod.Frappe(self.correcteur,
-                                  predicteur=self._predicteur()),
+                                  predicteur=self._predicteur(),
+                                  memoire=self._memoire()),
                 delai_oubli=self.config.get("delai_oubli", 5.0),
                 sur_correction=self._signaler_correction,
                 sur_annulation=self._signaler_annulation,
@@ -192,7 +198,18 @@ class Application:
         # `correcteur` a deja force le chargement du dictionnaire : le
         # predicteur s'appuie dessus plutot que d'en ouvrir un second.
         self.correcteur  # noqa: B018
-        return prediction.Predicteur(self._lexique)
+        return prediction.Predicteur(self._lexique, self._memoire())
+
+    def _memoire(self):
+        """Les habitudes de frappe, si l'apprentissage est autorise.
+
+        Le meme reglage gouverne les deux apprentissages : celui des
+        corrections annulees et celui des tournures. Quelqu'un qui refuse
+        qu'on retienne ses habitudes les refuse toutes.
+        """
+        if not self.config.get("apprentissage", True):
+            return None
+        return self.memoire_frappe
 
     def _bulle(self):
         """La bulle de propositions, ou une doublure inerte."""
@@ -367,6 +384,7 @@ class Application:
             self.journal_habitudes.enregistrer(apprentissage_mod.chemin_journal())
         except OSError:
             pass
+        self.memoire_frappe.enregistrer(memoire_mod.chemin_memoire())
 
     def _sauvegarder_config(self) -> None:
         try:
