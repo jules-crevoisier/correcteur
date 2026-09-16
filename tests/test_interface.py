@@ -90,3 +90,12 @@ def test_le_redemarrage_relance_avec_un_environnement_propre(barre, monkeypatch)
     _commande, options = lancements[0]
     assert "_MEIPASS2" not in options["env"]
 
+
+
+def test_l_icone_de_la_zone_de_notification_se_dessine():
+    """Active et en pause : deux images, pas d'exception, la bonne taille."""
+    from papote.interface import _icone
+
+    for actif in (True, False):
+        image = _icone(actif)
+        assert image.size == (64, 64)

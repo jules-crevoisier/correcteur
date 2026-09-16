@@ -9,18 +9,21 @@ import threading
 import time
 
 from . import __version__, config as config_mod
-from . import couleurs, demarrage, icones, maj
+from . import couleurs, demarrage, logo, maj
 
 
 def _icone(actif: bool = True):
-    """La bulle de Papote, en pixel art. Grise quand l'outil est en pause."""
-    trait = couleurs.ACCENT if actif else couleurs.TEXTE_ETEINT
-    creux = "#0e1014" if actif else "#1a1c22"
-    return icones.image_pil(
-        "papote",
-        icones.palette(trait, creux, lumiere=couleurs.ACCENT_VIF if actif else trait),
-        taille=64,
-    )
+    """La bulle de Papote. Grise quand l'outil est en pause.
+
+    Windows l'affiche a seize pixels, mais la redimensionne lui-meme depuis
+    celle qu'on lui donne : mieux vaut lui fournir un trace lisse qu'une
+    grille de pixels agrandie.
+    """
+    if actif:
+        return logo.dessiner(64, teinte=couleurs.ACCENT,
+                             lumiere=couleurs.ACCENT_VIF)
+    return logo.dessiner(64, teinte=couleurs.TEXTE_ETEINT,
+                         lumiere=couleurs.TEXTE_DOUX, fond=None)
 
 
 class InterfaceBarre:
