@@ -50,9 +50,10 @@ class Verrou:
             fichier.close()
             raise Occupee(str(e)) from e
         # Le numero de processus sert au diagnostic, pas au verrou : c'est
-        # le systeme qui arbitre, pas ce qui est ecrit dedans.
+        # le systeme qui arbitre, pas ce qui est ecrit dedans. Il s'ecrit
+        # apres le premier octet, que le verrou occupe sous Windows.
         try:
-            fichier.seek(0)
+            fichier.seek(1)
             fichier.truncate()
             fichier.write(str(os.getpid()).encode("ascii"))
             fichier.flush()
@@ -87,7 +88,15 @@ def _verrouiller(fichier) -> None:
     Deux systemes, deux appels. Aucun des deux n'est portable, et aucun des
     deux ne survit a la mort du processus — ce qui est precisement ce qu'on
     veut.
+
+    Le `seek(0)` n'est pas une precaution : sous Windows, `msvcrt.locking`
+    verrouille a partir de **la position courante**. Le fichier s'ouvre en
+    ajout, donc a la fin — et comme la premiere instance y ecrit son numero
+    de processus, la seconde s'ouvrait quatre octets plus loin et
+    verrouillait une plage que personne ne tenait. Le verrou existait, et ne
+    verrouillait rien.
     """
+    fichier.seek(0)
     if os.name == "nt":
         import msvcrt
 
@@ -99,10 +108,10 @@ def _verrouiller(fichier) -> None:
 
 
 def _deverrouiller(fichier) -> None:
+    fichier.seek(0)
     if os.name == "nt":
         import msvcrt
 
-        fichier.seek(0)
         msvcrt.locking(fichier.fileno(), msvcrt.LK_UNLCK, 1)
         return
     import fcntl

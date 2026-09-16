@@ -76,11 +76,30 @@ def test_le_dossier_est_cree_au_besoin(tmp_path):
 
 
 def test_le_numero_de_processus_est_ecrit(tmp_path):
-    """Pour le diagnostic seulement : c'est le systeme qui arbitre."""
+    """Pour le diagnostic seulement : c'est le systeme qui arbitre.
+
+    Il s'ecrit apres le premier octet, que le verrou occupe sous Windows.
+    """
     import os
 
     chemin = tmp_path / "papote.verrou"
     verrou = instance.Verrou(chemin)
     verrou.prendre()
     verrou.rendre()
-    assert chemin.read_text(encoding="ascii") == str(os.getpid())
+    assert str(os.getpid()) in chemin.read_bytes().decode("ascii",
+                                                         "replace")
+
+
+def test_le_verrou_tient_meme_apres_l_ecriture_du_numero(tmp_path):
+    """Sous Windows, `msvcrt.locking` verrouille a partir de la position
+    courante. Le fichier s'ouvre en ajout, donc a la fin : la seconde
+    instance verrouillait une plage que personne ne tenait, et passait."""
+    chemin = tmp_path / "papote.verrou"
+    premier = instance.Verrou(chemin)
+    premier.prendre()
+    try:
+        assert chemin.stat().st_size > 0
+        with pytest.raises(instance.Occupee):
+            instance.Verrou(chemin).prendre()
+    finally:
+        premier.rendre()
