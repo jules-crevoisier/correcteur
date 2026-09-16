@@ -41,9 +41,11 @@ RAPPEL_MINIMAL_DEV = 0.95
 # redescend jamais : le faire baisser, c'est avouer une regression.
 RAPPEL_MINIMAL_A_PART = 0.63
 
-# Une phrase correcte abimee est un defaut grave. On en tolere une seule ici,
-# heritee du jour de l'ecriture du corpus, et ce plafond ne monte pas.
-ABIMEES_MAXIMUM_A_PART = 1
+# Une phrase correcte abimee est un defaut grave. Le corpus en tolerait une,
+# heritee du jour de son ecriture ; en l'agrandissant on a trouve les trois
+# bugs qui la causaient, et le plafond est descendu a zero. Il n'y remonte
+# pas : zero, pas « presque zero ».
+ABIMEES_MAXIMUM_A_PART = 0
 
 
 @pytest.fixture(scope="module")

@@ -124,6 +124,12 @@ def toujours_en_tete(ctx, i: int) -> bool:
     return ctx.debut_de_segment(i)
 
 
+def _suit_un_article(ctx, i):
+    from .grammaire import _peut_suivre_un_article
+
+    return _peut_suivre_un_article(ctx, i)
+
+
 def _et(*conditions: Callable) -> Callable:
     def condition(ctx, i: int) -> bool:
         return all(c(ctx, i) for c in conditions)
@@ -198,9 +204,9 @@ CONFUSIONS = (
                                "allez", "tu", "il", "elle", "on"}),
               "« où » designe le lieu"),
 
-    # « la » article et « là » adverbe : idem, complement de LA_ACCENT pour
-    # la fin de phrase.
-    Confusion("la", "là", _et(lambda ctx, i: ctx.fin_de_segment(i),
+    # « la » article et « là » adverbe : idem, complement de LA_ACCENT. La
+    # condition est la meme — rien derriere que « la » puisse determiner.
+    Confusion("la", "là", _et(lambda ctx, i: not _suit_un_article(ctx, i + 1),
                               apres("est", "suis", "es", "sommes", "êtes",
                                     "sont", "était", "étais", "sera",
                                     "serai", "seras", "reste", "restes")),

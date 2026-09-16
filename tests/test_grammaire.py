@@ -374,3 +374,120 @@ def test_l_accord_reste_dans_le_temps(correcteur):
     """« les gens finit » est un present : sa 3e personne du pluriel aussi."""
     assert correcteur.corriger("les gens finit")[0] == "les gens finissent"
     assert correcteur.corriger("les gens pensait")[0] == "les gens pensaient"
+
+
+# ---------------------------------------------------------------------------
+# Les homophones dont les deux membres sont courants
+#
+# La table de `confusions.py` exige un ecart de frequence : elle ne peut rien
+# pour « ou » / « où » ni « du » / « dû », aussi employes l'un que l'autre.
+# Ceux-la demandent une regle, et une condition qui ne laisse pas de doute.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("avant, apres", [
+    # « ou » relie deux choix : il lui faut quelque chose des deux cotes.
+    ("tu vas ou", "tu vas où"),
+    ("il est ou le fichier", "il est où le fichier"),
+    ("je sais pas ou il est", "je sais pas où il est"),
+    ("la ou on s'est vus", "là où on s'est vus"),
+    ("ou est ce qu'on mange", "où est-ce qu'on mange"),
+    # Un article ne precede jamais un infinitif.
+    ("elle a du rentrer plus tot", "elle a dû rentrer plus tôt"),
+    ("j'aurais du le faire avant", "j'aurais dû le faire avant"),
+    # « sûr » se construit avec « de » ou « que » ; « sur » avec un lieu.
+    ("je suis sur de moi", "je suis sûr de moi"),
+    ("elle est sure de son coup", "elle est sûre de son coup"),
+    ("bien sur que oui", "bien sûr que oui"),
+    # Un adverbe ne gouverne pas d'infinitif.
+    ("on peu passer ce soir", "on peut passer ce soir"),
+    ("je peu pas venir", "je peux pas venir"),
+    ("peu etre demain alors", "peut-être demain alors"),
+    # « voire » est un adverbe : il ne suit pas un semi-auxiliaire.
+    ("faut voire avec lui", "faut voir avec lui"),
+    # Derriere un pronom sujet et devant un participe, c'est le pronominal.
+    ("il c'est trompé de jour", "il s'est trompé de jour"),
+    ("elle c'est bien débrouillée", "elle s'est bien débrouillée"),
+    # « ces » determine un nom pluriel ; devant « pas » il n'y en a pas.
+    ("ces pas faux ce que tu dis", "c'est pas faux ce que tu dis"),
+    ("ses pas normal ce truc", "c'est pas normal ce truc"),
+])
+def test_les_homophones_courants(correcteur, avant, apres):
+    assert correcteur.corriger(avant)[0] == apres
+
+
+@pytest.mark.parametrize("phrase", [
+    # Les memes paires, du bon cote. Une regle qui les abime coute plus
+    # cher qu'elle ne rapporte.
+    "café ou thé",
+    "oui ou non ça m'est égal",
+    "tu viens ou pas",
+    "un ou deux jours de plus",
+    "il a du pain et du fromage",
+    "j'ai du mal à y croire",
+    "il a du courage pour deux",
+    "je suis sur la route",
+    "pose ça sur la table",
+    "un peu plus tard dans la journée",
+    "il y a peu de chances",
+    "voire même beaucoup mieux",
+    "ses pas résonnaient dans le couloir",
+    "ces pas perdus ne servent à rien",
+    "lui c'est différent",
+    "ces livres sont à moi",
+    "il peut être là dans dix minutes",
+    "c'est noir ou blanc",
+])
+def test_les_homophones_courants_ne_s_inventent_pas(correcteur, phrase):
+    assert correcteur.corriger(phrase)[0] == phrase
+
+
+# ---------------------------------------------------------------------------
+# Le genre des noms
+#
+# Le dictionnaire ne le dit pas. `genres.py` le reconstitue par trois voies —
+# la phrase, la terminaison, une liste — et laisse le reste inconnu.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("avant, apres", [
+    # La liste : des noms courts que rien ne signale.
+    ("des voitures blanc", "des voitures blanches"),
+    ("des portes ouvert", "des portes ouvertes"),
+    ("des chaises vert", "des chaises vertes"),
+    ("les tables sont rond", "les tables sont rondes"),
+    ("les routes sont long", "les routes sont longues"),
+    # La phrase : le determinant porte deja le genre.
+    ("la porte est ouvert", "la porte est ouverte"),
+    ("la voiture est garé", "la voiture est garée"),
+    # La terminaison : « -union », « -ité » sont feminins sans exception.
+    ("la reunion est terminé", "la réunion est terminée"),
+    # Le dictionnaire, quand il connait le genre : « chat » / « chatte ».
+    ("des chattes gentil", "des chattes gentilles"),
+    ("les femmes sont content", "les femmes sont contentes"),
+    ("les hommes sont content", "les hommes sont contents"),
+    # Les pluriels irreguliers, masculins.
+    ("les yeux fermé", "les yeux fermés"),
+    ("des chevaux blanc", "des chevaux blancs"),
+])
+def test_l_adjectif_suit_le_genre_du_nom(correcteur, avant, apres):
+    assert correcteur.corriger(avant)[0] == apres
+
+
+@pytest.mark.parametrize("phrase", [
+    # Genre inconnu et adjectif dont les deux genres different : le
+    # masculin serait un coup de des. « des voitures blanc » devenait
+    # « des voitures blancs », et c'etait une faute ecrite.
+    "des trucs blanc",
+    "des machins vert",
+    # Genre inconnu au singulier : le masculin ne se rattrape pas.
+    "le livre est ouvert",
+    "la nuit est calme",
+    "le film est fini",
+])
+def test_un_genre_inconnu_fait_taire(correcteur, phrase):
+    assert correcteur.corriger(phrase)[0] == phrase
+
+
+def test_un_adjectif_epicene_n_a_pas_besoin_du_genre(correcteur):
+    """« rouge » s'ecrit pareil aux deux genres : le nombre suffit."""
+    assert correcteur.corriger("des voitures rouge")[0] == "des voitures rouges"
+    assert correcteur.corriger("des trucs rouge")[0] == "des trucs rouges"

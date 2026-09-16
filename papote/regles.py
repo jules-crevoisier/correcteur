@@ -82,6 +82,15 @@ LEXIQUE_PROTEGE = {
     "tryhard", "clutch", "nerf", "buff", "lag", "ragequit", "gameplay",
     "cringe", "based", "ratio", "hype", "troll", "spam", "dm", "mp", "vocal",
     "serv", "serveur", "bot", "pseudo", "pfp", "banni", "kick", "mute",
+    # Vocabulaire de developpement. La liste est courte a dessein : seuls y
+    # figurent les mots que le correcteur abime vraiment. « push », « merge »
+    # ou « backend » n'ont besoin de personne — aucun mot francais ne leur
+    # ressemble assez.
+    "repo",      # devenait « repos »
+    "deploy",    # devenait « déployé »
+    "devops",    # devenait « devons »
+    "debug",     # devenait « début »
+    "json",      # devenait « son »
     # Plateformes et marques
     "discord", "twitch", "youtube", "tiktok", "insta", "snap", "whatsapp",
     "telegram", "steam", "spotify", "netflix", "reddit", "twitter",
@@ -98,6 +107,10 @@ LEXIQUE_PROTEGE = {
 # « thé », « can » deviendrait « c'an ». Seuls figurent ici les mots anglais
 # qui ne sont pas aussi des mots francais — « site », « table » ou « long »
 # n'ont pas besoin d'etre proteges, et « son » doit rester corrigible.
+#
+# Quelques-uns, en revanche, sont des mots francais **prives de leur
+# accent**, et les proteger revient a interdire de les accentuer. Ceux-la
+# sont retires plus bas : voir `ANGLAIS_TROMPEURS`.
 # ---------------------------------------------------------------------------
 LEXIQUE_ANGLAIS = {
     "above", "account", "across", "activity", "add", "all", "also",
@@ -153,6 +166,33 @@ LEXIQUE_ANGLAIS = {
     "yeah", "year", "yes", "yesterday", "you", "young", "your",
 }
 
+# Mots anglais qui sont aussi un mot francais courant ampute de son accent.
+# Les proteger, c'est refuser d'ecrire « président » ou « décision » :
+#
+#     president   -> président   (309e mot du francais)
+#     role        -> rôle        (575e)
+#     experience  -> expérience  (686e)
+#     decision    -> décision    (854e)
+#     education   -> éducation   (911e)
+#     difference  -> différence  (1016e)
+#     college     -> collège     (1647e)
+#
+# La coupure se lit dans les chiffres. Ces sept-la sont tous dans les deux
+# mille premiers mots du francais ; le suivant, « these » -> « thèse », est
+# au trois millieme, et personne n'ecrit « thèse » en tapant « these ». Pour
+# « the » -> « thé » ou « he » -> « hé », la protection a franchement raison.
+#
+# `tests/test_regles.py` refait le calcul : si le dictionnaire change, la
+# liste se signale au lieu de vieillir en silence.
+RANG_FRANCAIS_EVIDENT = 2_000
+
+ANGLAIS_TROMPEURS = {
+    "president", "role", "experience", "decision", "education",
+    "difference", "college",
+}
+
+LEXIQUE_ANGLAIS -= ANGLAIS_TROMPEURS
+
 # Prefixes/motifs qu'on ne touche jamais, ou qu'on protege integralement.
 MOTIFS_PROTEGES = [
     r"https?://\S+",            # liens
@@ -171,4 +211,12 @@ MOTIFS_PROTEGES = [
     # une lettre ou un chiffre, pour ne pas avaler le point d'une phrase.
     r"(?<!\w)[@#/]\w(?:[\w.\-]*\w)?",
     r"\b\w*\d\w*\b",            # tout mot contenant un chiffre
+    # Noms de fichiers : « config.json », « app.py », « index.html ». Sans
+    # eux, le point coupe le mot en deux et la seconde moitie se fait
+    # corriger — « json » devenait « j'son ». La liste d'extensions est
+    # explicite a dessein : « fin.Ensuite », c'est une espace oubliee, et
+    # celle-la doit rester corrigible.
+    r"\b\w[\w-]*\.(?:json|ya?ml|toml|ini|cfg|conf|env|lock|md|txt|csv|log"
+    r"|py|js|ts|tsx|jsx|html?|css|scss|sh|bat|ps1|sql|xml|svg|png|jpe?g|gif"
+    r"|pdf|zip|gz|exe|msi|dll|spec|rs|go|java|kt|rb|php|c|cpp|h)\b",
 ]

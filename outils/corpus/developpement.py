@@ -108,6 +108,52 @@ FAUTES = [
     ("ils sont national", "ils sont nationaux", "accord"),
     ("un chevaux blanc", "un cheval blanc", "accord"),
 
+    # -- accord en genre. Le dictionnaire ne dit pas le genre des noms :
+    #    il vient de la phrase elle-meme, d'une terminaison sure, ou d'une
+    #    liste ecrite a la main. Quand il reste inconnu, on se tait.
+    ("des voitures blanc", "des voitures blanches", "accord"),
+    ("des portes ouvert", "des portes ouvertes", "accord"),
+    ("des chaises vert", "des chaises vertes", "accord"),
+    ("la porte est ouvert", "la porte est ouverte", "accord"),
+    ("la voiture est garé", "la voiture est garée", "accord"),
+    ("les tables sont rond", "les tables sont rondes", "accord"),
+    ("mes soeurs sont grand", "mes sœurs sont grandes", "accord"),
+    ("les routes sont long", "les routes sont longues", "accord"),
+    ("les femmes sont content", "les femmes sont contentes", "accord"),
+    ("les hommes sont content", "les hommes sont contents", "accord"),
+
+    # -- homophones : les paires dont les deux membres sont trop courants
+    #    pour se departager sur la frequence. Seul le contexte tranche.
+    ("je sais pas ou il est", "je sais pas où il est", "homophone"),
+    ("tu vas ou", "tu vas où", "homophone"),
+    ("il est ou le fichier", "il est où le fichier", "homophone"),
+    ("la ou on s'est vus", "là où on s'est vus", "homophone"),
+    ("ou est ce qu'on mange", "où est-ce qu'on mange", "homophone"),
+    ("elle a du rentrer plus tot", "elle a dû rentrer plus tôt",
+     "homophone"),
+    ("j'aurais du le faire avant", "j'aurais dû le faire avant",
+     "homophone"),
+    ("je suis sur de moi", "je suis sûr de moi", "homophone"),
+    ("elle est sure de son coup", "elle est sûre de son coup", "homophone"),
+    ("bien sur que oui", "bien sûr que oui", "homophone"),
+    ("on peu passer ce soir", "on peut passer ce soir", "homophone"),
+    ("je peu pas venir", "je peux pas venir", "homophone"),
+    ("peu etre demain alors", "peut-être demain alors", "homophone"),
+    ("faut voire avec lui", "faut voir avec lui", "homophone"),
+    ("il c'est trompé de jour", "il s'est trompé de jour", "homophone"),
+    ("elle c'est bien débrouillée", "elle s'est bien débrouillée",
+     "homophone"),
+    ("ces pas faux ce que tu dis", "c'est pas faux ce que tu dis",
+     "homophone"),
+    ("ses pas normal ce truc", "c'est pas normal ce truc", "homophone"),
+
+    # -- des mots francais que la protection anglaise interdisait d'accentuer
+    ("une decision importante", "une décision importante", "accent"),
+    ("le president a parle", "le président a parlé", "accent"),
+    ("son role est clair", "son rôle est clair", "accent"),
+    ("une belle experience", "une belle expérience", "accent"),
+    ("la difference est nette", "la différence est nette", "accent"),
+
     # -- le sujet n'est pas toujours colle a son verbe
     ("beaucoup de gens pense ça", "beaucoup de gens pensent ça", "accord"),
     ("les gens qui pense ça", "les gens qui pensent ça", "accord"),
@@ -139,7 +185,9 @@ FAUTES = [
     ("ils se sont trompé", "ils se sont trompés", "accord"),
     ("elle s'est levé tôt", "elle s'est levée tôt", "accord"),
     ("nous nous sommes perdu", "nous nous sommes perdus", "accord"),
-    ("les filles son parti", "les filles sont partis", "accord"),
+    # Le masculin etait ce que le correcteur savait faire, pas ce que le
+    # francais demande. Il connait le genre de « fille » maintenant.
+    ("les filles son parti", "les filles sont parties", "accord"),
     ("les enfant sont la", "les enfants sont là", "accord"),
     ("mes ami arrivent", "mes amis arrivent", "accord"),
     ("quelques minute", "quelques minutes", "accord"),
@@ -185,10 +233,60 @@ FAUTES = [
 
 # Phrases correctes : elles doivent ressortir a l'identique.
 INTOUCHABLES = [
+    # Trois phrases venues du corpus tenu a l'ecart, ou elles ont trouve
+    # trois bugs d'un coup. Les avoir lues les a brulees : elles viennent
+    # donc ici, ou l'on a le droit de travailler dessus.
+    #
+    #   « c'est la même chose » devenait « c'est là même chose », et avec
+    #   lui « c'est la vie », « c'est la fin », « il est la preuve ». La
+    #   fin de segment se reconnaissait a un motif qui acceptait une simple
+    #   espace : presque tout mot passait pour une fin de phrase.
+    "Tous les jours c'est la même chose.",
+    #   « repo » devenait « repos ».
+    "le repo est sur github",
+    #   « config.json » devenait « config.j'son », et « vide » « vidé ».
+    "le fichier config.json est vide",
     # « court » est un adjectif autant qu'un verbe, et les deux lectures
     # demandent des corrections opposees : « les chiens courts » ou « les
     # chiens courent ». Devant ce partage, le correcteur n'invente pas.
     "les chiens court vite",
+    # Genre inconnu : l'adjectif differe au masculin et au feminin, et
+    # l'ecrire au masculin serait un coup de des. Mieux vaut ne rien faire.
+    "des trucs blanc",
+    "des machins vert",
+    "le livre est ouvert",
+    "la nuit est calme",
+    "le film est fini",
+    # Les deux lectures de chaque paire d'homophones, cote « ne pas
+    # toucher ». Une regle qui les abime coute plus cher qu'elle ne rapporte.
+    "café ou thé",
+    "oui ou non ça m'est égal",
+    "tu viens ou pas",
+    "un ou deux jours de plus",
+    "il a du pain et du fromage",
+    "j'ai du mal à y croire",
+    "il a du courage pour deux",
+    "je suis sur la route",
+    "pose ça sur la table",
+    "un peu plus tard dans la journée",
+    "il y a peu de chances",
+    "voire même beaucoup mieux",
+    "ses pas résonnaient dans le couloir",
+    "ces pas perdus ne servent à rien",
+    "lui c'est différent",
+    "ces livres sont à moi",
+    "il peut être là dans dix minutes",
+    # La fin de phrase se reconnait a une ponctuation, pas a une espace.
+    "c'est la vie",
+    "c'est la fin",
+    "il est la preuve",
+    "elle est la meilleure",
+    # Du vocabulaire de developpement et des noms de fichiers.
+    "ouvre app.py pour voir",
+    "le deploy a échoué hier soir",
+    "j'ai fait un git push ce matin",
+    "le verre est vide",
+    "i said no and left",
     "des tickets restaurant",
     "je les mange tous les jours",
     "beaucoup de monde est venu",
