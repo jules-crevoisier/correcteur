@@ -22,6 +22,17 @@ from papote import passerelle as passerelle_mod  # noqa: E402
 from papote.chemins import dossier_web  # noqa: E402
 
 
+def _methodes_appelees(script: str) -> set[str]:
+    """Les methodes de la passerelle que le JavaScript appelle.
+
+    L'espace apres la parenthese compte : les appels a plusieurs arguments
+    sont souvent coupes en deux lignes, et une regex qui l'ignorait en
+    manquait trois. Un test qui examine moins qu'il ne croit ne dit rien
+    quand il passe.
+    """
+    return set(re.findall(r'appeler\(\s*"([^"]+)"', script))
+
+
 @pytest.fixture(scope="module")
 def page() -> str:
     return (dossier_web() / "index.html").read_text(encoding="utf-8")
@@ -98,7 +109,7 @@ def test_la_doublure_de_l_apercu_couvre_toutes_les_methodes(script):
     sys.path.insert(0, str(RACINE / "outils"))
     from apercu_fenetre import DOUBLURE
 
-    appelees = set(re.findall(r'appeler\("([^"]+)"', script))
+    appelees = _methodes_appelees(script)
     fournies = set(re.findall(r"^\s+(\w+): async", DOUBLURE, re.MULTILINE))
     assert not appelees - fournies, f"non doublees : {sorted(appelees - fournies)}"
 
@@ -312,6 +323,34 @@ def test_toute_methode_de_la_passerelle_appelee_existe(script):
     """Une methode renommee en Python laisse un bouton mort dans la page."""
     from papote.passerelle import Passerelle
 
-    appelees = set(re.findall(r'appeler\("([^"]+)"', script))
-    manquantes = {m for m in appelees if not hasattr(Passerelle, m)}
+    manquantes = {m for m in _methodes_appelees(script)
+                  if not hasattr(Passerelle, m)}
     assert not manquantes, f"introuvables : {sorted(manquantes)}"
+
+
+def test_toute_methode_de_la_passerelle_sert_a_quelque_chose(script):
+    """Et l'inverse : une methode que plus personne n'appelle.
+
+    C'est le sens que le test d'au-dessus ne couvrait pas, et il manquait :
+    « oublier_faute » et « tours_dictee » etaient restees sur le pont apres
+    la disparition de l'ancienne fenetre tkinter. La premiere visait meme le
+    mauvais compteur — « annulations_mot », alors que la page « Vos fautes »
+    lit « corrections », dont les cles sont des paires « sa → ça ». La
+    rebrancher telle quelle n'aurait jamais rien retire.
+
+    Une methode appelee depuis la passerelle elle-meme compte : « etat_maj »
+    ne sert qu'a garnir la reponse de « demarrer », et c'est tres bien.
+    """
+    from papote.chemins import dossier_web
+    from papote.passerelle import Passerelle
+
+    source = (Path(dossier_web()).parent / "passerelle.py").read_text(
+        encoding="utf-8")
+    internes = set(re.findall(r"self\.(\w+)\(", source))
+    atteintes = _methodes_appelees(script) | internes
+
+    publiques = {nom for nom in vars(Passerelle)
+                 if not nom.startswith("_")
+                 and callable(getattr(Passerelle, nom, None))}
+    mortes = publiques - atteintes
+    assert not mortes, f"sur le pont, mais plus personne n'appelle : {sorted(mortes)}"

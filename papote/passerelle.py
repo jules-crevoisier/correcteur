@@ -341,13 +341,6 @@ class Passerelle:
             "actif": bool(self.config.get("apprentissage", True)),
         }
 
-    def oublier_faute(self, mot: str) -> dict:
-        habitudes = getattr(self.app, "journal_habitudes", None)
-        if habitudes is not None:
-            habitudes.oublier_mot(mot)
-            _sans_bruit(self.app.enregistrer_habitudes, None)
-        return {"message": f"« {mot} » ne compte plus.", "fautes": self.fautes()}
-
     def effacer_historique(self) -> dict:
         """Vide tout ce que Papote a retenu de vous, d'un seul geste.
 
@@ -503,9 +496,6 @@ class Passerelle:
 
     def arreter_dictee(self) -> dict:
         return _sans_bruit(self.dictee.arreter, {"ok": True, "tours": []})
-
-    def tours_dictee(self) -> dict:
-        return {"tours": _sans_bruit(self.dictee.tours, [])}
 
     def renommer_locuteur(self, ancien: str, nouveau: str) -> dict:
         return _sans_bruit(
