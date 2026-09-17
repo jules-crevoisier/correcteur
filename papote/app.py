@@ -617,11 +617,14 @@ class Application:
             return None
 
         self.maj_prete = version
+        # Le message renvoyait a l'icone « pres de l'horloge ». Windows range
+        # les icones dans un tiroir replie par defaut : la plupart des gens
+        # ne la voient pas, et on leur demandait de cliquer dessus. Ce qui
+        # marche a coup sur, c'est de redemarrer.
         self.notifier(
             f"Version {version} téléchargée",
-            "Cliquez l'icône Papote près de l'horloge pour redémarrer et "
-            "l'installer maintenant — sinon, elle attendra le prochain "
-            "démarrage.",
+            "Redémarrez Papote pour l'installer. Sinon, elle s'installera "
+            "toute seule au prochain démarrage.",
         )
         return version
 

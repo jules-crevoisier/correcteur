@@ -371,3 +371,54 @@ def test_le_message_n_accuse_plus_le_mode_d_installation(script):
     sans_commentaires = re.sub(r"^\s*//.*$", "", sans_commentaires,
                                flags=re.M)
     assert "Papote.msi" not in sans_commentaires
+
+
+# -- l'attente du moteur vocal ----------------------------------------------
+
+def test_le_demarrage_de_la_dictee_montre_qu_il_travaille(page, script):
+    """Le moteur charge quarante mégaoctets avant que le micro ne s'ouvre.
+
+    Plusieurs secondes pendant lesquelles rien ne bougeait : un bouton qui
+    ne répond pas passe pour un bouton cassé, et l'on reclique.
+    """
+    assert 'id="dictee-demarrage"' in page
+    assert "demarrageEnCours" in script
+
+
+def test_le_temoin_retombe_meme_si_le_demarrage_echoue(script):
+    """Sans « finally », un micro absent laissait les boutons éteints."""
+    debut = script.index("const lancer = async")
+    corps = script[debut:debut + 700]
+    assert "finally" in corps
+    assert corps.count("demarrageEnCours") >= 2
+
+
+def test_le_rouet_s_arrete_pour_qui_le_demande(style):
+    assert ".rouet" in style
+    assert "prefers-reduced-motion" in style
+
+
+# -- le bouton des mises a jour ---------------------------------------------
+
+def test_le_bouton_propose_de_redemarrer_quand_une_version_attend(script):
+    """Chercher une version alors qu'une autre attend ne mène nulle part."""
+    assert "Redémarrer pour installer" in script
+
+
+def test_le_clic_suit_le_role_du_bouton(script):
+    """Le libellé et l'action doivent changer ensemble, ou l'un ment."""
+    debut = script.index('$("#verifier-maj").addEventListener')
+    corps = script[debut:debut + 600]
+    assert "prete" in corps and "redemarrer" in corps
+
+
+def test_la_notification_n_envoie_plus_chercher_l_icone(script):
+    """Windows replie les icônes : beaucoup ne la voient jamais."""
+    from papote import app as app_mod
+    import inspect
+
+    source = inspect.getsource(app_mod)
+    sans_commentaires = "\n".join(
+        ligne for ligne in source.splitlines()
+        if not ligne.strip().startswith("#"))
+    assert "Cliquez l'icône Papote" not in sans_commentaires

@@ -654,17 +654,24 @@ function montrerEtatMaj() {
     return;
   }
 
-  $("#verifier-maj").hidden = false;
+  const bouton = $("#verifier-maj");
+  bouton.hidden = false;
   if (etatMaj.prete) {
     const numero = etatMaj.numero ? "Version " + etatMaj.numero + " prête"
                                   : "Mise à jour prête";
     $("#maj-etat").textContent = numero;
     $("#maj-detail").textContent = "Redémarrez pour l'installer.";
+    // Chercher une version alors qu'une autre attend déjà ne mène nulle
+    // part : le bouton propose donc la seule chose qui reste à faire.
+    bouton.textContent = "Redémarrer pour installer";
+    bouton.classList.add("principal");
     $("#annonce-titre").textContent = numero;
     if (!annonce.dataset.renvoyee) annonce.hidden = false;
   } else {
     $("#maj-etat").textContent = "Version " + etat.version;
     $("#maj-detail").textContent = "Vous êtes à jour.";
+    bouton.textContent = "Vérifier maintenant";
+    bouton.classList.remove("principal");
     annonce.hidden = true;
   }
 }
@@ -763,13 +770,20 @@ function brancher() {
   });
 
   $("#verifier-maj").addEventListener("click", async () => {
+    // Une version téléchargée attend : ce bouton redémarre, il ne cherche
+    // plus.
+    if ((etat.maj || {}).prete) {
+      repondre(await appeler("redemarrer"));
+      return;
+    }
     const bouton = $("#verifier-maj");
     bouton.disabled = true;
     bouton.textContent = "Recherche…";
     const reponse = repondre(await appeler("verifier_maj"));
     bouton.disabled = false;
-    bouton.textContent = "Vérifier maintenant";
-    if (reponse.maj) { etat.maj = reponse.maj; montrerEtatMaj(); }
+    if (reponse.maj) etat.maj = reponse.maj;
+    // C'est « montrerEtatMaj » qui repose le libellé : il sait lequel.
+    montrerEtatMaj();
   });
 
   $("#maj-redemarrer").addEventListener("click", async () => {
@@ -909,6 +923,18 @@ async function renommerLocuteur(ancien) {
   chargerDictee();
 }
 
+/* L'attente du démarrage : les deux boutons se taisent, et l'un d'eux dit
+   ce qu'on attend. Le modèle ne se charge qu'une fois par séance, mais cette
+   fois-là se voit. */
+function demarrageEnCours(actif) {
+  [$("#dicter-demarrer"), $("#reunion-demarrer")].forEach((bouton) => {
+    bouton.disabled = actif;
+  });
+  $("#dictee-demarrage").hidden = !actif;
+  if (actif) $("#dictee-etat").textContent = "";
+}
+
+
 function suivreLaDictee(actif) {
   clearInterval(minuterieDictee);
   minuterieDictee = actif ? setInterval(chargerDictee, 1500) : null;
@@ -927,9 +953,19 @@ function brancherDictee() {
     chargerDictee();
   });
 
+  /* Le moteur charge quarante mégaoctets de modèle en mémoire avant que le
+     micro ne s'ouvre : plusieurs secondes, pendant lesquelles rien ne
+     bougeait. Un bouton qui ne répond pas passe pour un bouton cassé, et
+     l'on reclique — ce qui n'arrange rien. */
   const lancer = async (reunion) => {
     const boucle = reunion && $("#dictee-boucle").checked;
-    const reponse = await appeler("commencer_dictee", reunion, boucle);
+    demarrageEnCours(true);
+    let reponse;
+    try {
+      reponse = await appeler("commencer_dictee", reunion, boucle);
+    } finally {
+      demarrageEnCours(false);
+    }
     if (reponse && reponse.avertissement) dire(reponse.avertissement);
     else if (!reponse || !reponse.ok) dire((reponse && reponse.erreur) || "Échec.");
     suivreLaDictee(Boolean(reponse && reponse.ok));
