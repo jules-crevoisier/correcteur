@@ -365,6 +365,8 @@ class Correcteur:
             return None
 
         minuscule = mot.lower()
+        if self._un_seul_mot_plus_probable(minuscule):
+            return None
         # Le mot existe, a ses accents pres : « decolle » est « décolle » ou
         # « décollé », et le correcteur se tait faute de savoir lequel. Cette
         # hesitation dit que le mot en est un — pas qu'il en cache deux.
@@ -382,12 +384,42 @@ class Correcteur:
             rangs = (self.lexique.rang(gauche), self.lexique.rang(droite))
             if max(rangs) > RANG_MAXIMAL_MORCEAU:
                 continue
+            if self.lexique.connait(f"{gauche}-{droite}"):
+                # « microonde » n'est pas « micro onde » : c'est
+                # « micro-onde », a qui il manque un trait d'union. Ce que le
+                # dictionnaire connait sous cette forme-la n'est pas deux
+                # mots, et une espace n'y ferait pas l'affaire.
+                continue
             meilleures.append((max(rangs), i))
 
         if not meilleures:
             return None
         _rang, coupure = min(meilleures)
         return mot[:coupure] + " " + mot[coupure:]
+
+    def _un_seul_mot_plus_probable(self, minuscule: str) -> bool:
+        """Le mot cache-t-il une lettre manquante plutot qu'une espace ?
+
+        « platforme » se coupe en « plat » et « forme », deux mots courants —
+        et c'est « plateforme » a qui il manque un « e ». Pareil pour
+        « gestionaire », qui donnait « gestion aire ». Couper la, c'est
+        inventer une phrase a la place de celle qu'on ecrivait.
+
+        Ce qui tranche, c'est le **sens** de l'edition. Une espace sautee est
+        une omission : si le mot n'en est vraiment qu'un, la reparation
+        **ajoute** une lettre — la consonne doublee de « gestionnaire », le
+        « e » de « plateforme ». Elle n'en retire pas, et elle n'en echange
+        pas : le candidat doit donc etre strictement plus long que ce qui a
+        ete tape.
+
+        Les deux autres cas montrent pourquoi la condition est si etroite.
+        Une lettre retiree : « apriori » donnerait « priori » au lieu de
+        « a priori ». Une lettre echangee : « jevais » donnerait « devais »
+        au lieu de « je vais ». Dans les deux cas, la coupure a raison.
+        """
+        candidat = self.lexique.suggestion(minuscule,
+                                           classe_max=CLASSE_EDITION)
+        return candidat is not None and len(candidat) > len(minuscule)
 
     def propositions(self, mot: str, maximum: int = 4) -> list[str]:
         """Les remplacements plausibles d'un mot inconnu, faute de certitude.

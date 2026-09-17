@@ -595,6 +595,15 @@ Le dictionnaire français vient de [Dicollecte](https://grammalecte.net/)
 (MPL 2.0), la liste de fréquences de
 [wordfreq](https://github.com/rspeer/wordfreq) (Apache 2.0).
 
+## Licence
+
+Le code de Papote est sous [licence MIT](LICENSE) : faites-en ce que vous
+voulez, y compris commercialement, en gardant la mention de copyright.
+
+Les données de `donnees/` gardent la leur — **MPL 2.0**, celle du
+dictionnaire dont elles dérivent. Redistribuer Papote, c'est donc
+redistribuer les deux.
+
 ## Structure
 
 | Fichier | Rôle |

@@ -10,6 +10,7 @@ texte.
 """
 
 import sys
+import threading
 import time
 import types
 from pathlib import Path
@@ -18,6 +19,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from papote import bulle as bulle_mod  # noqa: E402
 from papote.frappe import EcouteClavier, Frappe, Remplacement  # noqa: E402
 from papote.moteur import Correcteur  # noqa: E402
 
@@ -759,3 +761,271 @@ def test_la_bulle_muette_ne_fait_rien():
     muette.cacher()
     muette.fermer()
     assert muette.visible is False
+
+
+def test_la_bulle_se_perime_et_rend_la_touche(correcteur):
+    """Une bulle oubliee a l'ecran garde la touche de validation detournee.
+
+    Quelqu'un qui commence a taper un identifiant, voit la bulle apparaitre
+    et appuie sur Tab pour passer au mot de passe verrait sa tabulation
+    avalee. Passe le delai, la touche redevient la touche.
+    """
+    ecoute = EcouteClavier(Frappe(correcteur), application=lambda: None)
+    ecoute._montree_a = time.monotonic() - bulle_mod.DUREE_MAXIMALE - 1
+    ecoute._perimer_la_bulle()
+    assert ecoute._montree_a is None
+
+
+def test_une_bulle_recente_reste_affichee(correcteur):
+    ecoute = EcouteClavier(Frappe(correcteur), application=lambda: None)
+    ecoute._montree_a = time.monotonic()
+    ecoute._perimer_la_bulle()
+    assert ecoute._montree_a is not None
+
+
+# ---------------------------------------------------------------------------
+# Ce qu'un testeur a trouvé en pilotant vraiment le clavier
+# ---------------------------------------------------------------------------
+
+def test_un_clic_fait_oublier_la_phrase(correcteur):
+    """Un clic déplace le curseur, et aucune touche ne le signale.
+
+    Les flèches étaient surveillées, la souris non : cliquer ailleurs puis
+    reprendre la frappe faisait corriger à partir d'un tampon qui décrivait
+    un autre endroit du texte.
+    """
+    ecoute = EcouteClavier(Frappe(correcteur), application=lambda: None)
+    ecoute.actif = True
+    for caractere in "sa ":
+        ecoute.frappe.caractere(caractere)
+    ecoute._sur_clic(type("ButtonEvent", (), {})())
+    assert ecoute.frappe.texte == ""
+
+
+def test_la_molette_ne_fait_rien_oublier(correcteur):
+    """Elle fait défiler, elle ne déplace pas le curseur."""
+    ecoute = EcouteClavier(Frappe(correcteur), application=lambda: None)
+    ecoute.actif = True
+    for caractere in "sa ":
+        ecoute.frappe.caractere(caractere)
+    ecoute._sur_clic(type("WheelEvent", (), {})())
+    assert ecoute.frappe.texte == "sa "
+
+
+def test_une_annulation_trop_tardive_ne_tape_rien(correcteur):
+    """Le raccourci est global : rien n'empêche de l'actionner ailleurs.
+
+    L'annulation tape là où est le curseur, pas là où la correction a eu
+    lieu : « ça va bien » + Ctrl+Alt+Z donnait « ça vsa va ».
+    """
+    ecoute = EcouteClavier(Frappe(correcteur), application=lambda: None)
+    ecoute.annulables.append(Remplacement(5, "ça va", "sa va"))
+    ecoute._derniere_touche = time.monotonic() - 100
+    assert ecoute.annuler() is None
+    # Elle reste disponible : on n'a rien perdu, on a seulement refusé de
+    # taper à l'aveugle.
+    assert ecoute.annulables
+
+
+def test_une_tabulation_ferme_la_phrase(correcteur):
+    """Dans un formulaire, la tabulation change de champ.
+
+    Sans cela, « sa » tapé dans un champ puis « va » dans le suivant
+    donnait six retours arrière envoyés au second champ, qui n'en
+    contenait que trois.
+    """
+    frappe = Frappe(correcteur)
+    for caractere in "sa":
+        frappe.caractere(caractere)
+    frappe.caractere("\t")
+    correction = None
+    for caractere in "va ":
+        correction = frappe.caractere(caractere) or correction
+    assert correction is None
+
+
+def test_une_exception_dans_le_rappel_ne_tue_pas_l_ecoute(correcteur):
+    """Sous Windows, une exception qui traverse le crochet le fait supprimer.
+
+    Papote devient alors muet sans le dire. `sur_correction` écrit sur le
+    disque : un disque plein suffisait.
+    """
+    ecoute = EcouteClavier(Frappe(correcteur), application=lambda: None,
+                           sur_correction=lambda _r: 1 / 0)
+    ecoute.actif = True
+    for caractere in "sa va ":
+        ecoute._sur_evenement(_touche(caractere))
+    # On est encore là, et le tampon a été oublié par prudence.
+    assert ecoute.frappe.texte == ""
+
+
+def _touche(caractere: str):
+    nom = "space" if caractere == " " else caractere
+    return type("E", (), {"event_type": "down", "name": nom,
+                          "scan_code": 0})()
+
+
+# ---------------------------------------------------------------------------
+# Deux fils, un seul tampon
+#
+# Le crochet clavier et le guetteur de pause tournent en parallele. Le second
+# lit la phrase, calcule une correction, puis l'ecrit — et entre la lecture et
+# l'ecriture, le premier peut avoir tout change. Ces epreuves verifient que la
+# relecture renonce plutot que d'ecrire au hasard.
+# ---------------------------------------------------------------------------
+
+def test_la_relecture_renonce_si_le_clavier_tient_le_verrou(correcteur,
+                                                            clavier):
+    ecouteur = ecoute(correcteur)
+    ecouteur.actif = True
+    for caractere in "les gens":
+        ecouteur.frappe.caractere(caractere)
+    ecouteur._relu = False
+    ecouteur._derniere_touche = time.monotonic() - 1.0
+
+    relu = []
+    ecouteur._relire_maintenant = lambda: relu.append(True)
+
+    verrou_pris = threading.Event()
+    relacher = threading.Event()
+
+    def tenir():
+        with ecouteur._verrou:
+            verrou_pris.set()
+            relacher.wait(1.0)
+
+    fil = threading.Thread(target=tenir, daemon=True)
+    fil.start()
+    assert verrou_pris.wait(1.0)
+    try:
+        ecouteur._relire_si_pause()
+        assert relu == []
+        # Le temoin n'a pas ete pose : le battement suivant reessaiera.
+        assert ecouteur._relu is False
+    finally:
+        relacher.set()
+        fil.join(1.0)
+
+    ecouteur._relire_si_pause()
+    assert relu == [True]
+
+
+def test_le_crochet_clavier_prend_le_verrou(correcteur, clavier):
+    ecouteur = ecoute(correcteur)
+    ecouteur.actif = True
+
+    tenus = []
+    vrai_traitement = ecouteur._sur_evenement_sans_filet
+
+    def observer(evenement):
+        # `acquire(blocking=False)` depuis le meme fil reussirait : le verrou
+        # est reentrant. On regarde donc depuis un autre fil.
+        essai = []
+
+        def tenter():
+            essai.append(ecouteur._verrou.acquire(blocking=False))
+            if essai[0]:
+                ecouteur._verrou.release()
+
+        fil = threading.Thread(target=tenter)
+        fil.start()
+        fil.join(1.0)
+        tenus.append(essai[0])
+        return vrai_traitement(evenement)
+
+    ecouteur._sur_evenement_sans_filet = observer
+    ecouteur._sur_evenement(FauxEvenement("a"))
+    assert tenus == [False]
+
+
+def test_l_arret_attend_le_guetteur(correcteur, clavier, monkeypatch):
+    ecouteur = ecoute(correcteur)
+    monkeypatch.setattr(ecouteur, "_ecouter_la_souris", lambda: None)
+    ecouteur.activer()
+    guetteur = ecouteur._guetteur
+    assert guetteur is not None and guetteur.is_alive()
+    ecouteur.desactiver()
+    assert not guetteur.is_alive()
+
+
+# ---------------------------------------------------------------------------
+# Le verrouillage majuscule
+#
+# `keyboard` rend toujours le nom de la touche en minuscule. Sans lire le
+# verrou, « BONJOUR » entrait dans le tampon comme « bonjour », et la
+# correction — qui reecrit ce qu'elle a lu — rendait le mot en minuscules.
+# ---------------------------------------------------------------------------
+
+def test_le_verrou_majuscule_met_la_lettre_en_capitale(correcteur, clavier,
+                                                       monkeypatch):
+    ecouteur = ecoute(correcteur)
+    monkeypatch.setattr(ecouteur, "_verrou_majuscule", lambda: True)
+    assert ecouteur._traduire(FauxEvenement("a")) == "A"
+
+
+def test_le_verrou_et_la_touche_majuscule_se_defont(correcteur, clavier,
+                                                    monkeypatch):
+    ecouteur = ecoute(correcteur)
+    monkeypatch.setattr(ecouteur, "_verrou_majuscule", lambda: True)
+    clavier.enfonces.add("shift")
+    assert ecouteur._traduire(FauxEvenement("a")) == "a"
+
+
+def test_sans_verrou_rien_ne_change(correcteur, clavier, monkeypatch):
+    ecouteur = ecoute(correcteur)
+    monkeypatch.setattr(ecouteur, "_verrou_majuscule", lambda: False)
+    assert ecouteur._traduire(FauxEvenement("a")) == "a"
+
+
+def test_hors_de_windows_le_verrou_est_ignore(correcteur, clavier,
+                                              monkeypatch):
+    """La question ne se pose que la ou Papote ecoute le clavier."""
+    import os as os_mod
+
+    monkeypatch.setattr(os_mod, "name", "posix")
+    assert ecoute(correcteur)._verrou_majuscule() is False
+
+
+# ---------------------------------------------------------------------------
+# Le cache de l'application au premier plan
+#
+# Le nom de la fenetre active est garde une demi-seconde pour ne pas harceler
+# le systeme. Mais Alt+Tab change de fenetre en bien moins que cela : la
+# premiere frappe du terminal qu'on vient d'ouvrir se faisait corriger.
+# ---------------------------------------------------------------------------
+
+def test_un_raccourci_perime_le_cache_de_l_application(correcteur, clavier):
+    demandes = []
+    ecouteur = EcouteClavier(Frappe(correcteur),
+                             application=lambda: demandes.append(1) or "a.exe")
+    ecouteur.actif = True
+    ecouteur._application()
+    assert len(demandes) == 1
+    # Sans raccourci, la reponse est reprise du cache.
+    ecouteur._application()
+    assert len(demandes) == 1
+
+    clavier.enfonces.add("alt")
+    ecouteur._traduire(FauxEvenement("tab"))
+    clavier.enfonces.discard("alt")
+
+    ecouteur._application()
+    assert len(demandes) == 2
+
+
+def test_un_clic_perime_le_cache_de_l_application(correcteur, clavier):
+    demandes = []
+    ecouteur = EcouteClavier(Frappe(correcteur),
+                             application=lambda: demandes.append(1) or "a.exe")
+    ecouteur.actif = True
+    ecouteur._application()
+    assert len(demandes) == 1
+
+    class Clic:
+        pass
+
+    Clic.__name__ = "ButtonEvent"
+    ecouteur._sur_clic(Clic())
+
+    ecouteur._application()
+    assert len(demandes) == 2

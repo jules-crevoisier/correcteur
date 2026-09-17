@@ -328,3 +328,33 @@ def test_le_pluriel_du_contexte_s_applique_aussi_aux_fautes_de_frappe(
 def test_sans_determinant_pluriel_le_doute_reste_entier(correcteur):
     """Au singulier, rien ne départage « delà » et « délai » : on se tait."""
     assert correcteur.corriger("le délay est court")[0] == "le délay est court"
+
+
+# ---------------------------------------------------------------------------
+# Une lettre manquante, ou une espace ?
+#
+# Un mot inconnu peut se lire de deux facons : deux mots colles, ou un seul
+# mot mal orthographie. Papote choisissait toujours la premiere, et ecrivait
+# « plat forme » pour « plateforme ».
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("ecrit,attendu", [
+    ("platforme", "plateforme"),      # il manque un « e »
+    ("gestionaire", "gestionnaire"),  # il manque un « n »
+    ("microonde", "microonde"),       # c'est « micro-onde », pas deux mots
+])
+def test_la_lettre_manquante_passe_avant_la_coupure(correcteur, ecrit,
+                                                    attendu):
+    assert correcteur.corriger(ecrit)[0] == attendu
+
+
+@pytest.mark.parametrize("colle,attendu", [
+    # Le candidat d'un seul mot est plus court : c'est bien l'espace qui
+    # manque. « jesuis » ne devient pas « jésus », ni « apriori » « priori ».
+    ("jesuis là", "je suis là"),
+    ("ilfaut voir", "il faut voir"),
+    ("jevais partir", "je vais partir"),
+])
+def test_la_coupure_reste_quand_le_candidat_raccourcit(correcteur, colle,
+                                                       attendu):
+    assert correcteur.corriger(colle)[0] == attendu

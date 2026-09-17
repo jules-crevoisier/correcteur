@@ -13,9 +13,13 @@
     reglages de l'application : l'un comme l'autre ecrivent au meme endroit.
   * **Tout est en francais**, images comprises, fabriquees a partir des memes
     pixels que l'icone du programme.
+  * **Papote se lance a la fin.** Une case cochee sur la derniere page :
+    sinon l'assistant se ferme, rien n'apparait pres de l'horloge, et
+    l'utilisateur croit que l'installation a rate.
 -->
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
-     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
 
   <Package Name="Papote"
            Manufacturer="Papote"
@@ -48,6 +52,34 @@
     <!-- WixUI_FeatureTree : l'utilisateur choisit ce qu'il installe, sans
          avoir a repondre a une question sur le dossier de destination. -->
     <ui:WixUI Id="WixUI_FeatureTree" />
+
+    <!-- Papote se lance a la fin de l'installation.
+
+         Sans cela, l'assistant se ferme et il ne se passe rien : la cle de
+         demarrage automatique n'agit qu'a la prochaine ouverture de session.
+         L'utilisateur regarde l'horloge, ne voit pas l'icone, et conclut que
+         l'installation a echoue. C'est le premier endroit ou l'on perd
+         quelqu'un, et il se repare en quatre lignes.
+
+         `Return="ignore"` : `WixShellExec` passe par `ShellExecute`, qui
+         rend la main sans attendre — et c'est necessaire, parce que Papote
+         ne se termine jamais : c'est une icone dans la barre des taches. Si
+         le lancement echoue, l'installation reste reussie ; elle l'est. -->
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT"
+              Value="Lancer Papote maintenant" />
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
+    <Property Id="WixShellExecTarget" Value="[#PapoteExe]" />
+    <CustomAction Id="LancerPapote"
+                  DllEntry="WixShellExec"
+                  BinaryRef="Wix4UtilCA_X86"
+                  Impersonate="yes"
+                  Execute="immediate"
+                  Return="ignore" />
+    <UI>
+      <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction"
+               Value="LancerPapote"
+               Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 AND NOT Installed" />
+    </UI>
 
     <Feature Id="Programme"
              Title="Papote"

@@ -13,12 +13,56 @@ from typing import Callable
 from . import apprentissage as apprentissage_mod
 from . import memoire as memoire_mod
 from . import config as config_mod
-from . import demarrage, frappe as frappe_mod, journal as journal_mod
+from . import demarrage, frappe as frappe_mod, grammaire, journal as journal_mod
 from . import lexique, maj, moteur
 from . import morphologie
 from . import politique as politique_mod
 from . import presse_papier
 from .raccourci import Raccourci, RaccourciInvalide
+
+
+def _mot_connu(lexique_, mot: str) -> bool:
+    """Ce mot est-il du francais, elision comprise ?
+
+    « j'ai » ne figure pas au dictionnaire : il y a « ai », et « j' »
+    devant. Sans separer les deux, la correction la plus courante du
+    francais parle etait jugee inconnue — et « Vos fautes » restait vide de
+    tout ce qui porte une apostrophe, c'est-a-dire de presque tout.
+    """
+    mot = mot.strip(".,;:!?…\u00a0")
+    if not mot:
+        return False
+    if lexique_.connait(mot):
+        return True
+    elision, noyau = grammaire.separer_clitique(mot)
+    return bool(elision) and bool(noyau) and lexique_.connait(noyau)
+
+
+def _trace_sans_texte(remplacement) -> str:
+    """Ce qu'on a le droit d'ecrire dans le journal : la forme, pas le fond.
+
+    « ORTHOGRAPHE 12→13 » suffit a comprendre ce qui s'est passe quand on
+    cherche une panne, et ne dit rien de ce qui a ete tape.
+    """
+    regles = getattr(remplacement, "regles", ()) or ("CORRECTION",)
+    avant = len(getattr(remplacement, "avant", "") or "")
+    apres = len(getattr(remplacement, "ecrire", "") or "")
+    return f"{'+'.join(regles)} {avant}\u2192{apres}"
+
+
+def _dire_la_regle(nom: str) -> str:
+    """Le message francais d'une regle, plutot que son identifiant.
+
+    L'utilisateur recevait « la règle PARTICIPE_APRES_AUXILIAIRE ». Ce nom
+    ne sert qu'au code ; chaque regle porte deja une phrase ecrite pour
+    etre lue, et c'est celle-la qu'il faut montrer.
+    """
+    from . import grammaire
+
+    for regle in grammaire.REGLES:
+        if regle.nom == nom:
+            return regle.message
+    return "cette correction"
 
 
 class Application:
@@ -57,6 +101,11 @@ class Application:
 
         # La version telechargee qui attend le prochain demarrage, s'il y en a.
         self.maj_prete: maj.Version | None = None
+
+        # Le texte que le raccourci de relecture vient de capturer, en
+        # attendant que la fenetre le reclame. Il ne vit qu'en memoire, et
+        # seulement dans le processus qui affiche la fenetre.
+        self.texte_a_relire: str = ""
 
         self.raccourcis: list[Raccourci] = []
         self._installer_raccourcis()
@@ -169,7 +218,7 @@ class Application:
                 self._lexique.charger()
                 self._morphologie = morphologie.Morphologie()
                 self._morphologie.charger()
-                self.journal("Papote pret.")
+                self.journal("Papote prêt.")
             self._correcteurs[registre] = moteur.depuis_config(
                 self.config, self._lexique, registre, self._morphologie
             )
@@ -260,11 +309,11 @@ class Application:
                 self.journal("Correction au fil de la frappe active.")
             except Exception as e:
                 journal_mod.erreur(
-                    "la correction au fil de la frappe n'a pas pu demarrer", e)
+                    "la correction au fil de la frappe n'a pas pu démarrer", e)
                 self.notifier(
                     "Correction automatique indisponible",
                     f"Le raccourci {self.config.get('raccourci', '')} reste "
-                    f"actif. Détails dans Réglages → Ouvrir le journal.",
+                    f"actif. Détails dans Réglages → Quand quelque chose ne va pas.",
                 )
 
         threading.Thread(target=_demarrer, daemon=True).start()
@@ -288,14 +337,14 @@ class Application:
                 delai=self.config.get("delai_copie", 0.35)
             )
             if not texte:
-                self.notifier("Rien a corriger",
-                              "Selectionnez d'abord le texte a corriger.")
+                self.notifier("Rien à corriger",
+                              "Sélectionnez d'abord le texte à corriger.")
                 return
 
             corrige, corrections = self.corriger_texte(texte)
 
             if not corrections:
-                self.notifier("Aucune faute", "Le texte est deja correct.")
+                self.notifier("Aucune faute", "Le texte est déjà correct.")
                 # Restituer la selection d'origine : on avait vide le
                 # presse-papiers pour la capturer.
                 presse_papier.ecrire(texte)
@@ -321,21 +370,57 @@ class Application:
             self.notifier("Dictionnaire introuvable", str(e).split("\n")[0])
         except Exception:
             self.journal(traceback.format_exc())
-            self.notifier("Erreur", "La correction a echoue. Voir la console.")
+            self.notifier("Erreur", "La correction a échoué. Détails dans "
+                          "Réglages → Quand quelque chose ne va pas.")
 
     # -- correction au fil de la frappe -------------------------------------
 
     def _signaler_correction(self, remplacement) -> None:
-        """Appelee a chaque correction automatique."""
-        self.journal(f"[auto] {remplacement}")
+        """Appelee a chaque correction automatique.
+
+        Rien de ce qui est ecrit ici ne doit contenir le texte tape.
+
+        Papote promet que ce qu'on tape ne quitte pas la machine ; il promet
+        aussi de ne retenir que des mots du dictionnaire. La memoire de
+        frappe tenait cette seconde promesse, ces deux chemins-ci non : le
+        journal recevait « Motdepase123 → Motdepasse123 », et le fichier
+        d'habitudes aussi. Un mot de passe mal tape est exactement ce qui
+        declenche une correction d'orthographe.
+        """
+        self.journal(f"[auto] {_trace_sans_texte(remplacement)}")
         if not self.config.get("apprentissage", True):
             return
-        self.journal_habitudes.correction_appliquee(
-            remplacement.avant, remplacement.ecrire
-        )
+        # Seule la forme corrigee est examinee, parce que seule elle est
+        # retenue : le cote gauche est la faute, et une faute n'est par
+        # definition pas un mot du dictionnaire. Exiger qu'elle en soit un
+        # revenait a ne rien compter du tout.
+        if self._mots_connus(remplacement.ecrire):
+            self.journal_habitudes.correction_appliquee(
+                remplacement.avant, remplacement.ecrire
+            )
         self._corrections_depuis_sauvegarde += 1
         if self._corrections_depuis_sauvegarde >= 20:
             self.enregistrer_habitudes()
+
+    def _mots_connus(self, *morceaux: str) -> bool:
+        """Tous ces morceaux sont-ils des mots du dictionnaire ?
+
+        C'est le meme test que celui de la memoire de frappe, et pour la
+        meme raison : ce qui n'est pas un mot du francais n'a rien a faire
+        dans un fichier qui survit a la session.
+        """
+        try:
+            lexique_ = self.correcteur.lexique
+        except Exception:                          # noqa: BLE001
+            return False
+        for morceau in morceaux:
+            mots = [m for m in (morceau or "").split() if m.strip()]
+            if not mots:
+                return False
+            for mot in mots:
+                if not _mot_connu(lexique_, mot):
+                    return False
+        return True
 
     def _signaler_annulation(self, remplacement) -> None:
         """Appelee quand une correction automatique est defaite.
@@ -378,8 +463,9 @@ class Application:
             del self.regles_contestees[:-10]
             self.notifier(
                 "Une règle vous dérange",
-                f"Vous avez annulé {lecon.compte} fois la règle {lecon.valeur}. "
-                f"Vous pouvez l'éteindre depuis la fenêtre.",
+                f"Vous avez annulé {lecon.compte} fois la même correction : "
+                f"{_dire_la_regle(lecon.valeur)}. Le mot que vous rétablissez "
+                f"peut aussi rejoindre votre dictionnaire.",
             )
 
     def enregistrer_habitudes(self) -> None:
@@ -423,8 +509,8 @@ class Application:
             return
         remplacement = self._ecoute.annuler()
         if remplacement is None:
-            self.notifier("Rien a annuler",
-                          "Aucune correction automatique recente.")
+            self.notifier("Rien à annuler",
+                          "Aucune correction automatique récente.")
             return
 
         mot = remplacement.avant.strip(" \t\n.,;:!?…")
@@ -433,8 +519,8 @@ class Application:
             del self.mots_retablis[:-20]
 
         self.notifier(
-            "Correction annulee",
-            f"« {mot} » est retabli. Ouvrez la fenetre pour l'ajouter a "
+            "Correction annulée",
+            f"« {mot} » est rétabli. Ouvrez la fenêtre pour l'ajouter à "
             f"votre dictionnaire.",
         )
 
@@ -508,7 +594,7 @@ class Application:
         try:
             version = maj.disponible()
         except maj.MiseAJourImpossible as e:
-            self.journal(f"Verification des mises a jour impossible : {e}")
+            self.journal(f"Vérification des mises à jour impossible : {e}")
             if prevenir_si_a_jour:
                 self.notifier("Mise à jour", f"Vérification impossible : {e}")
             return None
@@ -521,7 +607,7 @@ class Application:
         try:
             maj.installer_maintenant(version)
         except maj.MiseAJourImpossible as e:
-            self.journal(f"Telechargement de {version} impossible : {e}")
+            self.journal(f"Téléchargement de {version} impossible : {e}")
             return None
 
         self.maj_prete = version

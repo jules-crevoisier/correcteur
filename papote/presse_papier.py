@@ -50,8 +50,14 @@ def capturer_selection(delai: float = 0.35) -> str | None:
     absence de selection. On attend ensuite que quelque chose y apparaisse,
     plutot que de dormir un delai fixe — l'application cible repond souvent
     en quelques millisecondes.
+
+    Et quand rien ne vient, on rend ce qu'on avait pris. Le raccourci est
+    global : il s'actionne aussi par erreur, ou dans une fenetre qui ne
+    contient aucun texte selectionnable. Le vidage detruisait alors ce que
+    l'utilisateur venait de copier — sans le dire, et sans retour possible.
     """
     clavier = _clavier()
+    precedent = _sans_bruit_lire()
     ecrire("")
 
     clavier.send("ctrl+c")
@@ -59,10 +65,33 @@ def capturer_selection(delai: float = 0.35) -> str | None:
     echeance = time.time() + delai
     while time.time() < echeance:
         time.sleep(0.01)
-        contenu = lire()
+        # Une lecture qui echoue — une image dans le presse-papiers, un
+        # autre programme qui le tient — ne doit pas sortir d'ici sur une
+        # exception : le presse-papiers est vide a cet instant, et personne
+        # ne le remplirait.
+        contenu = _sans_bruit_lire()
         if contenu:
             return contenu
+
+    _sans_bruit_ecrire(precedent)
     return None
+
+
+def _sans_bruit_lire() -> str:
+    """Le presse-papiers, ou rien. Une sauvegarde ne doit pas faire echouer."""
+    try:
+        return lire()
+    except ErreurPressePapier:
+        return ""
+
+
+def _sans_bruit_ecrire(texte: str) -> None:
+    if not texte:
+        return
+    try:
+        ecrire(texte)
+    except ErreurPressePapier:
+        pass
 
 
 def coller(texte: str, delai: float = 0.08) -> None:

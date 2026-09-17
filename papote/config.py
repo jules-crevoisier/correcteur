@@ -154,27 +154,62 @@ def _reprendre_anciens_reglages() -> dict | None:
         return None
 
 
+def _lire(chemin: Path) -> dict | None:
+    """Le contenu du fichier, s'il ressemble a des reglages.
+
+    Un fichier corrompu ne contient pas seulement du JSON invalide : il peut
+    contenir du JSON parfaitement valide qui n'est pas un objet. `[1, 2, 3]`
+    passait le decodage, puis faisait echouer la fusion sur une exception que
+    personne n'attrapait — Papote ne demarrait plus, et ne disait pas
+    pourquoi. On verifie donc la forme, pas seulement la syntaxe.
+    """
+    try:
+        with chemin.open(encoding="utf-8") as f:
+            donnees = json.load(f)
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError, ValueError):
+        return None
+    return donnees if isinstance(donnees, dict) else None
+
+
 def charger() -> dict:
-    """Lit la configuration, en creant le fichier au premier lancement."""
+    """Lit la configuration, en creant le fichier au premier lancement.
+
+    Ne leve jamais : sans reglages on travaille avec ceux d'origine, et un
+    dossier ou l'on ne peut pas ecrire — un profil itinerant verrouille, un
+    disque plein — ne doit pas empecher de corriger une phrase.
+    """
     chemin = chemin_config()
 
     if not chemin.exists():
         anciens = _reprendre_anciens_reglages()
         if anciens is not None:
             config = _fusionner(DEFAUTS, _migrer(anciens))
-            sauvegarder(config)
+            _sauvegarder_sans_bruit(config)
             return config
 
     if not chemin.exists():
-        sauvegarder(DEFAUTS)
+        _sauvegarder_sans_bruit(DEFAUTS)
+        return dict(DEFAUTS)
+
+    charges = _lire(chemin)
+    if charges is None:
         return dict(DEFAUTS)
     try:
-        with chemin.open(encoding="utf-8") as f:
-            return _fusionner(DEFAUTS, _migrer(json.load(f)))
-    except (json.JSONDecodeError, OSError, AttributeError):
-        # Fichier corrompu ou illisible : on repart des defauts plutot que
-        # d'empecher l'application de demarrer.
+        return _fusionner(DEFAUTS, _migrer(charges))
+    except (TypeError, AttributeError, ValueError):
+        # Un fichier dont les valeurs ont la mauvaise forme : les cles sont
+        # la, mais « regles_optionnelles » est une chaine. On repart des
+        # defauts plutot que de refuser de demarrer.
         return dict(DEFAUTS)
+
+
+def _sauvegarder_sans_bruit(config: dict) -> None:
+    try:
+        sauvegarder(config)
+    except OSError:
+        # Le dossier refuse l'ecriture. Les reglages restent en memoire pour
+        # cette session : c'est peu, mais c'est mieux que rien du tout.
+        pass
 
 
 def sauvegarder(config: dict) -> Path:

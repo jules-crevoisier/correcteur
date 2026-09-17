@@ -158,22 +158,58 @@ def main(argv: list[str] | None = None) -> int:
     if args.fenetre:
         return _ouvrir_fenetre(app)
 
-    if args.console:
-        app.demarrer()
-        app.prechauffer()
-        print("Ctrl+C pour quitter.")
-        try:
-            import keyboard
-            keyboard.wait()
-        except KeyboardInterrupt:
-            pass
-        finally:
-            app.arreter()
+    verrou = _prendre_le_verrou(app)
+    if verrou is None:
         return 0
 
-    from .interface import InterfaceBarre
-    InterfaceBarre(app).lancer()
-    return 0
+    try:
+        if args.console:
+            app.demarrer()
+            app.prechauffer()
+            print("Ctrl+C pour quitter.")
+            try:
+                import keyboard
+                keyboard.wait()
+            except KeyboardInterrupt:
+                pass
+            finally:
+                app.arreter()
+            return 0
+
+        from .interface import InterfaceBarre
+        InterfaceBarre(app).lancer()
+        return 0
+    finally:
+        verrou.rendre()
+
+
+def _prendre_le_verrou(app):
+    """Le verrou d'instance, ou None s'il faut renoncer a demarrer.
+
+    Deux Papote qui ecoutent le meme clavier, ce sont deux corrections pour
+    une frappe, et un texte que personne ne peut plus lire. Celle qui arrive
+    en second le dit et s'efface.
+
+    Un verrou qu'on ne peut pas poser du tout — un dossier en lecture seule
+    — ne doit pas empecher de demarrer : mieux vaut une Papote sans filet
+    que pas de Papote.
+    """
+    from . import instance
+
+    verrou = instance.verrou_par_defaut()
+    try:
+        verrou.prendre()
+    except instance.Occupee:
+        message = "Papote tourne déjà. Regardez près de l'horloge."
+        print(message, file=sys.stderr)
+        try:
+            app.notifier("Papote est déjà lancé", message)
+        except Exception:                          # noqa: BLE001
+            pass
+        return None
+    except OSError as e:
+        journal.erreur("Verrou d'instance impossible", e)
+    return verrou
 
 
 def _gerer_demarrage(action: str) -> int:
@@ -207,15 +243,28 @@ def _ouvrir_fenetre(app) -> int:
         return 0
 
     from .fenetre import Fenetre
-    Fenetre(app).lancer()
+    fenetre = Fenetre(app)
+    texte = getattr(app, "texte_a_relire", "")
+    if texte:
+        fenetre.poser_le_texte(texte)
+    fenetre.lancer()
     return 0
 
 
 def _relire(app, chemin: str) -> int:
-    """Ouvre la fenetre de relecture sur le texte capture."""
-    from pathlib import Path
+    """Ouvre la fenetre sur le texte capture, et efface le fichier.
 
-    from .fenetre import FenetreRelecture
+    Ce chemin visait autrefois une fenetre a lui, `FenetreRelecture`, qui
+    n'existe plus : le raccourci ecrivait la selection sur le disque, le
+    processus fils mourait sur un import manquant, et le fichier restait la
+    — avec le texte dedans. C'etait tout ce que Papote promet de ne pas
+    faire.
+
+    Desormais la selection ouvre la page « Corriger », qui fait le meme
+    travail en mieux. Et l'effacement est dans un `finally` : la fenetre
+    peut refuser de s'ouvrir, le texte ne survit pas.
+    """
+    from pathlib import Path
 
     fichier = Path(chemin)
     try:
@@ -223,11 +272,14 @@ def _relire(app, chemin: str) -> int:
     except OSError as e:
         print(f"[X]  {chemin} est illisible ({e}).", file=sys.stderr)
         return 1
-    # Le texte capture ne traine pas : il a servi.
-    fichier.unlink(missing_ok=True)
+    finally:
+        try:
+            fichier.unlink(missing_ok=True)
+        except OSError:
+            pass
 
-    FenetreRelecture(app, texte).lancer()
-    return 0
+    app.texte_a_relire = texte
+    return _ouvrir_fenetre(app)
 
 
 def _mettre_a_jour() -> int:

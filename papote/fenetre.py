@@ -560,10 +560,13 @@ class Fenetre:
 
         barre = tk.Frame(dedans, bg=theme.SURFACE, pady=theme.MOYEN)
         barre.pack(fill="x")
-        theme.Bouton(barre, "Ne plus corriger ça", self._ignorer_faute,
-                     petit=True, fond=theme.SURFACE).pack(side="left")
+        # « Ne plus corriger ça » se tenait ici. La liste ne montre plus que
+        # la forme **corrigee** — « ça », « j'ai » —, et ajouter celle-la au
+        # dictionnaire personnel n'aurait aucun sens : c'est deja du
+        # francais. Pour ecarter un mot, la page « Corriger » a « garder
+        # « mot » », qui sait de quoi elle parle.
         theme.Bouton(barre, "Effacer l'historique", self._effacer_historique,
-                     petit=True, fond=theme.SURFACE).pack(side="left", padx=(6, 0))
+                     petit=True, fond=theme.SURFACE).pack(side="left")
 
         self.cadre_regles = tk.Frame(dedans, bg=theme.SURFACE)
         self.cadre_regles.pack(fill="x")
@@ -599,15 +602,6 @@ class Fenetre:
             theme.Bouton(ligne, f"✕ {nom}", lambda n=nom: self._eteindre_regle(n),
                          petit=True, fond=theme.SURFACE).pack(side="left",
                                                               padx=(0, 6), pady=2)
-
-    def _ignorer_faute(self) -> None:
-        ligne = self._choisi(self.liste_fautes, "une ligne")
-        if ligne is None or "→" not in ligne:
-            return
-        mot = ligne.split("×", 1)[-1].split("→")[0].strip()
-        if mot:
-            self._ajouter_mot(mot)
-            self._rafraichir_fautes()
 
     def _eteindre_regle(self, nom: str) -> None:
         regles_actives = dict(self.config.get("regles_optionnelles", {}))
@@ -1088,6 +1082,15 @@ class Fenetre:
         self._dire(message, theme.SUCCES)
 
     # -- boucle -------------------------------------------------------------
+
+    def poser_le_texte(self, texte: str) -> None:
+        """Remplit la page « Corriger », avant que la fenetre ne s'ouvre.
+
+        C'est par la qu'arrive le texte selectionne au raccourci de
+        relecture : il est deja la quand l'utilisateur voit la fenetre.
+        """
+        self.champ.delete("1.0", "end")
+        self.champ.insert("1.0", texte)
 
     def lancer(self) -> None:
         self.racine.mainloop()

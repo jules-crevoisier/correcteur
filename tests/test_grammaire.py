@@ -560,3 +560,157 @@ def test_un_nom_propre_prend_sa_majuscule(correcteur, avant, apres):
 ])
 def test_une_majuscule_incertaine_ne_s_ajoute_pas(correcteur, phrase):
     assert correcteur.corriger(phrase)[0] == phrase
+
+
+# ---------------------------------------------------------------------------
+# Ce qu'un testeur à l'aveugle a trouvé
+#
+# Trois familles de fautes que Papote **écrivait**. Les deux premières
+# venaient d'être introduites le jour même : une table de mots composés avec
+# des entrées vides, et une règle de participe qui ignorait le trait d'union.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("phrase", [
+    # Le moteur levait une exception, et tout le texte etait perdu.
+    "À tout à l'heure !",
+    "Tout à coup il est parti.",
+    "On a tout à perdre.",
+    "C'est tout à son honneur.",
+    # « il est peut-être malade » -> « il est pu-être malade »
+    "Il est peut-être malade.",
+    "Elle est peut-être partie.",
+    "Ils sont peut-être déjà partis.",
+    # L'inverse, tout aussi faux : « cela peut être » n'est pas « peut-être ».
+    "Cela peut être dangereux.",
+    "Le résultat peut être faux.",
+    # « nous » et « vous » sont complements des qu'un sujet les precede.
+    "Le prof nous a rendu les copies.",
+    "Ma voisine nous a apporté des tomates.",
+    "La directrice vous a reçus ?",
+    "L'équipe vous remercie de votre patience.",
+    "Notre entreprise vous accompagne au quotidien.",
+    "Le service client vous répond sous 48h.",
+    "Personne ne nous croit.",
+])
+def test_ce_que_le_correcteur_ecrivait(correcteur, phrase):
+    assert correcteur.corriger(phrase)[0] == phrase
+
+
+def test_le_moteur_ne_leve_jamais_sur_une_locution(correcteur):
+    """Une phrase qu'on ne sait pas traiter se rend telle quelle.
+
+    Une exception non rattrapee fait perdre le texte entier a
+    l'utilisateur — c'est le pire qui puisse arriver a un correcteur.
+    """
+    for phrase in ["tout à l'heure", "tout à coup", "tout à fait",
+                   "arc en ciel", "tout à l'envers", "face à face"]:
+        correcteur.corriger(phrase)
+
+
+@pytest.mark.parametrize("avant, apres", [
+    # Les memes regles, du cote ou elles servent.
+    ("nous mange ensemble", "nous mangeons ensemble"),
+    ("vous parle trop vite", "vous parlez trop vite"),
+    ("nous somme en retard", "nous sommes en retard"),
+    ("peut être que oui", "peut-être que oui"),
+])
+def test_les_regles_corrigent_toujours_ce_qu_elles_doivent(correcteur, avant, apres):
+    assert correcteur.corriger(avant)[0] == apres
+
+
+# ---------------------------------------------------------------------------
+# Les fautes que Papote inventait
+#
+# Chacune de ces phrases est correcte. Elles sont ici parce que le correcteur
+# les abimait — et une faute ecrite coute plus cher qu'une faute laissee.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("phrase", [
+    # Verbe pronominal : le participe s'accorde avec l'objet direct, et
+    # seulement s'il le precede. Ici il suit.
+    "elle s'est lavé les cheveux",
+    "elle s'est cassé la jambe",
+    "elle s'est rendu compte",
+    "il s'est fait mal au dos",
+    # « a » est le verbe de la relative, « sont » celui de la principale.
+    "les idées qu'elle a sont bonnes",
+    "les photos qu'il a sont belles",
+    # « quel » interroge sur un attribut : ce n'est pas « qu'elle ».
+    "Quelles sont les options",
+    "dis-moi quelles sont tes idées",
+    "quelle est ta couleur préférée",
+    # Le sujet est la tete du groupe, pas son complement.
+    "le prix des billets a augmenté",
+    "la liste des courses est longue",
+    "le nombre de participants a doublé",
+    # Une couleur composee reste invariable.
+    "des yeux bleu foncé",
+    "une veste vert clair",
+    "des chemises bleu ciel",
+])
+def test_ces_phrases_correctes_ne_bougent_pas(correcteur, phrase):
+    assert correcteur.corriger(phrase)[0] == phrase
+
+
+@pytest.mark.parametrize("phrase,attendu", [
+    # Ce que les correctifs ci-dessus ne doivent pas avoir emporte.
+    ("elle s'est levé", "elle s'est levée"),
+    ("je sais quelle viendra", "je sais qu'elle viendra"),
+    ("les gens pense", "les gens pensent"),
+    ("des voitures rouge", "des voitures rouges"),
+])
+def test_les_corrections_voisines_tiennent_toujours(correcteur, phrase,
+                                                     attendu):
+    assert correcteur.corriger(phrase)[0] == attendu
+
+
+# ---------------------------------------------------------------------------
+# L'accord singulier, quand un adjectif s'intercale
+#
+# « des petites faute » -> « fautes » marchait ; « une petite fautes » ne
+# bougeait pas. C'est la meme faute de frappe, vue de l'autre cote — mais la
+# regle exigeait le determinant juste devant le nom.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("phrase,attendu", [
+    ("une petite fautes", "une petite faute"),
+    ("un petit chats", "un petit chat"),
+    ("une grande maisons", "une grande maison"),
+    ("la grande maisons", "la grande maison"),
+    ("le premier jours", "le premier jour"),
+    ("mon nouveau vélos", "mon nouveau vélo"),
+    # Et ce que la regle faisait deja, sans adjectif.
+    ("une choses", "une chose"),
+])
+def test_le_nom_suit_le_determinant_singulier(correcteur, phrase, attendu):
+    assert correcteur.corriger(phrase)[0] == attendu
+
+
+@pytest.mark.parametrize("phrase", [
+    # Un adjectif au pluriel ne laisse pas passer le determinant singulier.
+    "des jolies fleurs",
+    "les grandes maisons",
+    "des petites fautes",
+    # Les noms invariables en « s » : leur retirer la lettre en ferait
+    # autre chose, ou rien du tout.
+    "un pays", "le bras", "une fois", "le prix", "un corps", "le temps",
+    "un cours", "une souris", "un avis", "le mois", "un poids", "le dos",
+    "un repas", "le permis", "un fils", "la voix", "un choix", "le nez",
+    "le vieux tapis", "un beau prix", "la première fois",
+    # « le » et « la » sont aussi des pronoms complements.
+    "je la mange", "je le vois",
+])
+def test_l_accord_singulier_se_tait_quand_il_doute(correcteur, phrase):
+    assert correcteur.corriger(phrase)[0] == phrase
+
+
+@pytest.mark.parametrize("phrase", [
+    # « un » y est un chiffre, pas un determinant : le nom reste au pluriel,
+    # et « quatre-vingt-uns » n'existe pas.
+    "vingt et un ans",
+    "trente et un jours",
+    "quatre-vingt-un ans",
+    "quatre-vingt-dix ans",
+])
+def test_un_dans_un_nombre_ne_determine_rien(correcteur, phrase):
+    assert correcteur.corriger(phrase)[0] == phrase

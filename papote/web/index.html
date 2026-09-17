@@ -66,6 +66,13 @@
               <kbd>Ctrl ↵</kbd>
             </button>
             <button class="bouton" id="copier">Copier</button>
+            <!-- Corriger reecrit le texte par-dessus l'original. Ctrl+Z ne
+                 defait pas ce que le programme a ecrit : sans ce bouton, le
+                 texte d'avant n'existait plus nulle part. -->
+            <button class="bouton discret" id="annuler" hidden>
+              Annuler
+              <kbd>Ctrl Z</kbd>
+            </button>
             <button class="bouton discret" id="vider">Effacer</button>
             <span class="pousse"></span>
             <span class="compteur" id="compteur"></span>
@@ -133,6 +140,11 @@
               <input id="exclusion" placeholder="jeu.exe" autocomplete="off">
               <button class="bouton" type="submit">Exclure</button>
             </form>
+            <!-- L'application au premier plan, proposee d'un clic. Elle
+                 servait de valeur par defaut a un champ vide : valider sans
+                 rien ecrire excluait une application qu'on n'avait pas
+                 nommee — ou « jeu.exe », le simple exemple du champ. -->
+            <p class="aide" id="courante-exclusion" hidden></p>
             <ul class="jetons" id="exclues"></ul>
           </div>
 
@@ -145,7 +157,74 @@
                      autocomplete="off">
               <button class="bouton" type="submit">Soutenu ici</button>
             </form>
+            <p class="aide" id="courante-registre" hidden></p>
             <ul class="lignes" id="registres-application"></ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- ---------- Dicter ---------- -->
+      <section class="page" data-page="dicter">
+
+        <!-- Ce qui manque, dit avant d'offrir un bouton qui échouerait. -->
+        <div class="carte" id="dictee-installation" hidden>
+          <h2>Un modèle à installer, une fois</h2>
+          <p class="aide">Papote transcrit <strong>sur votre machine</strong>,
+            sans rien envoyer nulle part. Cela demande de télécharger le
+            modèle qui entend le français — et, pour le mode réunion, celui
+            qui distingue les voix. C'est la seule fois où Papote a besoin
+            d'Internet pour cette fonction.</p>
+          <ul class="liste" id="dictee-modeles"></ul>
+          <div class="ligne-boutons">
+            <button class="bouton principal" id="installer-modeles">
+              Installer (54 Mo)
+            </button>
+            <span class="compteur" id="dictee-avancement"></span>
+          </div>
+        </div>
+
+        <!-- Quand la bibliothèque manque : on le dit, on n'offre rien. -->
+        <div class="carte" id="dictee-indisponible" hidden>
+          <h2>La dictée n'est pas disponible ici</h2>
+          <p class="aide" id="dictee-pourquoi"></p>
+        </div>
+
+        <div class="carte" id="dictee-commandes" hidden>
+          <div class="ligne-boutons">
+            <button class="bouton principal" id="dicter-demarrer">
+              Commencer à dicter
+            </button>
+            <button class="bouton" id="reunion-demarrer">
+              Mode réunion
+            </button>
+            <button class="bouton danger" id="dicter-arreter" hidden>
+              Arrêter
+            </button>
+            <span class="pousse"></span>
+            <span class="compteur" id="dictee-etat"></span>
+          </div>
+          <p class="aide" id="dictee-aide">
+            En mode réunion, Papote distingue les voix et signe chaque prise
+            de parole. Il ne sait pas <em>qui</em> parle — seulement que ce
+            n'est plus la même personne. Vous nommez les voix vous-même.
+          </p>
+          <label class="case" id="dictee-boucle-ligne" hidden>
+            <input type="checkbox" id="dictee-boucle">
+            <span>Capter aussi les autres participants (réunion en ligne)</span>
+          </label>
+        </div>
+
+        <div class="carte" id="dictee-resultat" hidden>
+          <h2>Transcription</h2>
+          <div id="dictee-tours" class="tours"></div>
+          <div class="ligne-boutons">
+            <input type="text" id="dictee-titre" class="champ-ligne"
+                   placeholder="Titre du compte rendu">
+            <button class="bouton principal" id="dictee-compte-rendu">
+              Compte rendu
+            </button>
+            <button class="bouton" id="dictee-copier">Copier</button>
+            <button class="bouton discret" id="dictee-oublier">Effacer</button>
           </div>
         </div>
       </section>
@@ -195,6 +274,71 @@
               <div class="aide" id="maj-detail"></div>
             </div>
             <button class="bouton" id="verifier-maj">Vérifier maintenant</button>
+          </div>
+        </div>
+
+        <!-- Trois reglages qui n'existaient que dans le fichier. Celui qui
+             en a besoin en a vraiment besoin : Tab sert deja partout dans
+             les formulaires, et une application lente a repondre au Ctrl+C
+             fait echouer le raccourci sans rien dire. -->
+        <div class="carte">
+          <h2>Réglages fins</h2>
+          <p class="aide">À ne toucher que si quelque chose ne va pas.</p>
+
+          <div class="ligne-action">
+            <div>
+              <div class="ligne-titre">Touche qui accepte la proposition</div>
+              <div class="aide">Elle n'est détournée que pendant que la bulle
+                est affichée. Ailleurs, elle garde son rôle.</div>
+            </div>
+            <select class="champ" id="touche-prediction">
+              <option value="tab">Tab</option>
+              <option value="right">Flèche droite</option>
+              <option value="end">Fin</option>
+              <option value="ctrl+space">Ctrl + Espace</option>
+            </select>
+          </div>
+
+          <div class="ligne-action">
+            <div>
+              <div class="ligne-titre">Oublier la phrase après</div>
+              <div class="aide">Passé ce silence, le curseur a pu bouger :
+                Papote repart de zéro plutôt que de corriger à l'aveugle.</div>
+            </div>
+            <span class="champ-nombre">
+              <input class="champ" id="delai-oubli" type="number"
+                     min="1" max="30" step="0.5"> s
+            </span>
+          </div>
+
+          <div class="ligne-action">
+            <div>
+              <div class="ligne-titre">Attendre le presse-papiers</div>
+              <div class="aide">À augmenter si le raccourci de correction ne
+                trouve rien dans une application lente à répondre.</div>
+            </div>
+            <span class="champ-nombre">
+              <input class="champ" id="delai-copie" type="number"
+                     min="0.1" max="3" step="0.05"> s
+            </span>
+          </div>
+        </div>
+
+        <!-- La promesse est ecrite partout : rien de ce qui est tape ne
+             quitte la machine, et rien n'en reste. Une promesse qu'on ne
+             peut pas verifier ne vaut pas grand-chose : cet encadre nomme
+             les fichiers, les mesure, et ouvre le dossier. -->
+        <div class="carte">
+          <h2>Ce que Papote garde de vous</h2>
+          <p class="aide">Rien de ce que vous tapez ne quitte cette machine :
+            aucun compte, aucun serveur, aucun fichier envoyé. Voici
+            exactement ce qui est écrit sur votre disque.</p>
+          <ul class="lignes" id="fichiers-gardes"></ul>
+          <div class="rangee">
+            <code class="chemin" id="dossier-config"></code>
+          </div>
+          <div class="rangee">
+            <button class="bouton" id="ouvrir-dossier">Ouvrir le dossier</button>
           </div>
         </div>
 

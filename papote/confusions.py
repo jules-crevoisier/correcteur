@@ -158,7 +158,7 @@ CONFUSIONS = (
 
     # « sui » existe (rare, juridique). « je sui » ne peut etre que « suis ».
     Confusion("sui", "suis", apres("je", "j'"),
-              "avec « je », le verbe etre s'ecrit « suis »"),
+              "avec « je », le verbe être s'écrit « suis »"),
 
     # « fau » n'existe pas seul en francais courant ; « il faut » si.
     Confusion("fau", "faut", apres("il", "qu'", "ne", "n'"),
@@ -173,7 +173,7 @@ CONFUSIONS = (
     # participe « pris ».
     Confusion("pri", "pris", apres("ai", "as", "a", "avons", "avez", "ont",
                                    "avais", "avait", "avaient"),
-              "apres l'auxiliaire, c'est le participe « pris »"),
+              "après l'auxiliaire, c'est le participe « pris »"),
 
     # « mai » est le mois. En tete de phrase et suivi d'une proposition,
     # c'est la conjonction.
@@ -202,7 +202,7 @@ CONFUSIONS = (
                               lambda ctx, i: ctx.mot(i + 1) in
                               {"est", "sont", "es", "était", "vas", "va",
                                "allez", "tu", "il", "elle", "on"}),
-              "« où » designe le lieu"),
+              "« où » désigne le lieu"),
 
     # « la » article et « là » adverbe : idem, complement de LA_ACCENT. La
     # condition est la meme — rien derriere que « la » puisse determiner.
@@ -210,14 +210,14 @@ CONFUSIONS = (
                               apres("est", "suis", "es", "sommes", "êtes",
                                     "sont", "était", "étais", "sera",
                                     "serai", "seras", "reste", "restes")),
-              "« là » designe le lieu"),
+              "« là » désigne le lieu"),
 
     # « hate » est un mot anglais protege, et « hâte » un mot francais
     # courant. La protection empeche le correcteur de deviner ; ici il ne
     # devine pas, il lit l'auxiliaire : « j'ai hate » n'est pas de l'anglais.
     Confusion("hate", "hâte", apres("ai", "as", "a", "avons", "avez", "ont",
                                     "j'", "avais", "avait", "aurai"),
-              "« j'ai hâte » : le mot francais prend un accent"),
+              "« j'ai hâte » : le mot français prend un accent"),
 
     # « ces » demonstratif et « ses » possessif. Seul le contexte tranche, et
     # il ne tranche que rarement : on s'en tient au cas ou un possesseur

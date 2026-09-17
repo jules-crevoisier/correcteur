@@ -29,6 +29,7 @@ c'est alors a l'utilisateur de choisir, et la fenetre la lui montre.
 
 from __future__ import annotations
 
+from collections import OrderedDict
 import bisect
 import gzip
 import unicodedata
@@ -40,6 +41,10 @@ from .chemins import dossier_donnees
 # Lettres utilisees pour fabriquer les variantes a une frappe d'ecart. Les
 # accents n'y figurent pas : ils sont deja couverts par l'index des squelettes.
 ALPHABET = "abcdefghijklmnopqrstuvwxyz-'"
+
+# Nombre de mots dont on retient les candidats. Vingt mille couvre largement
+# une journee de frappe ; au-dela, ce sont des mots qu'on ne retapera pas.
+MEMOIRE_CANDIDATS = 20_000
 
 CLASSE_ACCENT = 0
 CLASSE_EDITION = 1
@@ -177,7 +182,14 @@ class Lexique:
         self._rangs = (
             {m: i for i, m in enumerate(frequences)} if frequences is not None else None
         )
-        self._cache: dict[tuple[str, int], list[Candidat]] = {}
+        # Le cache des candidats. Il est borne : Papote tourne des semaines
+        # d'affilee, et sans borne il retenait un candidat pour **chaque**
+        # mot jamais tape — quelques dizaines de milliers d'entrees au bout
+        # d'un mois, chacune portant sa liste d'objets. La plus ancienne
+        # cede la place a la nouvelle : ce qu'on ecrit se repete, ce qu'on a
+        # ecrit il y a trois heures beaucoup moins.
+        self._cache: OrderedDict[tuple[str, int], list[Candidat]] = \
+            OrderedDict()
 
     @classmethod
     def depuis_formes(cls, formes: list[str], frequences: list[str] | None = None):
@@ -373,6 +385,7 @@ class Lexique:
         minuscule = mot.lower()
         cle_cache = (minuscule, classe_max)
         if cle_cache in self._cache:
+            self._cache.move_to_end(cle_cache)
             return self._cache[cle_cache]
 
         nu = squelette(minuscule)
@@ -436,6 +449,8 @@ class Lexique:
             key=lambda c: c.cle,
         )
         self._cache[cle_cache] = candidats
+        while len(self._cache) > MEMOIRE_CANDIDATS:
+            self._cache.popitem(last=False)
         return candidats
 
     # -- decision -----------------------------------------------------------

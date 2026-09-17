@@ -29,6 +29,9 @@ const ICONES = {
   barres: "M5 20V11 M12 20V4 M19 20v-6",
   fenetre: "M3.5 6.5A2 2 0 0 1 5.5 4.5h13a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2h-13"
          + "a2 2 0 0 1-2-2v-11Z M3.5 9h17",
+  micro: "M12 3.5a2.6 2.6 0 0 1 2.6 2.6v5.4a2.6 2.6 0 1 1-5.2 0V6.1"
+       + "A2.6 2.6 0 0 1 12 3.5Z M5.8 10.6a6.2 6.2 0 0 0 12.4 0 M12 16.8V20"
+       + " M9 20h6",
   reglages: "M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z "
           + "M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1"
           + "a1.6 1.6 0 0 0-2.7 1.1 2 2 0 1 1-4 0 1.6 1.6 0 0 0-2.7-1.1"
@@ -97,6 +100,43 @@ function dire(message, ton) {
   clearTimeout(minuterieToast);
   minuterieToast = setTimeout(() => toast.classList.remove("visible"), 4200);
 }
+
+/* Un bouton qui efface demande a etre presse deux fois.
+
+   Trois boutons de cette fenetre detruisent quelque chose qu'on ne peut pas
+   reconstituer : l'historique des fautes, le journal, la transcription en
+   cours. Un clic de trop et tout est parti, sans avertissement et sans
+   retour. Le premier clic arme, le second agit, et l'arme retombe toute
+   seule si l'on s'en va. */
+const DELAI_CONFIRMATION = 4000;
+
+function armer(selecteur, action) {
+  const bouton = $(selecteur);
+  const libelle = bouton.textContent;
+  let arme = false;
+  let minuterie = null;
+
+  function desarmer() {
+    clearTimeout(minuterie);
+    arme = false;
+    bouton.textContent = libelle;
+    bouton.classList.remove("arme");
+  }
+
+  bouton.addEventListener("click", async () => {
+    if (!arme) {
+      arme = true;
+      bouton.textContent = "Confirmer ?";
+      bouton.classList.add("arme");
+      minuterie = setTimeout(desarmer, DELAI_CONFIRMATION);
+      return;
+    }
+    desarmer();
+    await action();
+  });
+  bouton.addEventListener("blur", desarmer);
+}
+
 
 /* -------------------------------------------------------------------------
    Petits assembleurs
@@ -181,7 +221,8 @@ const RAFRAICHIR = {
   dictionnaire: chargerDictionnaire,
   fautes: chargerFautes,
   applications: chargerApplications,
-  reglages: chargerJournal,
+  dicter: chargerDictee,
+  reglages: () => { chargerJournal(); chargerConfidentialite(); },
 };
 
 function afficher(cle) {
@@ -209,10 +250,37 @@ function compter() {
   $("#compteur").textContent = mots ? mots + (mots > 1 ? " mots" : " mot") : "";
 }
 
+/* Ce que le texte etait avant que le programme n'y touche.
+
+   « Corriger » reecrit le champ par-dessus l'original, et Ctrl+Z ne defait
+   pas ce qu'un programme a ecrit : le texte d'avant n'existait plus nulle
+   part. Quelqu'un qui colle un texte, corrige, et n'aime pas le resultat
+   n'avait aucun moyen de revenir. */
+const etatsPrecedents = [];
+const PROFONDEUR_ANNULATION = 20;
+
+function retenirLetat() {
+  etatsPrecedents.push($("#champ").value);
+  if (etatsPrecedents.length > PROFONDEUR_ANNULATION) etatsPrecedents.shift();
+  $("#annuler").hidden = false;
+}
+
+function annulerLaDerniere() {
+  if (!etatsPrecedents.length) return;
+  $("#champ").value = etatsPrecedents.pop();
+  $("#annuler").hidden = etatsPrecedents.length === 0;
+  compter();
+  montrerCorrections([]);
+  montrerInconnus([]);
+  $("#champ").focus();
+  dire("Texte rétabli.", "succes");
+}
+
 async function corriger() {
   const champ = $("#champ");
   const bouton = $("#corriger");
   if (!champ.value.trim()) return;
+  retenirLetat();
 
   bouton.disabled = true;
   bouton.textContent = "…";
@@ -263,6 +331,7 @@ function montrerInconnus(inconnus) {
     inconnu.propositions.forEach((proposition) => {
       const bouton = creer("button", "bouton minuscule", proposition);
       bouton.addEventListener("click", async () => {
+        retenirLetat();
         const reponse = repondre(
           await appeler("remplacer", $("#champ").value, inconnu.mot, proposition));
         if (reponse.erreur) return;
@@ -350,17 +419,98 @@ async function chargerFautes() {
   sinon(liste, "Rien encore. Corrigez un peu, revenez voir.");
 }
 
+/* Les trois reglages qui n'existaient que dans le fichier.
+
+   Chacun s'enregistre des qu'il change : il n'y a pas de bouton
+   « Enregistrer » dans cette fenetre, et il n'en faut pas un ici. */
+function brancherReglagesFins() {
+  lier("#touche-prediction", "touche_prediction", (champ) => champ.value);
+  lier("#delai-oubli", "delai_oubli", (champ) => Number(champ.value));
+  lier("#delai-copie", "delai_copie", (champ) => Number(champ.value));
+}
+
+function lier(selecteur, cle, lire) {
+  const champ = $(selecteur);
+  champ.value = etat.reglages[cle];
+  champ.addEventListener("change", async () => {
+    const valeur = lire(champ);
+    // Un champ vide ou hors bornes rendrait « NaN », que Python prendrait
+    // pour un reglage valide. On remet ce qui etait la.
+    if (typeof valeur === "number" && !Number.isFinite(valeur)) {
+      champ.value = etat.reglages[cle];
+      return;
+    }
+    const reponse = repondre(await appeler("regler", cle, valeur));
+    if (reponse.erreur) champ.value = etat.reglages[cle];
+    else etat.reglages[cle] = valeur;
+  });
+}
+
+
+/* -------------------------------------------------------------------------
+   « Ce que Papote garde de vous »
+
+   La promesse est ecrite partout ; celle-ci la rend verifiable. Les
+   fichiers sont nommes, mesures, et le dossier s'ouvre d'un clic.
+   ------------------------------------------------------------------------- */
+
+async function chargerConfidentialite() {
+  const donnees = await appeler("confidentialite");
+  if (!donnees || donnees.erreur) return;
+
+  $("#dossier-config").textContent = donnees.dossier || "";
+
+  const liste = vider($("#fichiers-gardes"));
+  (donnees.fichiers || []).forEach((fichier) => {
+    const ligne = creer("li");
+    const gauche = creer("div");
+    gauche.appendChild(creer("div", "ligne-titre", fichier.nom));
+    gauche.appendChild(creer("div", "aide", fichier.quoi));
+    ligne.appendChild(gauche);
+    ligne.appendChild(creer("span", "compte", poids(fichier.octets)));
+    liste.appendChild(ligne);
+  });
+  sinon(liste, "Rien encore : Papote n'a pas eu besoin d'écrire.");
+}
+
+function poids(octets) {
+  if (octets < 1024) return octets + " o";
+  if (octets < 1024 * 1024) return Math.round(octets / 1024) + " Ko";
+  return (octets / (1024 * 1024)).toFixed(1) + " Mo";
+}
+
+
 /* -------------------------------------------------------------------------
    Page « Applications »
    ------------------------------------------------------------------------- */
 
+/* L'application au premier plan, proposee d'un clic.
+
+   Elle servait de valeur par defaut a un champ vide : valider sans rien
+   ecrire excluait une application qu'on n'avait pas nommee — et quand
+   aucune n'etait detectee, c'etait « jeu.exe », le simple exemple du champ.
+   Un clic explicite vaut mieux qu'un defaut invisible. */
+function proposerLapplicationCourante(zone, champ, courante) {
+  const ligne = vider($(zone));
+  ligne.hidden = !courante;
+  if (!courante) return;
+  ligne.appendChild(document.createTextNode("Au premier plan : "));
+  const bouton = creer("button", "bouton discret minuscule", courante);
+  bouton.type = "button";
+  bouton.addEventListener("click", () => {
+    $(champ).value = courante;
+    $(champ).focus();
+  });
+  ligne.appendChild(bouton);
+}
+
 async function chargerApplications() {
   const donnees = await appeler("applications");
 
-  if (donnees.courante) {
-    $("#exclusion").placeholder = donnees.courante;
-    $("#registre-application").placeholder = donnees.courante;
-  }
+  proposerLapplicationCourante("#courante-exclusion", "#exclusion",
+                               donnees.courante);
+  proposerLapplicationCourante("#courante-registre", "#registre-application",
+                               donnees.courante);
 
   const exclues = vider($("#exclues"));
   donnees.exclues.forEach((application) => {
@@ -538,6 +688,13 @@ function brancher() {
       evenement.preventDefault();
       corriger();
     }
+    // Ctrl+Z ne defait que ce que le programme a ecrit. Tant qu'il n'y a
+    // rien a rendre, la touche garde son role : defaire la frappe.
+    if ((evenement.ctrlKey || evenement.metaKey) && evenement.key === "z"
+        && !evenement.shiftKey && etatsPrecedents.length) {
+      evenement.preventDefault();
+      annulerLaDerniere();
+    }
   });
 
   $("#copier").addEventListener("click", async () => {
@@ -552,7 +709,14 @@ function brancher() {
     }
   });
 
+  $("#annuler").addEventListener("click", annulerLaDerniere);
+
+  $("#ouvrir-dossier").addEventListener("click", async () => {
+    repondre(await appeler("ouvrir_le_dossier"));
+  });
+
   $("#vider").addEventListener("click", () => {
+    if ($("#champ").value) retenirLetat();
     $("#champ").value = "";
     compter();
     montrerCorrections([]);
@@ -581,8 +745,7 @@ function brancher() {
   $("#forme-exclusion").addEventListener("submit", async (evenement) => {
     evenement.preventDefault();
     const champ = $("#exclusion");
-    const reponse = repondre(
-      await appeler("exclure", champ.value || champ.placeholder));
+    const reponse = repondre(await appeler("exclure", champ.value));
     if (!reponse.erreur) { champ.value = ""; chargerApplications(); }
   });
 
@@ -590,11 +753,11 @@ function brancher() {
     evenement.preventDefault();
     const champ = $("#registre-application");
     const reponse = repondre(await appeler(
-      "registre_application", champ.value || champ.placeholder, "soutenu"));
+      "registre_application", champ.value, "soutenu"));
     if (!reponse.erreur) { champ.value = ""; chargerApplications(); }
   });
 
-  $("#effacer-historique").addEventListener("click", async () => {
+  armer("#effacer-historique", async () => {
     repondre(await appeler("effacer_historique"));
     chargerFautes();
   });
@@ -630,7 +793,7 @@ function brancher() {
     }
   });
 
-  $("#vider-journal").addEventListener("click", async () => {
+  armer("#vider-journal", async () => {
     repondre(await appeler("vider_journal"));
     chargerJournal();
   });
@@ -656,9 +819,158 @@ async function demarrer() {
   });
 
   construireReglages();
+  brancherReglagesFins();
   brancher();
+  brancherDictee();
   afficher("corriger");
   $("#champ").focus();
+
+  // Le raccourci de relecture ouvre la fenetre avec la selection dedans.
+  // On la corrige tout de suite : c'est ce qu'on venait demander.
+  if (etat.texte_a_relire) {
+    $("#champ").value = etat.texte_a_relire;
+    compter();
+    corriger();
+  }
+}
+
+
+/* -------------------------------------------------------------------------
+   Dicter
+
+   Deux modes, une seule page. Tant que les modeles ne sont pas la, la page
+   ne montre que ce qu'il faut faire pour qu'ils y soient — un bouton qui
+   echouerait vaut moins qu'une phrase qui explique.
+   ------------------------------------------------------------------------- */
+
+let minuterieDictee = null;
+
+async function chargerDictee() {
+  const etatDictee = await appeler("etat_dictee");
+  if (!etatDictee || etatDictee.erreur) return;
+  montrerDictee(etatDictee);
+}
+
+function montrerDictee(d) {
+  const manque = Object.entries(d.disponible || {})
+    .filter(([, present]) => !present)
+    .map(([nom]) => nom);
+
+  $("#dictee-indisponible").hidden = manque.length === 0;
+  if (manque.length) {
+    $("#dictee-pourquoi").textContent =
+      "Cette installation de Papote n'embarque pas " + manque.join(" ni ")
+      + ". La dictée demande la version installée depuis Papote.msi.";
+  }
+
+  const modeles = d.modeles || [];
+  const aInstaller = modeles.filter((m) => !m.installe);
+  $("#dictee-installation").hidden = manque.length > 0 || aInstaller.length === 0;
+  const liste = vider($("#dictee-modeles"));
+  modeles.forEach((m) => {
+    const ligne = creer("li", m.installe ? "fait" : null);
+    ligne.textContent = (m.installe ? "✓ " : "· ") + m.role
+      + " — " + Math.round(m.taille / 1e6) + " Mo";
+    liste.appendChild(ligne);
+  });
+
+  $("#dictee-commandes").hidden = manque.length > 0;
+  $("#dicter-demarrer").hidden = d.en_cours;
+  $("#reunion-demarrer").hidden = d.en_cours;
+  $("#dicter-arreter").hidden = !d.en_cours;
+  $("#dictee-boucle-ligne").hidden = d.en_cours;
+  $("#dictee-etat").textContent = d.en_cours
+    ? (d.reunion ? "Réunion en cours…" : "Dictée en cours…")
+    : (d.erreur || "");
+
+  const tours = d.tours || [];
+  $("#dictee-resultat").hidden = tours.length === 0;
+  const zone = vider($("#dictee-tours"));
+  tours.forEach((tour) => {
+    const bloc = creer("div", "tour");
+    const nom = creer("button", "locuteur", tour.locuteur);
+    nom.title = "Cliquez pour renommer cette voix";
+    nom.addEventListener("click", () => renommerLocuteur(tour.locuteur));
+    bloc.appendChild(nom);
+    bloc.appendChild(creer("p", null, tour.texte));
+    zone.appendChild(bloc);
+  });
+}
+
+async function renommerLocuteur(ancien) {
+  const nouveau = window.prompt("Qui est « " + ancien + " » ?", ancien);
+  if (!nouveau || nouveau === ancien) return;
+  await appeler("renommer_locuteur", ancien, nouveau);
+  chargerDictee();
+}
+
+function suivreLaDictee(actif) {
+  clearInterval(minuterieDictee);
+  minuterieDictee = actif ? setInterval(chargerDictee, 1500) : null;
+}
+
+function brancherDictee() {
+  $("#installer-modeles").addEventListener("click", async (evenement) => {
+    const bouton = evenement.currentTarget;
+    bouton.disabled = true;
+    $("#dictee-avancement").textContent = "Téléchargement…";
+    const reponse = await appeler("installer_modeles", true);
+    bouton.disabled = false;
+    $("#dictee-avancement").textContent = "";
+    dire(reponse && reponse.ok ? (reponse.message || "Installé.")
+                               : (reponse && reponse.erreur) || "Échec.");
+    chargerDictee();
+  });
+
+  const lancer = async (reunion) => {
+    const boucle = reunion && $("#dictee-boucle").checked;
+    const reponse = await appeler("commencer_dictee", reunion, boucle);
+    if (reponse && reponse.avertissement) dire(reponse.avertissement);
+    else if (!reponse || !reponse.ok) dire((reponse && reponse.erreur) || "Échec.");
+    suivreLaDictee(Boolean(reponse && reponse.ok));
+    chargerDictee();
+  };
+  $("#dicter-demarrer").addEventListener("click", () => lancer(false));
+  $("#reunion-demarrer").addEventListener("click", () => lancer(true));
+
+  $("#dicter-arreter").addEventListener("click", async () => {
+    await appeler("arreter_dictee");
+    suivreLaDictee(false);
+    chargerDictee();
+  });
+
+  $("#dictee-compte-rendu").addEventListener("click", async () => {
+    const reponse = await appeler("compte_rendu", $("#dictee-titre").value, "");
+    if (!reponse || !reponse.ok) {
+      dire((reponse && reponse.erreur) || "Échec.");
+      return;
+    }
+    /* Le compte rendu part dans la page « Corriger » : c'est là qu'on relit
+       et qu'on copie, et il n'y a pas de raison d'avoir deux éditeurs. */
+    $("#champ").value = reponse.texte;
+    afficher("corriger");
+    dire("Compte rendu prêt — relisez-le avant de l'envoyer.");
+  });
+
+  $("#dictee-copier").addEventListener("click", async () => {
+    const reponse = await appeler("compte_rendu", $("#dictee-titre").value, "");
+    if (!reponse || !reponse.ok) {
+      dire((reponse && reponse.erreur) || "Échec.");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(reponse.texte);
+      dire("Compte rendu copié.");
+    } catch (e) {
+      dire("La copie a échoué.");
+    }
+  });
+
+  armer("#dictee-oublier", async () => {
+    await appeler("oublier_dictee");
+    suivreLaDictee(false);
+    chargerDictee();
+  });
 }
 
 demarrer();

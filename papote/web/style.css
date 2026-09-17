@@ -199,10 +199,20 @@ body {
 
 nav { display: flex; flex-direction: column; gap: 2px; }
 
+/* En bandeau, les entrees s'enroulent sur deux rangees plutot que de
+   deborder. Elles debordaient : « overflow-x: auto » promet un defilement
+   qu'aucune molette ne declenche horizontalement dans cette fenetre, et les
+   deux dernieres pages — « Dicter » et « Réglages » — etaient simplement
+   hors d'atteinte a la largeur minimale de la fenetre elle-meme. */
 @media (max-width: 720px) {
   .marque { padding: 0 8px 10px; }
-  nav { flex-direction: row; overflow-x: auto; padding-bottom: 2px; }
-  nav .entree { white-space: nowrap; }
+  nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 2px 4px;
+    padding-bottom: 2px;
+  }
+  nav .entree { white-space: nowrap; padding: 6px 9px; gap: 7px; }
 }
 
 .entree {
@@ -711,3 +721,153 @@ input::placeholder { color: var(--texte-eteint); }
 }
 .toast.succes::before { background: var(--succes); }
 .toast.alerte::before { background: var(--alerte); }
+
+/* -------------------------------------------------------------------------
+   Dicter
+
+   Une transcription se lit comme une piece de theatre : le nom en retrait,
+   la replique en dessous. Le nom est un bouton parce qu'il en est un — c'est
+   la qu'on dit qui parlait.
+   ------------------------------------------------------------------------- */
+
+.ligne-boutons {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+
+.champ-ligne {
+  flex: 1 1 200px;
+  min-width: 0;
+  padding: 9px 12px;
+  border-radius: var(--rond-petit, 8px);
+  border: 1px solid var(--bord);
+  background: var(--fond-champ, var(--fond-carte));
+  color: var(--texte);
+  font: inherit;
+}
+
+.champ-ligne:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.liste {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.liste li {
+  color: var(--texte-doux);
+  font-size: 13px;
+}
+
+.liste li.fait { color: var(--accent); }
+
+.tours {
+  display: grid;
+  gap: 16px;
+  margin-top: 6px;
+  max-height: 46vh;
+  overflow-y: auto;
+}
+
+.tour p {
+  margin: 4px 0 0;
+  line-height: 1.55;
+}
+
+.locuteur {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--accent);
+  cursor: pointer;
+  border-bottom: 1px dashed transparent;
+}
+
+.locuteur:hover { border-bottom-color: currentColor; }
+
+.bouton.danger {
+  border-color: color-mix(in srgb, var(--alerte, #e5484d) 45%, transparent);
+  color: var(--alerte, #e5484d);
+}
+
+/* Une case a cocher ordinaire : « .bascule » est un interrupteur, ce n'est
+   pas la meme chose et cela ne se dessine pas pareil. */
+.case {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 12px;
+  color: var(--texte-doux);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.case input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+
+/* Un bouton arme : il a ete presse une fois, le suivant efface. La couleur
+   dit ce que le libelle dit deja, pour que cela se voie du coin de l'oeil. */
+.bouton.arme,
+.bouton.discret.arme {
+  background: var(--alerte-sourd);
+  border-color: color-mix(in srgb, var(--alerte) 55%, transparent);
+  color: var(--alerte);
+}
+
+
+/* Le chemin du dossier de reglages : on doit pouvoir le lire et le copier,
+   donc une chasse fixe, et un retour a la ligne plutot qu'un debordement. */
+.chemin {
+  font-family: "Cascadia Code", "Consolas", ui-monospace, monospace;
+  font-size: 12px;
+  color: var(--texte-doux);
+  background: var(--surface-haute);
+  border: 1px solid var(--trait);
+  border-radius: var(--rayon-petit);
+  padding: 6px 9px;
+  word-break: break-all;
+  user-select: all;
+}
+
+
+/* Les trois reglages fins. Le style des champs texte s'arretait a
+   « input[type="text"] » : un nombre et une liste deroulante n'en heritaient
+   pas, et tombaient sur le dessin du systeme — blanc sur fond sombre. */
+.champ {
+  padding: 7px 11px;
+  border: 1px solid var(--trait-net);
+  border-radius: var(--rayon-petit);
+  background: var(--surface-haute);
+  color: var(--texte);
+  font: inherit;
+  font-size: 13px;
+}
+.champ:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+input.champ[type="number"] { width: 78px; text-align: right; }
+
+.champ-nombre {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  color: var(--texte-eteint);
+  font-size: 12px;
+  white-space: nowrap;
+}
