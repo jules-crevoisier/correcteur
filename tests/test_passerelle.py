@@ -268,3 +268,22 @@ def test_le_texte_a_relire_ne_sort_qu_une_fois(passerelle):
 
 def test_sans_relecture_le_champ_reste_vide(passerelle):
     assert passerelle.demarrer()["texte_a_relire"] == ""
+
+
+# -- la dictee : ce qui manque, et ce qui s'installe -------------------------
+
+def test_le_moteur_vocal_figure_parmi_ce_qui_s_installe(passerelle):
+    """Il n'est pas embarqué : son absence est normale, et réparable.
+
+    La page se servait de « disponible » pour cacher le bouton
+    d'installation. Y laisser le moteur rendait son propre téléchargement
+    inatteignable.
+    """
+    etat = passerelle.etat_dictee()
+    assert "vosk" not in etat.get("disponible", {})
+    assert any(m["nom"] == "vosk" for m in etat.get("modeles", []))
+
+
+def test_ce_qui_manque_vraiment_reste_signale(passerelle):
+    """« sounddevice » est embarqué : s'il manque, aucun bouton n'y peut rien."""
+    assert "sounddevice" in passerelle.etat_dictee().get("disponible", {})

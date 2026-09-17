@@ -199,11 +199,16 @@ class MoteurVocal:
 
 def _vosk():
     try:
+        # Le moteur est deplie a cote des reglages, pas embarque : le
+        # dossier doit etre sur le chemin des imports avant qu'on essaie.
+        from . import bibliotheques
+
+        bibliotheques.rendre_importable()
         import vosk
     except Exception as erreur:                # noqa: BLE001
         raise AudioIndisponible(
-            "Le moteur de reconnaissance vocale n'est pas disponible dans "
-            f"cette installation de Papote ({erreur})."
+            "Le moteur de reconnaissance vocale n'est pas installé. "
+            f"Ouvrez « Dicter » et lancez l'installation ({erreur})."
         ) from erreur
     return vosk
 

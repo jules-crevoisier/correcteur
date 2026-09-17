@@ -47,6 +47,14 @@ DESCRIPTIONS = {
                              "jour. Un numéro de version, rien de vous.",
 }
 
+# Les dossiers, decrits comme les fichiers. Ils pesent lourd — c'est
+# justement pour cela qu'on les montre.
+DESCRIPTIONS_DOSSIERS = {
+    "modeles": "Les modèles de reconnaissance vocale de la dictée.",
+    "bibliotheques": "Le moteur de reconnaissance vocale, téléchargé au "
+                     "premier usage plutôt qu'embarqué.",
+}
+
 
 def _fichiers_du_dossier(dossier) -> list[dict]:
     """Les fichiers presents, avec leur taille et ce qu'ils contiennent."""
@@ -54,17 +62,23 @@ def _fichiers_du_dossier(dossier) -> list[dict]:
         return []
     trouves = []
     for chemin in sorted(dossier.iterdir()):
-        if not chemin.is_file():
-            continue
         try:
-            octets = chemin.stat().st_size
+            if chemin.is_dir():
+                # Un dossier de cinquante megaoctets qui ne figure pas dans
+                # la liste ferait mentir le total, et c'est le genre de
+                # silence qui abime une promesse.
+                octets = sum(p.stat().st_size
+                             for p in chemin.rglob("*") if p.is_file())
+                quoi = DESCRIPTIONS_DOSSIERS.get(chemin.name,
+                                                 "Un dossier de travail.")
+            elif chemin.is_file():
+                octets = chemin.stat().st_size
+                quoi = DESCRIPTIONS.get(chemin.name, "Un fichier de travail.")
+            else:
+                continue
         except OSError:
-            octets = 0
-        trouves.append({
-            "nom": chemin.name,
-            "octets": octets,
-            "quoi": DESCRIPTIONS.get(chemin.name, "Un fichier de travail."),
-        })
+            continue
+        trouves.append({"nom": chemin.name, "octets": octets, "quoi": quoi})
     return trouves
 
 

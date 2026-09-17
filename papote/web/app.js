@@ -858,9 +858,14 @@ function montrerDictee(d) {
 
   $("#dictee-indisponible").hidden = manque.length === 0;
   if (manque.length) {
+    // Ce message accusait le mode d'installation — « la dictée demande la
+    // version installée depuis Papote.msi » — alors qu'aucune version
+    // n'embarquait ces bibliothèques. Il ne reste vrai que pour
+    // « sounddevice », qui lui est bien embarqué : s'il manque, c'est qu'on
+    // tourne depuis les sources sans l'avoir installé.
     $("#dictee-pourquoi").textContent =
-      "Cette installation de Papote n'embarque pas " + manque.join(" ni ")
-      + ". La dictée demande la version installée depuis Papote.msi.";
+      "Cette installation n'a pas " + manque.join(" ni ")
+      + ". Lancé depuis les sources : « pip install -r requirements.txt ».";
   }
 
   const modeles = d.modeles || [];
