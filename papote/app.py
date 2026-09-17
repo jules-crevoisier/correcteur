@@ -13,12 +13,29 @@ from typing import Callable
 from . import apprentissage as apprentissage_mod
 from . import memoire as memoire_mod
 from . import config as config_mod
-from . import demarrage, frappe as frappe_mod, journal as journal_mod
+from . import demarrage, frappe as frappe_mod, grammaire, journal as journal_mod
 from . import lexique, maj, moteur
 from . import morphologie
 from . import politique as politique_mod
 from . import presse_papier
 from .raccourci import Raccourci, RaccourciInvalide
+
+
+def _mot_connu(lexique_, mot: str) -> bool:
+    """Ce mot est-il du francais, elision comprise ?
+
+    « j'ai » ne figure pas au dictionnaire : il y a « ai », et « j' »
+    devant. Sans separer les deux, la correction la plus courante du
+    francais parle etait jugee inconnue — et « Vos fautes » restait vide de
+    tout ce qui porte une apostrophe, c'est-a-dire de presque tout.
+    """
+    mot = mot.strip(".,;:!?…\u00a0")
+    if not mot:
+        return False
+    if lexique_.connait(mot):
+        return True
+    elision, noyau = grammaire.separer_clitique(mot)
+    return bool(elision) and bool(noyau) and lexique_.connait(noyau)
 
 
 def _trace_sans_texte(remplacement) -> str:
@@ -373,7 +390,11 @@ class Application:
         self.journal(f"[auto] {_trace_sans_texte(remplacement)}")
         if not self.config.get("apprentissage", True):
             return
-        if self._mots_connus(remplacement.avant, remplacement.ecrire):
+        # Seule la forme corrigee est examinee, parce que seule elle est
+        # retenue : le cote gauche est la faute, et une faute n'est par
+        # definition pas un mot du dictionnaire. Exiger qu'elle en soit un
+        # revenait a ne rien compter du tout.
+        if self._mots_connus(remplacement.ecrire):
             self.journal_habitudes.correction_appliquee(
                 remplacement.avant, remplacement.ecrire
             )
@@ -397,7 +418,7 @@ class Application:
             if not mots:
                 return False
             for mot in mots:
-                if not lexique_.connait(mot.strip(".,;:!?…\u00a0")):
+                if not _mot_connu(lexique_, mot):
                     return False
         return True
 

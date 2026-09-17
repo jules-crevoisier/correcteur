@@ -26,7 +26,9 @@ def test_les_corrections_sont_comptees(journal):
     journal.correction_appliquee("sa ", "ça ")
     journal.correction_appliquee("sa ", "ça ")
     journal.correction_appliquee("malgres ", "malgré ")
-    assert journal.fautes_frequentes() == [("sa → ça", 2), ("malgres → malgré", 1)]
+    # Seule la forme corrigee est retenue : la faute, elle, n'est pas un
+    # mot du dictionnaire, et rien ne la distingue d'un mot de passe.
+    assert journal.fautes_frequentes() == [("ça", 2), ("malgré", 1)]
     assert journal.total_corrections() == 3
 
 
@@ -87,7 +89,7 @@ def test_ce_qui_est_ecrit_se_relit(tmp_path, journal):
     journal.enregistrer(chemin)
 
     relu = apprentissage.charger(chemin)
-    assert relu.fautes_frequentes() == [("sa → ça", 1)]
+    assert relu.fautes_frequentes() == [("ça", 1)]
     assert relu.annulations_mot["zbeul"] == 1
 
 
@@ -104,9 +106,9 @@ def test_un_fichier_abime_ne_bloque_rien(tmp_path):
 def test_les_valeurs_absurdes_sont_ecartees(tmp_path):
     chemin = tmp_path / "apprentissage.json"
     chemin.write_text(json.dumps({
-        "corrections": {"sa → ça": 3, "bidon": "beaucoup", "negatif": -1},
+        "corrections": {"ça": 3, "bidon": "beaucoup", "negatif": -1},
     }), encoding="utf-8")
-    assert apprentissage.charger(chemin).fautes_frequentes() == [("sa → ça", 3)]
+    assert apprentissage.charger(chemin).fautes_frequentes() == [("ça", 3)]
 
 
 def test_le_fichier_ne_grossit_pas_indefiniment(tmp_path, journal):
@@ -145,4 +147,4 @@ def test_l_elagage_garde_les_plus_frequentes():
         journal.correction_appliquee("sa", "ça")
     for i in range(apprentissage.MEMOIRE * 6):
         journal.correction_appliquee(f"faute{i}", f"correction{i}")
-    assert journal.corrections["sa → ça"] == 50
+    assert journal.corrections["ça"] == 50

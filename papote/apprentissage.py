@@ -62,9 +62,27 @@ class Journal:
     # -- observation --------------------------------------------------------
 
     def correction_appliquee(self, avant: str, apres: str) -> None:
-        if not avant.strip() or not apres.strip():
+        """Compte une correction, sans garder ce qui a ete tape.
+
+        Seule la forme **corrigee** entre ici. C'est elle que la page « Vos
+        fautes » montre : les mots que vous ratez le plus souvent.
+
+        Le compteur retenait la paire — « jai → j'ai » —, ce qui disait plus
+        de choses et coutait trop cher. Papote ne corrige que vers un mot
+        qu'il connait : le cote droit est toujours du francais. Le cote
+        gauche, lui, est par definition ce que le dictionnaire ignore, et
+        rien ne distingue « jai » d'un mot de passe mal tape dans la
+        mauvaise fenetre. Or ce fichier survit a la session.
+
+        Le filtre pose en amont refusait donc la paire des que le cote
+        gauche etait inconnu — c'est-a-dire presque toujours, puisque c'est
+        la faute. La page restait vide. Ne garder que la forme juste tient
+        la promesse **et** remplit la page.
+        """
+        forme = apres.strip()
+        if not avant.strip() or not forme:
             return
-        self.corrections[f"{avant.strip()} → {apres.strip()}"] += 1
+        self.corrections[forme] += 1
         self.modifie = True
         self._elaguer()
 

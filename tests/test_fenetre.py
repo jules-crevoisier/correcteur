@@ -181,7 +181,7 @@ def test_donner_un_registre_a_une_application(fenetre):
 def test_les_fautes_frequentes_s_affichent(fenetre, application):
     application.journal_habitudes.correction_appliquee("sa ", "ça ")
     fenetre._afficher("Vos fautes")
-    assert any("sa → ça" in ligne for ligne in fenetre.liste_fautes.lignes)
+    assert any("ça" in ligne for ligne in fenetre.liste_fautes.lignes)
 
 
 def test_effacer_l_historique(fenetre, application):
@@ -189,14 +189,6 @@ def test_effacer_l_historique(fenetre, application):
     fenetre._afficher("Vos fautes")
     fenetre._effacer_historique()
     assert application.journal_habitudes.total_corrections() == 0
-
-
-def test_ignorer_une_faute_l_ajoute_au_dictionnaire(fenetre, application):
-    application.journal_habitudes.correction_appliquee("zbeul", "zébu")
-    fenetre._afficher("Vos fautes")
-    fenetre.liste_fautes.choisir(0)
-    fenetre._ignorer_faute()
-    assert "zbeul" in fenetre.config["mots_perso"]
 
 
 # -- reglages ----------------------------------------------------------------

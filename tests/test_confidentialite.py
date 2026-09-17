@@ -145,3 +145,63 @@ def test_le_fichier_de_relecture_disparait_apres_usage(tmp_path, monkeypatch):
     assert principal._relire(app, str(fichier)) == 0
     assert app.texte_a_relire == "jai pas vu sa"
     assert not fichier.exists()
+
+
+# ---------------------------------------------------------------------------
+# Le compteur des fautes
+#
+# La page « Vos fautes » vit d'un fichier qui survit a la session. Ce qui y
+# entre doit donc etre du francais, et rien d'autre.
+# ---------------------------------------------------------------------------
+
+def test_le_compteur_ne_garde_que_la_forme_corrigee():
+    """« Motdepase → Motdepasse » ne doit rien laisser derriere lui.
+
+    Papote ne corrige que vers un mot qu'il connait : le cote droit est
+    toujours du francais. Le cote gauche est par definition ce que le
+    dictionnaire ignore, et rien ne distingue « jai » d'un mot de passe tape
+    dans la mauvaise fenetre.
+    """
+    journal = apprentissage_mod.Journal()
+    journal.correction_appliquee("Motdepase", "Motdepasse")
+    journal.correction_appliquee("jai", "j'ai")
+
+    ecrit = repr(journal.en_dictionnaire())
+    assert "Motdepase→" not in ecrit
+    assert "Motdepase " not in ecrit
+    assert "jai" not in ecrit.replace("j'ai", "")
+    assert set(journal.corrections) == {"Motdepasse", "j'ai"}
+
+
+def test_la_page_se_remplit_quand_meme():
+    """Le filtre d'amont exigeait que la faute soit un mot du dictionnaire.
+
+    Une faute n'en est jamais un : la page restait vide. C'est la forme
+    corrigee qu'on examine desormais, et elle, elle en est toujours un.
+    """
+    journal = apprentissage_mod.Journal()
+    for avant, apres in [("jai", "j'ai"), ("sa", "ça"), ("jai", "j'ai"),
+                         ("platforme", "plateforme")]:
+        journal.correction_appliquee(avant, apres)
+    assert journal.fautes_frequentes()[0] == ("j'ai", 2)
+    assert journal.total_corrections() == 4
+
+
+@pytest.mark.parametrize("mot,connu", [
+    # L'elision : « j'ai » n'est pas au dictionnaire, « ai » l'est.
+    ("j'ai", True),
+    ("c'est", True),
+    ("l'avion", True),
+    ("qu'elle", True),
+    ("ça", True),
+    ("bonjour", True),
+    # Et ce qui n'est pas du francais reste dehors, apostrophe ou pas.
+    ("Motdepasse", False),
+    ("zbeulotron", False),
+    ("l'zbeulotron", False),
+    ("", False),
+])
+def test_l_elision_ne_fait_pas_passer_un_mot_inconnu(correcteur, mot, connu):
+    from papote.app import _mot_connu
+
+    assert _mot_connu(correcteur.lexique, mot) is connu
