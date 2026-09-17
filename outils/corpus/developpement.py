@@ -556,4 +556,14 @@ INTOUCHABLES = [
     "c'est écrit en JavaScript",
     "envoie-moi un email",
     "le layout du dashboard",
+
+    # -- l'accord singulier ne doit pas deborder sur les nombres ni sur les
+    #    noms invariables en « s »
+    "vingt et un ans",
+    "trente et un jours",
+    "quatre-vingt-un ans",
+    "le vieux tapis",
+    "un beau prix",
+    "la première fois",
+    "des jolies fleurs",
 ]

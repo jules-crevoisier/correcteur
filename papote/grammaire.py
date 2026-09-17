@@ -2036,6 +2036,10 @@ def _accord_adjectif_pluriel(ctx: Contexte, i: int):
 
     if _couleur_composee(ctx, i):
         return None
+    if _un_est_un_nombre(ctx, i):
+        # « quatre-vingt-un ans » : « un » y est le dernier chiffre d'un
+        # nombre, pas un adjectif, et « quatre-vingt-uns » n'existe pas.
+        return None
 
     indice_du_nom = None
     if _est_pluriel(ctx, ctx.mot(i - 1)) and _determinant_pluriel(ctx, i - 2):
@@ -2682,6 +2686,20 @@ INVARIABLES_EN_S = {
 }
 
 
+def _un_est_un_nombre(ctx: "Contexte", i: int) -> bool:
+    """« un » en position i termine-t-il un nombre compose ?
+
+    « vingt et un ans », « trente et un jours » : le nom qui suit est bien
+    au pluriel, et « un » n'y determine rien.
+    """
+    if ctx.mot(i) not in ("un", "une"):
+        return False
+    if ctx.mot(i - 1) == "et" and ctx.mot(i - 2) in DIZAINES:
+        return True
+    return (ctx.mot(i - 1) in DIZAINES
+            or ctx.separateur(i - 1).endswith("-"))
+
+
 @regle("ACCORD_DETERMINANT_SINGULIER",
        "après un déterminant singulier, le nom reste au singulier")
 def _accord_determinant_singulier(ctx: Contexte, i: int):
@@ -2691,7 +2709,21 @@ def _accord_determinant_singulier(ctx: Contexte, i: int):
         return None
     if mot in INVARIABLES_EN_S or mot in MOTS_INVARIABLES:
         return None
-    if ctx.mot(i - 1) not in DETERMINANTS_SINGULIERS:
+
+    # Le determinant est juste devant, ou separe du nom par un adjectif :
+    # « une petite fautes » a bien un determinant singulier, deux mots plus
+    # tot. Seuls les adjectifs anteposes peuvent se glisser la, et il faut
+    # qu'ils soient eux-memes au singulier — sinon « des jolies fleurs »
+    # perdrait son « s ».
+    recul = 1
+    if (_adjectif_antepose(ctx.mot(i - 1))
+            and not ctx.mot(i - 1).endswith(("s", "x"))):
+        recul = 2
+    if ctx.mot(i - recul) not in DETERMINANTS_SINGULIERS:
+        return None
+    if _un_est_un_nombre(ctx, i - recul):
+        # « vingt et un ans », « trente et un jours » : « un » y est un
+        # chiffre, pas un determinant, et le nom reste au pluriel.
         return None
 
     # Le mot doit vraiment etre un pluriel. « la souris », « le prix », « le
@@ -2704,7 +2736,7 @@ def _accord_determinant_singulier(ctx: Contexte, i: int):
     # Un pronom sujet juste avant le determinant : ce n'en est pas un.
     # « elles son parties » n'est pas « elles son partie » — c'est « sont »
     # qu'il fallait lire, et une autre regle s'en charge.
-    if ctx.mot(i - 2) in PRONOMS_SUJETS:
+    if ctx.mot(i - recul - 1) in PRONOMS_SUJETS:
         return None
 
     singulier = ctx.morphologie.au_singulier(mot) or mot[:-1]

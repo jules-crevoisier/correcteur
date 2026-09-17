@@ -662,3 +662,55 @@ def test_ces_phrases_correctes_ne_bougent_pas(correcteur, phrase):
 def test_les_corrections_voisines_tiennent_toujours(correcteur, phrase,
                                                      attendu):
     assert correcteur.corriger(phrase)[0] == attendu
+
+
+# ---------------------------------------------------------------------------
+# L'accord singulier, quand un adjectif s'intercale
+#
+# « des petites faute » -> « fautes » marchait ; « une petite fautes » ne
+# bougeait pas. C'est la meme faute de frappe, vue de l'autre cote — mais la
+# regle exigeait le determinant juste devant le nom.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("phrase,attendu", [
+    ("une petite fautes", "une petite faute"),
+    ("un petit chats", "un petit chat"),
+    ("une grande maisons", "une grande maison"),
+    ("la grande maisons", "la grande maison"),
+    ("le premier jours", "le premier jour"),
+    ("mon nouveau vélos", "mon nouveau vélo"),
+    # Et ce que la regle faisait deja, sans adjectif.
+    ("une choses", "une chose"),
+])
+def test_le_nom_suit_le_determinant_singulier(correcteur, phrase, attendu):
+    assert correcteur.corriger(phrase)[0] == attendu
+
+
+@pytest.mark.parametrize("phrase", [
+    # Un adjectif au pluriel ne laisse pas passer le determinant singulier.
+    "des jolies fleurs",
+    "les grandes maisons",
+    "des petites fautes",
+    # Les noms invariables en « s » : leur retirer la lettre en ferait
+    # autre chose, ou rien du tout.
+    "un pays", "le bras", "une fois", "le prix", "un corps", "le temps",
+    "un cours", "une souris", "un avis", "le mois", "un poids", "le dos",
+    "un repas", "le permis", "un fils", "la voix", "un choix", "le nez",
+    "le vieux tapis", "un beau prix", "la première fois",
+    # « le » et « la » sont aussi des pronoms complements.
+    "je la mange", "je le vois",
+])
+def test_l_accord_singulier_se_tait_quand_il_doute(correcteur, phrase):
+    assert correcteur.corriger(phrase)[0] == phrase
+
+
+@pytest.mark.parametrize("phrase", [
+    # « un » y est un chiffre, pas un determinant : le nom reste au pluriel,
+    # et « quatre-vingt-uns » n'existe pas.
+    "vingt et un ans",
+    "trente et un jours",
+    "quatre-vingt-un ans",
+    "quatre-vingt-dix ans",
+])
+def test_un_dans_un_nombre_ne_determine_rien(correcteur, phrase):
+    assert correcteur.corriger(phrase)[0] == phrase
