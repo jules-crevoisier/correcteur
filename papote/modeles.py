@@ -163,6 +163,21 @@ def _recuperer(modele, archive: Path, avancement) -> None:
                 recu += len(bloc)
                 if avancement:
                     avancement(recu, total)
+    except urllib.error.HTTPError as erreur:
+        # Un 404 n'est pas une panne de reseau, et le dire ferait chercher
+        # au mauvais endroit. Il veut dire que ce modele n'existe pas a
+        # cette adresse — l'adresse est ecrite dans « modeles.py », et c'est
+        # la qu'il faut aller.
+        if erreur.code == 404:
+            raise ModeleIntrouvable(
+                f"Le modèle « {modele.nom} » n'existe pas à l'adresse "
+                f"attendue ({modele.url}). C'est un défaut de Papote, pas de "
+                f"votre installation."
+            ) from erreur
+        raise ModeleIntrouvable(
+            f"Le serveur des modèles a répondu {erreur.code} pour "
+            f"« {modele.nom} ». Réessayez plus tard."
+        ) from erreur
     except (urllib.error.URLError, OSError, TimeoutError) as erreur:
         raise ModeleIntrouvable(
             f"Le modèle « {modele.nom} » n'a pas pu être téléchargé : "
