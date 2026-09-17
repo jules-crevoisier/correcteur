@@ -354,3 +354,20 @@ def test_toute_methode_de_la_passerelle_sert_a_quelque_chose(script):
                  and callable(getattr(Passerelle, nom, None))}
     mortes = publiques - atteintes
     assert not mortes, f"sur le pont, mais plus personne n'appelle : {sorted(mortes)}"
+
+
+
+# -- le message de la page « Dicter » ----------------------------------------
+
+def test_le_message_n_accuse_plus_le_mode_d_installation(script):
+    """« La dictée demande la version installée depuis Papote.msi » etait faux.
+
+    Aucune version n'embarquait ces bibliotheques, MSI ou non — et celui qui
+    avait bien installe le MSI se voyait dire que c'etait sa faute.
+    """
+    # Les commentaires sont retires : celui qui explique le correctif cite
+    # justement la phrase qu'on ne veut plus voir s'afficher.
+    sans_commentaires = re.sub(r"/\*.*?\*/", "", script, flags=re.S)
+    sans_commentaires = re.sub(r"^\s*//.*$", "", sans_commentaires,
+                               flags=re.M)
+    assert "Papote.msi" not in sans_commentaires

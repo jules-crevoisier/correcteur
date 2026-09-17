@@ -9,7 +9,23 @@ quoi que ce soit d'autre sur la machine de destination.
 
 from pathlib import Path
 
+from PyInstaller.utils.hooks import collect_data_files
+
 RACINE = Path(SPECPATH)
+
+
+def donnees_de(paquet: str) -> list:
+    """Les fichiers de donnees d'un paquet, s'il est installe.
+
+    `sounddevice` porte ses binaires PortAudio dans un dossier de donnees :
+    sans eux, il s'importe sans broncher et echoue a l'ouverture du micro,
+    ce qui est la pire facon d'echouer. On ne s'arrete pas pour autant si le
+    paquet manque — une compilation rapide en local doit rester possible.
+    """
+    try:
+        return collect_data_files(paquet)
+    except Exception:                              # noqa: BLE001
+        return []
 
 # L'icone est fabriquee par « outils/images_installateur.py ». Si elle n'est
 # pas la — compilation rapide en local — PyInstaller met la sienne.
@@ -31,12 +47,20 @@ analyse = Analysis(
         (str(RACINE / "donnees" / "LICENCES.md"), "donnees"),
         # La fenetre est une page web : elle voyage avec le reste.
         (str(RACINE / "papote" / "web"), "papote/web"),
-    ],
+    ] + donnees_de("sounddevice"),
     # « webview » choisit son moteur au moment de demarrer, par un import
     # calcule que PyInstaller ne sait pas suivre : sans cette ligne, la
     # fenetre se replierait sur l'ancienne une fois compilee.
     hiddenimports=["pystray._win32", "webview.platforms.edgechromium",
-                   "clr_loader", "pythonnet"],
+                   "clr_loader", "pythonnet",
+                   # La dictee. « vosk » n'y est pas : il se telecharge au
+                   # premier usage et n'existe pas a la compilation. Mais
+                   # ce qu'il importe des son chargement, si — et
+                   # PyInstaller ne peut pas le deviner, puisque rien dans
+                   # le code source de Papote ne les nomme.
+                   "sounddevice", "_cffi_backend", "cffi",
+                   "requests", "srt", "tqdm",
+                   "mouse"],
     hookspath=[],
     runtime_hooks=[],
     excludes=["numpy", "pandas", "matplotlib", "PySide6", "PyQt5", "test"],

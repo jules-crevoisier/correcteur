@@ -13,3 +13,25 @@ Pillow>=10.0
 # machine depuis Windows 10. Rien n'est telecharge a l'installation.
 pywebview>=5.0
 pythonnet>=3.0 ; sys_platform == "win32"
+
+# Un clic de souris deplace le curseur, et aucune touche ne le signale :
+# sans cette bibliotheque, Papote corrige a partir d'une phrase qui decrit
+# un autre endroit du texte. Elle manquait — l'import est sous filet, donc
+# l'absence ne se voyait pas.
+mouse>=0.7
+
+# -- la dictee --------------------------------------------------------------
+# Le micro, et PortAudio qui va avec. Un megaoctet : il reste embarque.
+sounddevice>=0.4
+
+# `vosk`, lui, n'est pas ici. Il pese cinquante-quatre megaoctets de
+# bibliotheques natives, et Papote est un executable « onefile » : tout ce
+# qu'il embarque est extrait a chaque demarrage. Il se telecharge donc au
+# premier usage — voir « papote/bibliotheques.py ».
+#
+# Ces quatre-la, en revanche, sont embarques : `vosk/__init__.py` les
+# importe des qu'on le charge, et ils ne pesent rien.
+cffi>=1.15
+requests>=2.28
+srt>=3.5
+tqdm>=4.64

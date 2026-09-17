@@ -21,7 +21,7 @@ from __future__ import annotations
 import threading
 from dataclasses import dataclass, field
 
-from . import modeles
+from . import bibliotheques, modeles
 from .reunion import compte_rendu
 from .transcription import Transcription
 
@@ -54,12 +54,21 @@ class Dictee:
                              and getattr(self.seance, "en_cours", False)),
             "reunion": self.reunion,
             "erreur": self.erreur,
+            # Le moteur vocal figure dans la meme liste que les modeles :
+            # pour l'utilisateur, c'est un seul telechargement et un seul
+            # bouton. Qu'une partie soit du code et l'autre des donnees ne
+            # le regarde pas.
             "modeles": [
+                {"nom": r.nom, "role": r.role, "taille": r.taille,
+                 "installe": bibliotheques.installee(r)}
+                for r in bibliotheques.TOUTES
+            ] + [
                 {"nom": m.nom, "role": m.role, "taille": m.taille,
                  "installe": modeles.installe(m)}
                 for m in modeles.TOUS
             ],
-            "poids_installe": modeles.poids_installe(),
+            "poids_installe": (modeles.poids_installe()
+                               + bibliotheques.poids_installe()),
             "tours": self.tours(),
             "participants": (self.transcription.participants
                              if self.transcription else []),
@@ -67,10 +76,29 @@ class Dictee:
 
     def installer(self, pour_reunion: bool = True,
                   avancement=None) -> dict:
-        """Telecharge ce qui manque. Rend ce qui s'est passe."""
+        """Telecharge ce qui manque. Rend ce qui s'est passe.
+
+        Le moteur vocal d'abord, les modeles ensuite : c'est l'ordre dans
+        lequel ils servent, et si le premier echoue les seconds ne
+        serviraient a rien.
+        """
+        roues = bibliotheques.manquantes()
         manquants = modeles.manquants(reunion=pour_reunion)
-        if not manquants:
+        if not roues and not manquants:
             return {"ok": True, "message": "Tout est déjà installé."}
+
+        for roue in roues:
+            try:
+                bibliotheques.telecharger(roue, avancement)
+            except bibliotheques.BibliothequeIntrouvable as erreur:
+                self._noter(str(erreur))
+                return {"ok": False, "erreur": str(erreur)}
+            except Exception as erreur:            # noqa: BLE001
+                self._noter(f"{roue.nom} : {erreur}")
+                return {"ok": False, "erreur":
+                        f"« {roue.nom} » n'a pas pu être installé : "
+                        f"{erreur}"}
+
         for modele in manquants:
             try:
                 modeles.telecharger(modele, avancement)
@@ -82,7 +110,7 @@ class Dictee:
                 return {"ok": False, "erreur":
                         f"Le modèle « {modele.nom} » n'a pas pu être "
                         f"installé : {erreur}"}
-        return {"ok": True, "message": "Les modèles sont installés."}
+        return {"ok": True, "message": "Tout est installé."}
 
     # -- la seance ----------------------------------------------------------
 
@@ -93,6 +121,10 @@ class Dictee:
             if self.seance is not None and self.seance.en_cours:
                 return {"ok": False, "erreur": "Une transcription est déjà "
                                                "en cours."}
+            if bibliotheques.manquantes():
+                return {"ok": False,
+                        "erreur": "Le moteur vocal n'est pas encore "
+                                  "installé."}
             manquants = modeles.manquants(reunion=reunion)
             if manquants:
                 noms = ", ".join(m.nom for m in manquants)
@@ -187,13 +219,20 @@ class Dictee:
 
 
 def _bibliotheques_presentes() -> dict:
-    """Ce qui est compile dans cette installation de Papote.
+    """Ce qui manque et qu'aucun bouton ne peut reparer.
 
-    Lance depuis les sources, `vosk` et `sounddevice` peuvent manquer. La
-    page le dit au lieu d'offrir un bouton qui echouerait.
+    `vosk` n'y figure pas, et c'est le coeur de l'affaire : il se telecharge
+    au premier usage, donc son absence est **normale** avant. La page se
+    servait pourtant de cette liste pour cacher le bouton d'installation —
+    si bien qu'un moteur manquant rendait son propre telechargement
+    inatteignable.
+
+    Ne reste ici que ce qui est embarque. `sounddevice` absent, c'est qu'on
+    tourne depuis les sources sans avoir installe les dependances, et aucun
+    bouton n'y changera rien.
     """
     etat = {}
-    for nom in ("vosk", "sounddevice"):
+    for nom in ("sounddevice",):
         try:
             __import__(nom)
             etat[nom] = True
