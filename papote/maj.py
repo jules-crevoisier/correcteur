@@ -99,35 +99,145 @@ def dossier() -> Path:
 # Interroger GitHub
 # ---------------------------------------------------------------------------
 
+# La derniere reponse de GitHub, avec son ETag. Elle ne contient qu'un
+# numero de version et une adresse de telechargement — rien qui vienne de
+# l'utilisateur.
+CACHE = "derniere_version.json"
+
+
+def _chemin_cache() -> Path:
+    from .config import dossier_config
+
+    return dossier_config() / CACHE
+
+
+def _cache_lu() -> dict:
+    """La reponse mise de cote, ou rien. Ne leve jamais."""
+    try:
+        with _chemin_cache().open(encoding="utf-8") as f:
+            donnees = json.load(f)
+    except (OSError, ValueError):
+        return {}
+    return donnees if isinstance(donnees, dict) else {}
+
+
+def _cache_ecrit(etag: str, corps: str) -> None:
+    """Met la reponse de cote. Un echec d'ecriture ne coute qu'une demande."""
+    if not etag:
+        return
+    try:
+        chemin = _chemin_cache()
+        chemin.parent.mkdir(parents=True, exist_ok=True)
+        with chemin.open("w", encoding="utf-8") as f:
+            json.dump({"etag": etag, "corps": corps}, f)
+    except OSError:
+        pass
+
+
+def _attente_avant_nouvel_essai(entetes) -> str:
+    """« dans 12 minutes », lu dans l'en-tete que GitHub renvoie avec le 403.
+
+    Dire « reessayez plus tard » sans dire quand, c'est faire recliquer —
+    et chaque clic creuse un peu plus le trou.
+    """
+    import time
+
+    try:
+        reprise = int(entetes.get("X-RateLimit-Reset") or 0)
+    except (TypeError, ValueError):
+        return ""
+    minutes = max(0, round((reprise - time.time()) / 60))
+    if reprise <= 0 or minutes > 120:
+        return ""
+    if minutes < 1:
+        return " Réessayez dans une minute."
+    if minutes == 1:
+        return " Réessayez dans une minute."
+    return f" Réessayez dans {minutes} minutes."
+
+
+def _expliquer(erreur: urllib.error.HTTPError) -> str:
+    """Ce que le serveur a refusé, dit en francais.
+
+    Le message brut partait tel quel dans une notification :
+
+        Vérification impossible : serveur injoignable :
+        HTTP Error 403: rate limit exceeded
+
+    Trois choses fausses a la fois. Le serveur n'etait pas injoignable — il
+    a repondu, et vite. « rate limit exceeded » est de l'anglais dans un
+    produit qui n'en dit pas un mot ailleurs. Et rien n'indiquait quoi
+    faire, alors que la reponse le disait.
+    """
+    if erreur.code in (403, 429):
+        entetes = getattr(erreur, "headers", None) or {}
+        if str(entetes.get("X-RateLimit-Remaining")) == "0" \
+                or "rate limit" in str(erreur.reason).lower():
+            return ("GitHub limite le nombre de vérifications par heure, et "
+                    "la limite est atteinte."
+                    + _attente_avant_nouvel_essai(entetes))
+        return "GitHub a refusé la demande."
+    if erreur.code == 404:
+        return "Aucune version publiée n'a été trouvée."
+    if erreur.code >= 500:
+        return "GitHub est en panne, et ce n'est pas de votre côté."
+    return f"GitHub a répondu {erreur.code}."
+
+
 def derniere_version() -> Version:
-    """La derniere version publiee. Leve MiseAJourImpossible si on ne sait pas."""
-    requete = urllib.request.Request(
-        ADRESSE,
-        headers={
-            "Accept": "application/vnd.github+json",
-            "User-Agent": f"Papote/{__version__}",
-        },
-    )
+    """La derniere version publiee. Leve MiseAJourImpossible si on ne sait pas.
+
+    La reponse est mise de cote avec son ETag. GitHub n'accorde que soixante
+    demandes par heure a qui ne s'annonce pas, et Papote n'a pas de compte a
+    lui donner ; mais une demande conditionnelle a laquelle il repond « rien
+    n'a change » ne compte pas dans ce quota. Verifier dix fois de suite ne
+    coute donc qu'une seule demande.
+    """
+    entetes = {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": f"Papote/{__version__}",
+    }
+    cache = _cache_lu()
+    if cache.get("etag"):
+        entetes["If-None-Match"] = cache["etag"]
+
+    requete = urllib.request.Request(ADRESSE, headers=entetes)
     try:
         with urllib.request.urlopen(requete, timeout=DELAI) as reponse:
-            donnees = json.loads(reponse.read().decode("utf-8"))
-    except (urllib.error.URLError, TimeoutError, OSError, ValueError) as e:
-        raise MiseAJourImpossible(f"serveur injoignable : {e}") from e
+            corps = reponse.read().decode("utf-8")
+            etag = reponse.headers.get("ETag") or ""
+        donnees = json.loads(corps)
+        _cache_ecrit(etag, corps)
+    except urllib.error.HTTPError as e:
+        if e.code == 304 and cache.get("corps"):
+            # « Rien n'a change » : la reponse d'hier fait l'affaire, et
+            # celle-ci n'a rien coute.
+            donnees = json.loads(cache["corps"])
+        else:
+            raise MiseAJourImpossible(_expliquer(e)) from e
+    except (urllib.error.URLError, TimeoutError, OSError) as e:
+        raise MiseAJourImpossible(
+            "Impossible de joindre GitHub. Vérifiez votre connexion.") from e
+    except ValueError as e:
+        raise MiseAJourImpossible("La réponse de GitHub est illisible.") from e
 
     numero = str(donnees.get("tag_name") or "").strip()
     if not numero:
-        raise MiseAJourImpossible("la derniere version n'a pas de numero")
+        raise MiseAJourImpossible("La dernière version publiée n'a pas de "
+                                  "numéro.")
 
     for piece in donnees.get("assets") or []:
         if piece.get("name") != NOM_ATTENDU:
             continue
         adresse = str(piece.get("browser_download_url") or "")
         if not adresse.startswith("https://"):
-            raise MiseAJourImpossible("adresse de telechargement inattendue")
+            raise MiseAJourImpossible("L'adresse de téléchargement n'est "
+                                      "pas celle attendue.")
         empreinte = str(piece.get("digest") or "") or None
         return Version(numero, adresse, empreinte)
 
-    raise MiseAJourImpossible(f"aucun {NOM_ATTENDU} dans la version {numero}")
+    raise MiseAJourImpossible(f"La version {numero} ne contient pas de "
+                              f"{NOM_ATTENDU}.")
 
 
 def disponible() -> Version | None:

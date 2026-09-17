@@ -31,11 +31,28 @@ def publication(tag="v1.0.20", nom="Papote.exe",
 
 
 @pytest.fixture
-def github(monkeypatch):
-    """Remplace les appels reseau par des reponses toutes faites."""
+def github(monkeypatch, tmp_path):
+    """Remplace les appels reseau par des reponses toutes faites.
+
+    Le cache des reponses est detourne vers un dossier jetable : sans cela
+    les tests ecriraient dans la vraie configuration de la machine, et
+    liraient l'ETag laisse par le test precedent.
+    """
+    monkeypatch.setattr(maj, "_chemin_cache",
+                        lambda: tmp_path / "derniere_version.json")
     reponses = {"json": publication(), "fichier": b"MZ nouvel executable"}
 
     class Reponse(io.BytesIO):
+        """Une reponse HTTP de doublure.
+
+        Elle porte des en-tetes depuis que la verification est
+        conditionnelle : c'est l'ETag qui permet a GitHub de repondre
+        « rien n'a change », et une reponse sans en-tetes ne ressemblerait
+        plus a ce que le module recoit vraiment.
+        """
+
+        headers = {"ETag": '"abc123"'}
+
         def __enter__(self): return self
         def __exit__(self, *_): self.close()
 
@@ -248,3 +265,122 @@ def test_la_mise_en_place_relance_avec_un_environnement_propre(installe, tmp_pat
     _commande, options = lancements[0]
     assert "_MEIPASS2" not in options["env"]
 
+
+
+
+# -- ce que le serveur refuse, dit en francais --------------------------------
+#
+# Le message brut partait tel quel dans une notification Windows :
+#
+#     Vérification impossible : serveur injoignable :
+#     HTTP Error 403: rate limit exceeded
+#
+# Le serveur n'etait pas injoignable — il a repondu, et vite. « rate limit
+# exceeded » est de l'anglais dans un produit qui n'en dit pas un mot
+# ailleurs. Et rien n'indiquait quoi faire, alors que la reponse le disait.
+
+def _refus(code, raison, **entetes):
+    import email.message
+
+    message = email.message.Message()
+    for cle, valeur in entetes.items():
+        message[cle.replace("_", "-")] = valeur
+    return maj.urllib.error.HTTPError("u", code, raison, message,
+                                      io.BytesIO(b""))
+
+
+@pytest.mark.parametrize("erreur,attendu", [
+    (_refus(403, "rate limit exceeded", X_RateLimit_Remaining="0"),
+     "GitHub limite le nombre de vérifications par heure"),
+    (_refus(429, "Too Many Requests", X_RateLimit_Remaining="0"),
+     "GitHub limite le nombre de vérifications par heure"),
+    (_refus(403, "Forbidden"), "GitHub a refusé la demande."),
+    (_refus(404, "Not Found"), "Aucune version publiée"),
+    (_refus(503, "Service Unavailable"), "GitHub est en panne"),
+    (_refus(418, "I'm a teapot"), "GitHub a répondu 418."),
+])
+def test_le_refus_du_serveur_se_dit_en_francais(erreur, attendu):
+    message = maj._expliquer(erreur)
+    assert attendu in message
+    assert "rate limit" not in message
+    assert "HTTP Error" not in message
+
+
+def test_la_limite_dit_quand_reessayer():
+    """Dire « plus tard » sans dire quand, c'est faire recliquer."""
+    import time
+
+    erreur = _refus(403, "rate limit exceeded", X_RateLimit_Remaining="0",
+                    X_RateLimit_Reset=str(int(time.time()) + 12 * 60))
+    assert "12 minutes" in maj._expliquer(erreur)
+
+
+def test_une_heure_de_reprise_absurde_est_ignoree():
+    """Une horloge decalee ne doit pas annoncer « dans 4000 minutes »."""
+    erreur = _refus(403, "rate limit exceeded", X_RateLimit_Remaining="0",
+                    X_RateLimit_Reset="99999999999")
+    assert "Réessayez" not in maj._expliquer(erreur)
+
+
+def test_le_message_ne_parle_plus_de_serveur_injoignable(monkeypatch, tmp_path):
+    """Un 403 n'est pas une panne de reseau, et ne doit pas le dire."""
+    monkeypatch.setattr(maj, "_chemin_cache", lambda: tmp_path / "c.json")
+
+    def refuser(*_a, **_k):
+        raise _refus(403, "rate limit exceeded", X_RateLimit_Remaining="0")
+
+    monkeypatch.setattr(maj.urllib.request, "urlopen", refuser)
+    with pytest.raises(maj.MiseAJourImpossible) as capture:
+        maj.derniere_version()
+    assert "injoignable" not in str(capture.value)
+
+
+# -- la demande conditionnelle ------------------------------------------------
+#
+# GitHub n'accorde que soixante demandes par heure a qui ne s'annonce pas.
+# Une demande a laquelle il repond « rien n'a change » ne compte pas dans ce
+# quota : verifier dix fois de suite ne doit donc couter qu'une demande.
+
+def test_l_etag_est_renvoye_a_la_demande_suivante(github):
+    maj.derniere_version()
+
+    envoyees = []
+
+    def capturer(requete, timeout=None):
+        envoyees.append(dict(requete.headers))
+        raise _refus(304, "Not Modified")
+
+    monkey = pytest.MonkeyPatch()
+    monkey.setattr(maj.urllib.request, "urlopen", capturer)
+    try:
+        version = maj.derniere_version()
+    finally:
+        monkey.undo()
+
+    assert envoyees and "If-none-match" in envoyees[0]
+    # Et la reponse mise de cote fait l'affaire.
+    assert version.numero == "v1.0.20"
+
+
+def test_sans_cache_un_304_reste_une_erreur(monkeypatch, tmp_path):
+    """Repondre « rien n'a change » sans qu'on ait rien : on ne devine pas."""
+    monkeypatch.setattr(maj, "_chemin_cache", lambda: tmp_path / "vide.json")
+
+    def refuser(*_a, **_k):
+        raise _refus(304, "Not Modified")
+
+    monkeypatch.setattr(maj.urllib.request, "urlopen", refuser)
+    with pytest.raises(maj.MiseAJourImpossible):
+        maj.derniere_version()
+
+
+def test_un_cache_illisible_ne_casse_rien(github, tmp_path):
+    maj._chemin_cache().write_text("{ pas du json", encoding="utf-8")
+    assert maj.derniere_version().numero == "v1.0.20"
+
+
+def test_le_cache_ne_contient_que_la_reponse_de_github(github):
+    maj.derniere_version()
+    garde = json.loads(maj._chemin_cache().read_text(encoding="utf-8"))
+    assert set(garde) == {"etag", "corps"}
+    assert json.loads(garde["corps"])["tag_name"] == "v1.0.20"

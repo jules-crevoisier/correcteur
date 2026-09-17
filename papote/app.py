@@ -594,9 +594,15 @@ class Application:
         try:
             version = maj.disponible()
         except maj.MiseAJourImpossible as e:
-            self.journal(f"Vérification des mises à jour impossible : {e}")
+            # Le journal garde la cause technique ; la notification, elle, ne
+            # montre que la phrase ecrite pour etre lue. « Vérification
+            # impossible : serveur injoignable : HTTP Error 403: rate limit
+            # exceeded » disait trois fois la meme chose, dont deux en
+            # anglais, et ne disait pas quoi faire.
+            self.journal(f"Mise à jour : {e}"
+                         + (f" ({e.__cause__!r})" if e.__cause__ else ""))
             if prevenir_si_a_jour:
-                self.notifier("Mise à jour", f"Vérification impossible : {e}")
+                self.notifier("Mise à jour", str(e))
             return None
 
         if version is None:
