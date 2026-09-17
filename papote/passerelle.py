@@ -43,6 +43,8 @@ DESCRIPTIONS = {
     "journal.log": "Ce qui s'est mal passé. La règle et les longueurs, "
                    "jamais le texte.",
     "papote.verrou": "Un fichier vide, pour qu'une seule Papote tourne.",
+    "derniere_version.json": "La dernière réponse de GitHub sur les mises à "
+                             "jour. Un numéro de version, rien de vous.",
 }
 
 
@@ -455,13 +457,13 @@ class Passerelle:
         try:
             version = maj.disponible()
         except maj.MiseAJourImpossible as e:
-            return {"erreur": f"Vérification impossible : {e}"}
+            return {"erreur": str(e)}
         if version is None:
             return {"message": "Vous êtes déjà à jour.", "maj": self.etat_maj()}
         try:
             maj.installer_maintenant(version)
         except maj.MiseAJourImpossible as e:
-            return {"erreur": f"Téléchargement impossible : {e}"}
+            return {"erreur": f"Téléchargement impossible. {e}"}
         return {"message": f"Version {version} téléchargée.",
                 "maj": self.etat_maj()}
 
