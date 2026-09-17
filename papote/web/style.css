@@ -871,3 +871,32 @@ input.champ[type="number"] { width: 78px; text-align: right; }
   font-size: 12px;
   white-space: nowrap;
 }
+
+
+/* L'attente d'un traitement qui ne rend pas la main tout de suite. Le rouet
+   tourne lentement : vite, il donne l'impression que la machine peine. */
+.attente {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--texte-doux);
+  font-size: 13px;
+}
+
+.rouet {
+  width: 13px;
+  height: 13px;
+  border: 2px solid var(--trait-net);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: tourner 0.9s linear infinite;
+}
+
+@keyframes tourner { to { transform: rotate(360deg); } }
+
+/* Immobile pour qui a demandé moins de mouvement : la couleur suffit à dire
+   qu'il se passe quelque chose. */
+@media (prefers-reduced-motion: reduce) {
+  .rouet { animation: none; }
+}
+

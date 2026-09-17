@@ -200,6 +200,12 @@
             <button class="bouton danger" id="dicter-arreter" hidden>
               Arrêter
             </button>
+            <!-- Le moteur charge quarante mégaoctets avant que le micro
+                 ne s'ouvre. Sans ce témoin, le bouton semble mort. -->
+            <span class="attente" id="dictee-demarrage" hidden>
+              <span class="rouet" aria-hidden="true"></span>
+              Le moteur se charge…
+            </span>
             <span class="pousse"></span>
             <span class="compteur" id="dictee-etat"></span>
           </div>

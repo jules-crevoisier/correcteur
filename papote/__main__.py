@@ -200,7 +200,11 @@ def _prendre_le_verrou(app):
     try:
         verrou.prendre()
     except instance.Occupee:
-        message = "Papote tourne déjà. Regardez près de l'horloge."
+        # Windows replie les icones dans un tiroir : dire « regardez pres
+        # de l'horloge » envoie chercher quelque chose qui n'y est pas
+        # forcement.
+        message = ("Papote tourne déjà. Son icône est près de l'horloge, "
+                   "peut-être dans le tiroir des icônes masquées.")
         print(message, file=sys.stderr)
         try:
             app.notifier("Papote est déjà lancé", message)
