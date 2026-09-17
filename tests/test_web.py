@@ -422,3 +422,43 @@ def test_la_notification_n_envoie_plus_chercher_l_icone(script):
         ligne for ligne in source.splitlines()
         if not ligne.strip().startswith("#"))
     assert "Cliquez l'icône Papote" not in sans_commentaires
+
+
+# -- le choix du modele de dictee -------------------------------------------
+
+def test_le_modele_se_choisit_avant_le_telechargement(page, script):
+    """Revenir dessus après coup coûte un deuxième gigaoctet et demi."""
+    assert 'id="modele-dictee"' in page
+    assert "MODELES_DE_LANGUE" in script
+    assert "montrerChoixDuModele" in script
+
+
+def test_le_choix_reutilise_le_controle_segmente(script):
+    """Il en existait déjà un : en écrire un second les ferait diverger."""
+    debut = script.index("function montrerChoixDuModele")
+    corps = script[debut:debut + 400]
+    assert "segments(" in corps
+
+
+def test_le_bouton_annonce_ce_qu_il_va_chercher(script):
+    """Un gigaoctet et demi ne se télécharge pas par surprise."""
+    assert '"Installer (" + poids(reste)' in script
+
+
+@pytest.mark.parametrize("octets,attendu", [
+    (512, "512 o"),
+    (41_000_000, "39 Mo"),
+    (1_400_000_000, "1,3 Go"),
+])
+def test_les_poids_se_lisent_en_francais(script, octets, attendu):
+    """« 1347.5 Mo » demande une conversion de tête, et un point décimal
+    n'est pas français."""
+    assert "function poids(" in script
+    assert 'replace(".", ",")' in script
+
+
+def test_le_modele_par_defaut_est_le_precis(script):
+    """Un outil qui se trompe ne sert à rien ; l'espace disque se récupère."""
+    debut = script.index("const MODELES_DE_LANGUE")
+    assert script[debut:debut + 120].index('"precis"') < \
+        script[debut:debut + 400].index('"rapide"')

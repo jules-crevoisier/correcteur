@@ -37,6 +37,11 @@ class Dictee:
 
     fabriquer_correcteur: object = None
     journal: object = None
+    # Rend le modele de langue voulu — « rapide » ou « precis ». C'est une
+    # fonction, pas une valeur : le reglage change pendant que Papote
+    # tourne, et la relire a chaque fois evite de dicter avec l'ancien
+    # jusqu'au redemarrage.
+    lire_config: object = None
 
     transcription: Transcription | None = None
     seance: object = None
@@ -45,6 +50,20 @@ class Dictee:
     _verrou: threading.Lock = field(default_factory=threading.Lock)
 
     # -- ce que la fenetre demande avant de commencer -----------------------
+
+    @property
+    def choix_de_langue(self) -> str:
+        """Le modele de langue voulu, lu a chaque fois.
+
+        Il se regle pendant que Papote tourne : le retenir a la
+        construction ferait dicter avec l'ancien jusqu'au redemarrage.
+        """
+        if self.lire_config is None:
+            return modeles.LANGUE_PAR_DEFAUT
+        try:
+            return str(self.lire_config() or modeles.LANGUE_PAR_DEFAUT)
+        except Exception:                          # noqa: BLE001
+            return modeles.LANGUE_PAR_DEFAUT
 
     def etat(self) -> dict:
         """De quoi dessiner la page, a tout moment."""
@@ -65,8 +84,9 @@ class Dictee:
             ] + [
                 {"nom": m.nom, "role": m.role, "taille": m.taille,
                  "installe": modeles.installe(m)}
-                for m in modeles.TOUS
+                for m in (modeles.langue(self.choix_de_langue), modeles.VOIX)
             ],
+            "modele_langue": self.choix_de_langue,
             "poids_installe": (modeles.poids_installe()
                                + bibliotheques.poids_installe()),
             "tours": self.tours(),
@@ -83,7 +103,8 @@ class Dictee:
         serviraient a rien.
         """
         roues = bibliotheques.manquantes()
-        manquants = modeles.manquants(reunion=pour_reunion)
+        manquants = modeles.manquants(reunion=pour_reunion,
+                                      choix=self.choix_de_langue)
         if not roues and not manquants:
             return {"ok": True, "message": "Tout est déjà installé."}
 
@@ -125,7 +146,8 @@ class Dictee:
                 return {"ok": False,
                         "erreur": "Le moteur vocal n'est pas encore "
                                   "installé."}
-            manquants = modeles.manquants(reunion=reunion)
+            manquants = modeles.manquants(reunion=reunion,
+                                          choix=self.choix_de_langue)
             if manquants:
                 noms = ", ".join(m.nom for m in manquants)
                 return {"ok": False, "modeles_manquants": True,
@@ -140,7 +162,7 @@ class Dictee:
         from .audio import Micro, MoteurVocal, Seance
 
         moteur = MoteurVocal(
-            modeles.chemin(modeles.LANGUE),
+            modeles.chemin(modeles.langue(self.choix_de_langue)),
             modeles.chemin(modeles.VOIX) if reunion else None,
         )
         micro = Micro(peripherique, boucle=capter_les_autres)

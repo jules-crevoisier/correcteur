@@ -287,3 +287,28 @@ def test_le_moteur_vocal_figure_parmi_ce_qui_s_installe(passerelle):
 def test_ce_qui_manque_vraiment_reste_signale(passerelle):
     """« sounddevice » est embarqué : s'il manque, aucun bouton n'y peut rien."""
     assert "sounddevice" in passerelle.etat_dictee().get("disponible", {})
+
+
+# -- le modele de dictee -----------------------------------------------------
+
+def test_le_modele_de_dictee_se_regle(passerelle):
+    assert passerelle.demarrer()["reglages"]["modele_dictee"] == "precis"
+    passerelle.regler("modele_dictee", "rapide")
+    assert passerelle.demarrer()["reglages"]["modele_dictee"] == "rapide"
+
+
+def test_la_page_suit_le_modele_choisi(passerelle):
+    """Le réglage change pendant que Papote tourne : il se relit à chaque fois."""
+    passerelle.regler("modele_dictee", "rapide")
+    noms = [m["nom"] for m in passerelle.etat_dictee()["modeles"]]
+    assert "vosk-model-small-fr-0.22" in noms
+
+    passerelle.regler("modele_dictee", "precis")
+    noms = [m["nom"] for m in passerelle.etat_dictee()["modeles"]]
+    assert "vosk-model-fr-0.22" in noms
+
+
+def test_l_autre_modele_ne_manque_pas(passerelle):
+    """Seul le modèle choisi compte : l'autre peut rester absent."""
+    etat = passerelle.etat_dictee()
+    assert len([m for m in etat["modeles"] if "fr" in m["nom"]]) == 1
