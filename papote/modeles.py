@@ -47,12 +47,38 @@ class Modele:
         return BASE + self.archive
 
 
-LANGUE = Modele("vosk-model-small-fr-0.22", "vosk-model-small-fr-0.22.zip",
-                41_000_000, "entendre le français")
+# Deux modeles de langue, et le choix appartient a celui qui dicte.
+#
+# Le petit est concu pour les telephones et les cartes a un processeur. Il
+# tient en quarante megaoctets, se charge en une seconde — et il se trompe.
+# C'etait le seul propose, et « les mots sont faux » est arrive tout de
+# suite : sur de la parole reelle, un modele de cette taille rend une
+# bouillie de mots francais plausibles.
+#
+# Le grand est celui qu'on met sur un serveur. Il pese trente-cinq fois plus
+# et demande davantage de memoire, mais il entend ce qu'on lui dit.
+RAPIDE = Modele("vosk-model-small-fr-0.22", "vosk-model-small-fr-0.22.zip",
+                41_000_000, "entendre le français (rapide)")
+PRECIS = Modele("vosk-model-fr-0.22", "vosk-model-fr-0.22.zip",
+                1_400_000_000, "entendre le français (précis)")
 VOIX = Modele("vosk-model-spk-0.4", "vosk-model-spk-0.4.zip",
               13_000_000, "distinguer les voix")
 
-TOUS = (LANGUE, VOIX)
+LANGUES = {"rapide": RAPIDE, "precis": PRECIS}
+LANGUE_PAR_DEFAUT = "precis"
+
+
+def langue(choix: str | None = None) -> Modele:
+    """Le modele de langue a employer.
+
+    Le defaut est le grand : un outil qui se trompe ne sert a rien, et
+    l'espace disque se recupere. Qui prefere la legerete le dit dans les
+    reglages.
+    """
+    return LANGUES.get(choix or LANGUE_PAR_DEFAUT, LANGUES[LANGUE_PAR_DEFAUT])
+
+
+TOUS = (RAPIDE, PRECIS, VOIX)
 
 
 def dossier_modeles() -> Path:
@@ -77,9 +103,15 @@ def installe(modele: Modele) -> bool:
         or (dossier / "mfcc.conf").is_file()
 
 
-def manquants(reunion: bool = False) -> list[Modele]:
-    """Ce qu'il reste a telecharger pour que la fonction marche."""
-    besoin = TOUS if reunion else (LANGUE,)
+def manquants(reunion: bool = False, choix: str | None = None) -> list[Modele]:
+    """Ce qu'il reste a telecharger pour que la fonction marche.
+
+    Seul le modele de langue **choisi** compte : l'autre peut rester absent
+    sans que rien ne manque.
+    """
+    besoin = [langue(choix)]
+    if reunion:
+        besoin.append(VOIX)
     return [m for m in besoin if not installe(m)]
 
 
@@ -131,6 +163,21 @@ def _recuperer(modele, archive: Path, avancement) -> None:
                 recu += len(bloc)
                 if avancement:
                     avancement(recu, total)
+    except urllib.error.HTTPError as erreur:
+        # Un 404 n'est pas une panne de reseau, et le dire ferait chercher
+        # au mauvais endroit. Il veut dire que ce modele n'existe pas a
+        # cette adresse — l'adresse est ecrite dans « modeles.py », et c'est
+        # la qu'il faut aller.
+        if erreur.code == 404:
+            raise ModeleIntrouvable(
+                f"Le modèle « {modele.nom} » n'existe pas à l'adresse "
+                f"attendue ({modele.url}). C'est un défaut de Papote, pas de "
+                f"votre installation."
+            ) from erreur
+        raise ModeleIntrouvable(
+            f"Le serveur des modèles a répondu {erreur.code} pour "
+            f"« {modele.nom} ». Réessayez plus tard."
+        ) from erreur
     except (urllib.error.URLError, OSError, TimeoutError) as erreur:
         raise ModeleIntrouvable(
             f"Le modèle « {modele.nom} » n'a pas pu être téléchargé : "

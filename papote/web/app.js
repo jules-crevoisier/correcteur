@@ -169,7 +169,7 @@ function bascule(actif, surChangement) {
 /* Un contrôle segmenté : plusieurs choix, un seul retenu. Il sert au ton
    comme à la position de la bulle ; les écrire deux fois, c'était les voir
    diverger. */
-function segments(zone, choix, reglage) {
+function segments(zone, choix, reglage, apres) {
   vider(zone);
   choix.forEach((option) => {
     const bouton = creer("button", "segment", option.nom);
@@ -182,6 +182,9 @@ function segments(zone, choix, reglage) {
         autre.setAttribute("aria-pressed", String(autre === bouton));
       });
       repondre(await appeler("regler", reglage, option.cle));
+      // Certains réglages changent ce que la page affiche autour d'eux :
+      // le modèle de dictée change la taille annoncée du téléchargement.
+      if (apres) apres(option.cle);
     });
     zone.appendChild(bouton);
   });
@@ -473,10 +476,19 @@ async function chargerConfidentialite() {
   sinon(liste, "Rien encore : Papote n'a pas eu besoin d'écrire.");
 }
 
+/* Le français met une virgule, et s'arrête au gigaoctet plutôt que
+   d'annoncer « 1347.5 Mo », qu'il faut convertir de tête. */
 function poids(octets) {
   if (octets < 1024) return octets + " o";
   if (octets < 1024 * 1024) return Math.round(octets / 1024) + " Ko";
-  return (octets / (1024 * 1024)).toFixed(1) + " Mo";
+  if (octets < 1024 * 1024 * 1024) {
+    return virgule((octets / (1024 * 1024)).toFixed(0)) + " Mo";
+  }
+  return virgule((octets / (1024 * 1024 * 1024)).toFixed(1)) + " Go";
+}
+
+function virgule(nombre) {
+  return String(nombre).replace(".", ",");
 }
 
 
@@ -882,16 +894,23 @@ function montrerDictee(d) {
       + ". Lancé depuis les sources : « pip install -r requirements.txt ».";
   }
 
+  montrerChoixDuModele(d.modele_langue);
+
   const modeles = d.modeles || [];
   const aInstaller = modeles.filter((m) => !m.installe);
   $("#dictee-installation").hidden = manque.length > 0 || aInstaller.length === 0;
   const liste = vider($("#dictee-modeles"));
   modeles.forEach((m) => {
     const ligne = creer("li", m.installe ? "fait" : null);
-    ligne.textContent = (m.installe ? "✓ " : "· ") + m.role
-      + " — " + Math.round(m.taille / 1e6) + " Mo";
+    ligne.textContent = (m.installe ? "✓ " : "· ") + m.role + " — " + poids(m.taille);
     liste.appendChild(ligne);
   });
+
+  // Le bouton annonce ce qu'il va chercher : un gigaoctet et demi ne se
+  // télécharge pas par surprise.
+  const reste = aInstaller.reduce((somme, m) => somme + m.taille, 0);
+  $("#installer-modeles").textContent =
+    reste ? "Installer (" + poids(reste) + ")" : "Installer";
 
   $("#dictee-commandes").hidden = manque.length > 0;
   $("#dicter-demarrer").hidden = d.en_cours;
@@ -939,6 +958,32 @@ function suivreLaDictee(actif) {
   clearInterval(minuterieDictee);
   minuterieDictee = actif ? setInterval(chargerDictee, 1500) : null;
 }
+
+/* Le choix du modèle de langue.
+
+   Le petit est conçu pour les téléphones : sur de la parole réelle il rend
+   une bouillie de mots français plausibles. C'était le seul proposé, et
+   c'est exactement ce qu'on a eu. Le grand pèse trente-cinq fois plus et
+   entend ce qu'on lui dit. */
+const MODELES_DE_LANGUE = [
+  {cle: "precis", nom: "Précis",
+   quoi: "1,4 Go, et il entend ce que vous dites. C'est celui qu'il faut " +
+         "pour une réunion ou une note qu'on relira."},
+  {cle: "rapide", nom: "Rapide",
+   quoi: "41 Mo, se charge en une seconde — mais il se trompe souvent. " +
+         "À réserver aux machines à court d'espace."},
+];
+MODELES_DE_LANGUE.forEach((m) => { m.explication = m.quoi; });
+
+function montrerChoixDuModele(courant) {
+  const choisi = courant || "precis";
+  etat.reglages.modele_dictee = choisi;
+  segments($("#modele-dictee"), MODELES_DE_LANGUE, "modele_dictee",
+           () => chargerDictee());
+  const dit = MODELES_DE_LANGUE.find((m) => m.cle === choisi);
+  $("#modele-dictee-quoi").textContent = dit ? dit.quoi : "";
+}
+
 
 function brancherDictee() {
   $("#installer-modeles").addEventListener("click", async (evenement) => {

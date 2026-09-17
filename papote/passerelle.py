@@ -157,6 +157,7 @@ class Passerelle:
             self._dictee = Dictee(
                 fabriquer_correcteur=lambda: self.app.correcteur,
                 journal=getattr(self.app, "journal", None),
+                lire_config=lambda: self.config.get("modele_dictee"),
             )
         return self._dictee
 
@@ -222,7 +223,7 @@ class Passerelle:
             for cle in [i["cle"] for i in INTERRUPTEURS]
             + [r["cle"] for r in RACCOURCIS]
             + ["registre", "delai_oubli", "position_bulle",
-               "touche_prediction", "delai_copie"]
+               "touche_prediction", "delai_copie", "modele_dictee"]
         }
 
     # -- page « Corriger » --------------------------------------------------

@@ -144,3 +144,31 @@ def test_l_adresse_et_l_empreinte_vont_ensemble():
     assert bib.VOSK.url.endswith(bib.VOSK.fichier)
     assert len(bib.VOSK.empreinte) == 64
     assert bib.VOSK.url.startswith("https://")
+
+
+# -- ce que dit un modele introuvable ----------------------------------------
+
+def test_un_404_designe_le_defaut_plutot_que_la_connexion(monkeypatch,
+                                                          tmp_path):
+    """L'adresse du grand modele n'a pas pu etre verifiee a l'ecriture.
+
+    Si elle est fausse, le message doit envoyer au bon endroit du premier
+    coup — « vérifiez votre connexion » ferait chercher pendant une heure.
+    """
+    import urllib.error
+
+    from papote import config as config_mod, modeles
+
+    monkeypatch.setattr(config_mod, "dossier_config", lambda: tmp_path)
+
+    def introuvable(*_a, **_k):
+        raise urllib.error.HTTPError("u", 404, "Not Found", None,
+                                     io.BytesIO(b""))
+
+    monkeypatch.setattr(modeles.urllib.request, "urlopen", introuvable)
+    with pytest.raises(modeles.ModeleIntrouvable) as capture:
+        modeles.telecharger(modeles.PRECIS)
+    message = str(capture.value)
+    assert "connexion" not in message
+    assert modeles.PRECIS.url in message
+    assert "défaut de Papote" in message

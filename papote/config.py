@@ -60,6 +60,12 @@ DEFAUTS = {
     # Retient les corrections que vous annulez, et finit par s'y plier.
     "apprentissage": True,
 
+    # -- la dictee ----------------------------------------------------------
+    # Quel modele de reconnaissance vocale employer : « precis » (1,4 Go) ou
+    # « rapide » (41 Mo). Le petit est concu pour les telephones et se
+    # trompe beaucoup sur de la parole reelle ; le defaut est donc le grand.
+    "modele_dictee": "precis",
+
     # -- mises a jour -------------------------------------------------------
     # Cherche une nouvelle version au demarrage puis une fois par jour, et la
     # telecharge. Elle prend la place de l'ancienne au demarrage suivant :
