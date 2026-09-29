@@ -308,6 +308,12 @@ class Lexique:
         formes = self.formes(mot)
         if len(formes) != 1 or not formes[0][:1].isupper():
             return None
+        # Le dictionnaire cherche sans tenir compte des accents. Un mot que
+        # l'on a accentue soi-meme et qui ne correspond pas a la graphie
+        # trouvee n'est pas un nom propre oublie : « anné » n'est pas « Anne »
+        # mais « année » mal finie.
+        if sans_accents(mot) != mot and formes[0].lower() != mot.lower():
+            return None
         return formes[0]
 
     def rang(self, mot: str) -> int:
@@ -391,14 +397,17 @@ class Lexique:
         nu = squelette(minuscule)
         trouves: dict[str, int] = {}
 
-        # 1. Meme squelette : il ne manquait que les accents.
-        for forme in self.formes(minuscule):
-            if forme.lower() != minuscule:
-                trouves[forme] = CLASSE_ACCENT
-
         # Un mot accentue ne se corrige qu'en un autre mot accentue :
         # « pasé » peut devenir « passé », jamais « pas ».
         garder_accent = accentue(minuscule)
+
+        # 1. Meme squelette : il ne manquait que les accents. Restituer des
+        #    accents n'est pas en retirer : « anné » n'est pas « Anne », c'est
+        #    « année » a qui il manque une lettre.
+        for forme in self.formes(minuscule):
+            if forme.lower() != minuscule and not (
+                    garder_accent and not accentue(forme)):
+                trouves[forme] = CLASSE_ACCENT
 
         # Sur un mot de trois lettres, seules les lettres interverties sont
         # recevables : « qeu » vaut « que », jamais « qu » ni « peu ».

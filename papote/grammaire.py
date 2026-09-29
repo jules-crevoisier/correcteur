@@ -396,8 +396,14 @@ def sujet_avant(ctx: "Contexte", i: int) -> str:
     l'ecrire dans chaque regle.
     """
     precedent = ctx.noyau(i - 1)
-    if precedent in PRONOMS_INTERCALES and ctx.noyau(i - 2) in PRONOMS_SUJETS:
-        return ctx.noyau(i - 2)
+    # « je te le dis » : jusqu'a trois pronoms se glissent avant le verbe.
+    recul = 1
+    while (ctx.noyau(i - recul) in PRONOMS_INTERCALES and recul < 4
+           and ctx.noyau(i - recul - 1) in PRONOMS_INTERCALES):
+        recul += 1
+    if (ctx.noyau(i - recul) in PRONOMS_INTERCALES
+            and ctx.noyau(i - recul - 1) in PRONOMS_SUJETS):
+        return ctx.noyau(i - recul - 1)
     return precedent
 
 
@@ -419,6 +425,10 @@ def _sujet_avant_le_pronom(ctx: "Contexte", i: int) -> bool:
             return True
         noyau = ctx.noyau(i - recul)
         if mot in PRONOMS_SUJETS or mot in DETERMINANTS:
+            return True
+        # « ça vous fait mal », « cela nous concerne », « ce qui vous plait » :
+        # ces sujets-la ne sont pas des pronoms personnels.
+        if mot in ("ça", "cela", "ceci", "qui", "que", "ce"):
             return True
         if ctx.morphologie.nom(noyau):
             return True
@@ -1400,10 +1410,16 @@ MOTS_INTERROGATIFS = {"qui", "où", "quand", "comment", "pourquoi", "combien",
 
 @regle("EST_CE", "« est-ce » s'écrit avec un trait d'union")
 def _est_ce(ctx: Contexte, i: int):
-    if ctx.mot(i) != "est" or ctx.mot(i + 1) != "ce" or ctx.separateur(i) != " ":
+    # « qu'est ce que » : l'elision est collee a « est », c'est le noyau
+    # qu'il faut lire.
+    if ctx.noyau(i) != "est" or ctx.mot(i + 1) != "ce" \
+            or ctx.separateur(i) != " ":
+        return None
+    if ctx.elision(i) not in ("", "qu'"):
         return None
     interroge = (
         i == 0
+        or ctx.elision(i) == "qu'"
         or ctx.mot(i - 1) in MOTS_INTERROGATIFS
         or ctx.elision(i - 1) == "qu'"
         or ctx.mot(i + 2) == "que"
@@ -1411,7 +1427,7 @@ def _est_ce(ctx: Contexte, i: int):
     )
     if not interroge:
         return None
-    return (appliquer_casse(ctx.brut(i), "est-ce"), 2)
+    return (appliquer_casse(ctx.brut(i), ctx.elision(i) + "est-ce"), 2)
 
 
 def _auxiliaire_avant(ctx: Contexte, i: int) -> bool:
@@ -1912,6 +1928,15 @@ def _accord_determinant_nom(ctx: Contexte, i: int):
     mot = ctx.mot(i)
     determinant = ctx.mot(i - 1)
 
+    # « le onze novembre », « le 14 juillet » : une date ne prend pas de « s »
+    # parce qu'un nombre la precede.
+    if mot in MOIS:
+        return None
+
+    # « il ces passé » : « ces » est « s'est », il n'y a pas de nom a accorder.
+    if determinant == "ces" and ctx.mot(i - 2) in ("il", "elle", "on"):
+        return None
+
     if determinant in DETERMINANTS_PLURIELS | NOMBRES_PLURIELS:
         pass
     elif determinant == "les" and ctx.mot(i - 2) not in PRONOMS_SUJETS:
@@ -1937,6 +1962,10 @@ def _accord_determinant_nom(ctx: Contexte, i: int):
         if ctx.connait(pluriel):
             return appliquer_casse(ctx.brut(i), pluriel)
     return None
+
+
+MOIS = {"janvier", "février", "mars", "avril", "mai", "juin", "juillet",
+        "août", "septembre", "octobre", "novembre", "décembre"}
 
 
 # Les seuls adjectifs qui se placent *avant* le nom en francais. La liste
@@ -2774,3 +2803,8 @@ def _accord_determinant_singulier(ctx: Contexte, i: int):
     if rang_singulier >= rang_pluriel:
         return None
     return appliquer_casse(ctx.brut(i), singulier)
+
+
+# Les regles de tous les jours vivent a part ; elles se declarent a
+# l'import, apres celles-ci, et passent donc apres elles.
+from . import grammaire_suite  # noqa: E402,F401

@@ -39,6 +39,9 @@ from .politique import PARLE, SOUTENU
 RESTES_IMPOSSIBLES = {
     "st", "se", "ce", "de", "le", "la", "les", "me", "te", "ne", "je",
     "que", "des", "du", "au", "aux", "ma", "ta", "sa", "mes", "tes", "ses",
+    # Des mots qui commencent par une voyelle sans jamais suivre une
+    # elision : « jou » devenait « j'ou ».
+    "ou", "où", "et", "oui", "ok",
 }
 
 # Un mot colle plus court que cela ne vaut pas la peine d'etre coupe : la
@@ -92,6 +95,13 @@ class Correction:
 def _normaliser_mot(mot: str) -> str:
     """Pour comparer un mot au lexique protege."""
     return sans_accents(mot.strip(".,;:!?…\"'«»()[]{}-–—*_~")).lower()
+
+
+def _perd_des_accents(mot: str, candidat: str) -> bool:
+    """Le candidat a-t-il moins de lettres accentuees que le mot ecrit ?"""
+    def accentuees(texte: str) -> int:
+        return sum(1 for c in texte if c.isalpha() and not c.isascii())
+    return accentuees(candidat) < accentuees(mot)
 
 
 def _zones_protegees(texte: str) -> list[tuple[int, int]]:
@@ -251,6 +261,10 @@ class Correcteur:
         # oubliee ensuite, la faute de frappe en dernier. « cest » deviendrait
         # « est » si on laissait la distance d'edition passer la premiere.
         accents = self.lexique.suggestion(noyau, classe_max=CLASSE_ACCENT)
+        if accents is not None and _perd_des_accents(noyau, accents):
+            # « anné » n'est pas « Anne » : c'est « année » mal finie. Rendre
+            # ses accents a un mot n'a jamais consiste a lui en retirer.
+            accents = None
         if accents is not None:
             return elision + accents
 
@@ -601,15 +615,16 @@ class Correcteur:
 
     # -- entree publique ----------------------------------------------------
 
-    def corriger(self, texte: str, passes: int = 2,
+    def corriger(self, texte: str, passes: int = 3,
                  mise_en_forme: bool = True,
                  profond: bool = True,
                  fin_ouverte: bool = False) -> tuple[str, list[Correction]]:
         """Corrige `texte` et renvoie (texte_corrige, corrections_appliquees).
 
-        Deux passes par defaut : corriger « ils on manger » en « ils ont
+        Trois passes par defaut : corriger « ils on manger » en « ils ont
         manger » debloque la regle du participe, que la premiere passe ne
-        pouvait pas voir.
+        pouvait pas voir — et « mes parent son la » en demande trois, le
+        pluriel de « parents » permettant « sont », qui permet « là ».
 
         `mise_en_forme` couvre la majuscule de debut de phrase et le point
         final. La correction au fil de la frappe la desactive : une phrase en
