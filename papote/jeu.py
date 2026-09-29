@@ -48,7 +48,16 @@ def _fenetre_plein_ecran() -> bool:
     import ctypes
     from ctypes import wintypes
 
-    user32 = ctypes.windll.user32
+    # Une instance a part : declarer les types des arguments sur la
+    # bibliotheque partagee changerait le comportement des autres modules.
+    user32 = ctypes.WinDLL("user32")
+    user32.GetForegroundWindow.restype = wintypes.HWND
+    user32.GetClassNameW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
+    user32.GetWindowLongW.argtypes = [wintypes.HWND, ctypes.c_int]
+    user32.GetWindowRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT)]
+    user32.MonitorFromWindow.argtypes = [wintypes.HWND, wintypes.DWORD]
+    user32.MonitorFromWindow.restype = wintypes.HANDLE
+    user32.GetMonitorInfoW.argtypes = [wintypes.HANDLE, ctypes.c_void_p]
     fenetre = user32.GetForegroundWindow()
     if not fenetre:
         return False
@@ -75,7 +84,7 @@ def _fenetre_plein_ecran() -> bool:
     ecran = user32.MonitorFromWindow(fenetre, _MONITOR_DEFAULTTONEAREST)
     infos = InfosEcran()
     infos.taille = ctypes.sizeof(InfosEcran)
-    if not ecran or not user32.GetMonitorInfoW(ecran, ctypes.byref(infos)):
+    if not ecran or not user32.GetMonitorInfoW(ecran, ctypes.addressof(infos)):
         return False
 
     e = infos.ecran
