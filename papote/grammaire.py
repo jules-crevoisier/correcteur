@@ -214,10 +214,19 @@ class Contexte:
     """Le texte decoupe, plus les quelques services dont les regles ont besoin."""
 
     def __init__(self, texte: str, jetons: list[Jeton], lexique,
-                 morphologie=None):
+                 morphologie=None, fin_ouverte: bool = False):
         self.texte = texte
         self.jetons = jetons
         self.lexique = lexique
+        # La phrase n'est pas finie : le texte s'arrete la ou les doigts se
+        # sont arretes, pas la ou la phrase s'arrete. Une regle qui a besoin
+        # de ce qui vient *apres* le dernier mot — « c'est la » attend « vie »
+        # — ne peut pas trancher, et se tait. Voir `regard_au_dela`.
+        self.fin_ouverte = fin_ouverte
+        # Vrai des qu'une regle a regarde au-dela du dernier mot. L'analyse le
+        # remet a zero avant chaque regle et jette la proposition de celles
+        # qui ont regarde dans le vide : elles ont decide sur une absence.
+        self.regard_au_dela = False
         # Sans elle, les regles d'accord se taisent : une table vide ne
         # connait aucun mot, et `connait` est la premiere question qu'elles
         # posent.
@@ -230,6 +239,8 @@ class Contexte:
         """Le jeton entier, en minuscules : « C'est » -> « c'est »."""
         if 0 <= i < len(self.jetons):
             return self.jetons[i].texte.lower().replace("’", "'")
+        if i >= len(self.jetons):
+            self.regard_au_dela = True
         return ""
 
     def noyau(self, i: int) -> str:
@@ -241,6 +252,8 @@ class Contexte:
         return separer_clitique(self.mot(i))[0]
 
     def brut(self, i: int) -> str:
+        if i >= len(self.jetons):
+            self.regard_au_dela = True
         return self.jetons[i].texte if 0 <= i < len(self.jetons) else ""
 
     # -- lecture de ce qui separe les mots ----------------------------------
@@ -248,6 +261,7 @@ class Contexte:
     def separateur(self, i: int) -> str:
         """Le texte entre le jeton i et le suivant."""
         if i + 1 >= len(self.jetons):
+            self.regard_au_dela = True
             return self.texte[self.jetons[i].fin:] if 0 <= i < len(self.jetons) else ""
         return self.texte[self.jetons[i].fin:self.jetons[i + 1].debut]
 
@@ -260,6 +274,7 @@ class Contexte:
     def fin_de_segment(self, i: int) -> bool:
         """Le jeton i termine-t-il une phrase ou un membre de phrase ?"""
         if i >= len(self.jetons) - 1:
+            self.regard_au_dela = True
             return True
         return bool(FIN_DE_SEGMENT.match(self.separateur(i)))
 
@@ -2150,9 +2165,16 @@ def _leur_leurs(ctx: Contexte, i: int):
 
 def analyser(texte: str, jetons: list[Jeton], lexique,
              regles_ignorees: set[str] = frozenset(),
-             registre: str = PARLE, morphologie=None) -> list[Suggestion]:
-    """Passe toutes les regles sur le texte et renvoie leurs propositions."""
-    ctx = Contexte(texte, jetons, lexique, morphologie)
+             registre: str = PARLE, morphologie=None,
+             fin_ouverte: bool = False) -> list[Suggestion]:
+    """Passe toutes les regles sur le texte et renvoie leurs propositions.
+
+    `fin_ouverte` dit que le texte peut continuer : les regles qui ont besoin
+    de savoir ce qui suit le dernier mot sont alors ecartees. Sans cela,
+    « c'est la » devenait « c'est là » sous les doigts de quelqu'un qui allait
+    ecrire « la vie ».
+    """
+    ctx = Contexte(texte, jetons, lexique, morphologie, fin_ouverte)
     applicables = [
         r for r in REGLES
         if r.registre == "tous" or (r.registre == SOUTENU and registre == SOUTENU)
@@ -2166,8 +2188,11 @@ def analyser(texte: str, jetons: list[Jeton], lexique,
         for r in applicables:
             if r.nom in regles_ignorees:
                 continue
+            ctx.regard_au_dela = False
             resultat = r.fonction(ctx, i)
             if resultat is None:
+                continue
+            if fin_ouverte and ctx.regard_au_dela:
                 continue
             remplacement, portee = (
                 resultat if isinstance(resultat, tuple) else (resultat, 1)

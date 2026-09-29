@@ -433,7 +433,8 @@ class Correcteur:
 
     # -- une passe ----------------------------------------------------------
 
-    def _passe(self, texte: str, profond: bool = True) -> tuple[str, list[Correction]]:
+    def _passe(self, texte: str, profond: bool = True,
+               fin_ouverte: bool = False) -> tuple[str, list[Correction]]:
         jetons = grammaire.decouper(texte)
         zones = _zones_protegees(texte)
         propositions: list[Correction] = []
@@ -474,7 +475,7 @@ class Correcteur:
         # -- grammaire : elle voit le contexte, elle passe en premier.
         for suggestion in grammaire.analyser(
             texte, jetons, self.lexique, self.regles_ignorees, self.registre,
-            self.morphologie,
+            self.morphologie, fin_ouverte,
         ):
             indices = range(suggestion.index, suggestion.index + suggestion.portee)
             if traites.intersection(indices):
@@ -602,7 +603,8 @@ class Correcteur:
 
     def corriger(self, texte: str, passes: int = 2,
                  mise_en_forme: bool = True,
-                 profond: bool = True) -> tuple[str, list[Correction]]:
+                 profond: bool = True,
+                 fin_ouverte: bool = False) -> tuple[str, list[Correction]]:
         """Corrige `texte` et renvoie (texte_corrige, corrections_appliquees).
 
         Deux passes par defaut : corriger « ils on manger » en « ils ont
@@ -616,6 +618,10 @@ class Correcteur:
 
         `profond` autorise la recherche a deux frappes d'ecart. La frappe la
         desactive egalement : elle coute trop cher pour une touche.
+
+        `fin_ouverte` : le texte s'arrete parce que les doigts se sont
+        arretes, pas parce que la phrase est finie. Les regles qui devraient
+        connaitre le mot suivant s'abstiennent pour le dernier mot.
         """
         if not texte or not texte.strip():
             return texte, []
@@ -628,7 +634,7 @@ class Correcteur:
 
         toutes: list[Correction] = []
         for _ in range(max(1, passes)):
-            corps, corrections = self._passe(corps, profond)
+            corps, corrections = self._passe(corps, profond, fin_ouverte)
             if not corrections:
                 break
             toutes.extend(corrections)

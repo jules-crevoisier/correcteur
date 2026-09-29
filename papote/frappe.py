@@ -51,6 +51,10 @@ SEPARATEURS = " \t\n.,;:!?…\"()[]{}«»/\\|"
 # arriere envoyee dans le second champ, qui n'en contenait que trois.
 FINS_DE_PHRASE = ".!?…\n\t"
 
+# Ceux-la disent ce qui suit le mot : la phrase, ou au moins le membre de
+# phrase, est close. Avec une espace, le mot suivant n'est pas encore ecrit.
+FINS_DE_MEMBRE = ".,;:!?…\n"
+
 # Touches qui deplacent le curseur : ce qui est a l'ecran nous echappe.
 TOUCHES_DE_DEPLACEMENT = {
     "left", "right", "up", "down", "home", "end", "page up", "page down",
@@ -220,8 +224,13 @@ class Frappe:
         # Ni majuscule ni point final — la phrase n'est pas finie — et pas de
         # recherche a deux frappes d'ecart : elle coute deux dixiemes de
         # seconde sur un mot inconnu, ce qui se sentirait sous les doigts.
+        #
+        # Une espace n'annonce pas la fin de la phrase : « c'est la » attend
+        # « vie ». Une virgule ou un point, si — et c'est alors que le
+        # dernier mot peut etre juge sur ce qui le suit.
         corrige, corrections = self.correcteur.corriger(
-            corps, mise_en_forme=False, profond=False)
+            corps, mise_en_forme=False, profond=False,
+            fin_ouverte=separateur not in FINS_DE_MEMBRE)
         if corrige == corps or not corrections:
             return None
 
@@ -326,7 +335,7 @@ class Frappe:
         dernier_mot = self._debut_du_mot_en_cours()
 
         corrige, corrections = self.correcteur.corriger(
-            corps, mise_en_forme=False, profond=True)
+            corps, mise_en_forme=False, profond=True, fin_ouverte=True)
         if corrige == corps or not corrections:
             return None
 
