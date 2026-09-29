@@ -111,6 +111,9 @@ INTERRUPTEURS = (
     {"cle": "prediction", "libelle": "Proposer la suite des mots",
      "explication": "Une bulle dans un coin de l'écran, Tab pour "
                     "accepter."},
+    {"cle": "pause_en_jeu", "libelle": "Me mettre en pause dans les jeux",
+     "explication": "En plein écran, Papote lâche le clavier : aucun retard "
+                    "sur vos touches."},
     {"cle": "apprentissage", "libelle": "Retenir mes habitudes",
      "explication": "Trois annulations sur le même mot, et Papote n'y "
                     "touche plus."},

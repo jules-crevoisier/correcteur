@@ -21,6 +21,12 @@ DEFAUTS = {
     # texte.
     "delai_oubli": 5.0,
 
+    # Pendant une partie (jeu en plein ecran, ou programme liste ci-dessous),
+    # Papote decroche ses crochets clavier et souris : rien ne passe plus par
+    # lui, donc aucun retard sur les touches.
+    "pause_en_jeu": True,
+    "applications_jeux": [],
+
     # Propose la suite du mot en cours, comme un clavier de telephone, dans
     # une bulle posee dans un coin de l'ecran.
     "prediction": True,
