@@ -125,6 +125,21 @@ l'onglet *Applications* laisse compléter la liste.
 Le plus rapide : clic droit sur l'icône → **Ne plus corriger dans…**, qui
 propose le programme où vous veniez d'écrire.
 
+### Il s'efface pendant les jeux
+
+Un programme qui écoute le clavier fait passer chaque touche par lui. Dans un
+jeu, qui lit le clavier à chaque image, ce détour se sent : Papote se retire.
+Dès qu'une fenêtre plein écran sans bordure passe au premier plan, il lâche
+ses crochets clavier et souris — plus rien ne transite par lui —, et les
+reprend quand vous revenez à autre chose. Un jeu fenêtré, ou qu'il ne
+reconnaît pas, se désigne dans `applications_jeux` du fichier de réglages
+(`"applications_jeux": ["eldenring.exe"]`). Le réglage *Me mettre en pause
+dans les jeux* l'éteint.
+
+Les raccourcis globaux, eux, ne passent par aucun crochet : ils sont confiés à
+Windows (`RegisterHotKey`), qui ne prévient Papote que lorsque la combinaison
+est complète. `Ctrl`, `Alt` et les autres touches ne sont plus retardées.
+
 ### Il corrige aussi à la demande
 
 Pour un texte déjà écrit — un message collé, un vieux brouillon :
@@ -221,6 +236,7 @@ soit à la main.
 |---|---|---|
 | Corriger pendant que j'écris | activé | La correction au fil de la frappe |
 | Recoller le texte corrigé | activé | Sinon `Ctrl+Alt+C` se contente du presse-papiers |
+| Me mettre en pause dans les jeux | activé | Plein écran : plus aucun crochet clavier |
 | Notifications | activé | Le résumé des corrections près de l'horloge |
 | Apprendre de mes annulations | activé | Trois refus et il cède |
 | Typographie française | désactivé | `…`, guillemets `« »`, espaces insécables |
@@ -323,6 +339,12 @@ touche qu'il ne sait pas interpréter, un accent circonflexe composé en deux
 touches, une flèche, un clic ailleurs, cinq secondes de silence — et le tampon
 repart de zéro. Une correction manquée ne se voit pas ; une correction
 appliquée au mauvais endroit détruit le texte.
+
+Une espace ne dit pas que la phrase est finie : `c'est la` attend `vie`. Tant
+qu'un mot est le dernier du tampon, les règles qui devraient connaître le mot
+suivant s'abstiennent ; une virgule ou un point les autorise à trancher. Ainsi
+`c'est la vie` reste intact en cours de frappe, et `je suis la.` devient
+`je suis là.`
 
 Rien de ce qui est tapé n'est conservé : le tampon vit en mémoire, quelques
 centaines de caractères, et rien n'en sort — ni fichier, ni réseau. Dès qu'une
