@@ -24,12 +24,21 @@ Le format, tel que le lit « gc_core/py/lang_core/tests_core.py » :
   correcteur qui reecrit la phrase, comme Papote, ne peut pas s'y mesurer.
   Elle est comptee a part, et laissee.
 
+Les suggestions sont celles que Grammalecte fait lui-meme, faute par faute :
+mises bout a bout, elles ne font pas toujours une phrase juste (« en
+{{pleine}} {{foret}} ->> plein|||forêt »). Chaque faute est donc jugee a sa
+place, comme le fait Grammalecte : corrigee si Papote y met l'une des
+suggestions et ne touche a rien d'autre dans la phrase ; laissee s'il n'y
+touche pas ; mal corrigee sinon. L'apostrophe droite et la courbe valent la
+meme lettre.
+
 Ce qui est ecarte, comme pour le banc LanguageTool :
 
 - les options de pure norme : typographie (espaces, guillemets, apostrophe
   typographique, ecriture epicene, nombres, unites), majuscules, virgules,
   OCR, chimie, balisage ; le style (« populaire », pleonasmes, repetitions) ;
-  la validite des dates ;
+  la validite des dates ; et toute faute dont la correction ne change que
+  des espaces, des points ou des majuscules (« O.R. » / « OR ») ;
 - l'option « neg » (« ne » oublie) et, plus largement, toute correction
   attendue qui *ajoute* un « ne », ou le « il » de « il y a », « il faut » :
   c'est du francais parle, que Papote laisse volontairement ;
