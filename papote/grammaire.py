@@ -424,6 +424,10 @@ def sujet_avant(ctx: "Contexte", i: int) -> str:
         recul += 1
     if (ctx.noyau(i - recul) in PRONOMS_INTERCALES
             and ctx.noyau(i - recul - 1) in PRONOMS_SUJETS):
+        # « Peux-tu me dire » : le sujet trouve derriere les pronoms est
+        # lui-meme inverse.
+        if _sujet_inverse(ctx, i - recul - 1):
+            return ""
         return ctx.noyau(i - recul - 1)
     return precedent
 
@@ -496,11 +500,11 @@ PRONOMS_COMPLEMENTS = {
 
 # Formes de la 3e personne employees a tort avec « je » ou « tu ».
 ACCORDS_SUJET = {
-    "je": {"peut": "peux", "veut": "veux", "doit": "dois", "fait": "fais",
+    "je": {"ait": "ai", "peut": "peux", "veut": "veux", "doit": "dois", "fait": "fais",
            "va": "vais", "a": "ai", "est": "suis", "sait": "sais",
            "dit": "dis", "prend": "prends", "met": "mets", "vient": "viens",
            "part": "pars", "sort": "sors", "vaut": "vaux", "voit": "vois"},
-    "tu": {"peut": "peux", "veut": "veux", "doit": "dois", "fait": "fais",
+    "tu": {"ait": "as", "peut": "peux", "veut": "veux", "doit": "dois", "fait": "fais",
            "va": "vas", "a": "as", "est": "es", "sait": "sais",
            "dit": "dis", "prend": "prends", "met": "mets", "vient": "viens",
            "part": "pars", "sort": "sors", "vaut": "vaux", "voit": "vois"},
@@ -575,6 +579,10 @@ def _accord_auxiliaire_nous_vous(ctx: Contexte, i: int):
     """« nous somme » -> « nous sommes », « vous ete » -> « vous êtes »."""
     formes = AUXILIAIRES_NOUS_VOUS.get(ctx.noyau(i - 1))
     if formes is None or ctx.elision(i):
+        return None
+    # « Venez-vous a la fête ? » : le pronom inverse n'est pas sujet de ce
+    # qui suit.
+    if _sujet_inverse(ctx, i - 1):
         return None
     # « il nous a dit », « le prof nous a rendu les copies » : « nous » y
     # est complement, et le verbe a raison.
@@ -713,6 +721,9 @@ def _accord_imparfait(ctx: Contexte, i: int):
     if ctx.elision(i) or mot in FORMES_INTOUCHABLES:
         return None
 
+    if mot == "ait" and sujet in ("je", "tu"):
+        # « je lui ait demandé » : l'auxiliaire avoir, pas un imparfait.
+        return appliquer_casse(ctx.brut(i), "ai" if sujet == "je" else "as")
     if sujet in ("il", "elle", "on") and mot.endswith("ais"):
         accorde = mot[:-3] + "ait"
     elif sujet in ("je", "tu") and mot.endswith("ait"):
@@ -1254,6 +1265,11 @@ def _ou_accent(ctx: Contexte, i: int):
     # qui veut dire « ou pas ? » : seuls les verbes de lieu comptent.
     if ctx.fin_de_segment(i) and ctx.noyau(i - 1) in VERBES_DE_LIEU:
         return appliquer_casse(ctx.brut(i), "où")
+    # « ou se trouve le chalet », « tu sais ou se situe » : le lieu.
+    if ctx.mot(i + 1) == "se" and ctx.mot(i + 2) in (
+            "trouve", "trouvent", "situe", "situent", "cache", "cachent",
+            "passe", "passent", "rangent", "range"):
+        return appliquer_casse(ctx.brut(i), "où")
     # « on dit ou on écrit » : le meme sujet de part et d'autre.
     if ctx.mot(i + 1) in PRONOMS_SUJETS and ctx.mot(i + 1) == ctx.mot(i - 2):
         return None
@@ -1500,6 +1516,17 @@ def _mes_mais(ctx: Contexte, i: int):
     if ctx.mot(i + 1) in PRONOMS_SUJETS | {"ça", "bon", "bref", "quand"} \
             or ctx.mot(i + 1) in ("c'est", "j'ai", "j'y"):
         return appliquer_casse(ctx.brut(i), "mais")
+    # « il est laid mes intéressant », « il le fait vite mes bien » : un
+    # possessif ne peut pas suivre un adjectif ou un adverbe et preceder un
+    # singulier.
+    suivant = ctx.mot(i + 1)
+    precedent = ctx.mot(i - 1)
+    if suivant and not _est_pluriel(ctx, suivant) and (
+            precedent in ("vite", "bien", "mal", "loin", "tard", "tôt", "peu",
+                          "beaucoup", "pas", "encore", "toujours")
+            or (_est_adjectif(ctx, precedent)
+                and not ctx.morphologie.verbe(precedent))):
+        return appliquer_casse(ctx.brut(i), "mais")
     return None
 
 
@@ -1624,6 +1651,10 @@ def _participe_apres_auxiliaire_conjugue(ctx: Contexte, i: int):
     if mot in ("soit", "soient", "cela", "ceci", "ça"):
         # « il a soit démissionné, soit... », « j'ai cela en tête ».
         return None
+    # « il est peux admirable », « ils ont peut d'estime » : c'est « peu »
+    # qui est mal ecrit, pas un participe qu'il faudrait mettre.
+    if mot in ("peut", "peux"):
+        return None
     if mot in AUXILIAIRES:
         # « les idées qu'elle a sont bonnes » : « a » n'est pas un
         # auxiliaire ici, c'est le verbe de la relative, et « sont » est le
@@ -1642,6 +1673,9 @@ def _participe_apres_auxiliaire_conjugue(ctx: Contexte, i: int):
     # Le masculin singulier d'abord : c'est la forme qu'on ecrit quand rien
     # n'accorde le participe, et demander les deux nombres a la fois ferait
     # hesiter entre « fait » et « faits ».
+    # « il avait tord » : c'est le nom « tort », dans « avoir tort ».
+    if mot == "tord" and ctx.noyau(i - 1) in AUXILIAIRES_AVOIR:
+        return appliquer_casse(ctx.brut(i), "tort")
     participe = (ctx.morphologie.forme(mot, {"pms"})
                  or ctx.morphologie.forme(mot, PARTICIPES_MASCULINS))
     if participe is None or participe == mot:
@@ -1856,6 +1890,7 @@ UNITES = {"un", "une", "deux", "trois", "quatre", "cinq", "six", "sept",
 # dictionnaire — « les avants » d'une equipe, « les contres » au bridge — et
 # les regles d'accord les prendraient pour des adjectifs.
 MOTS_INVARIABLES = {
+    "ensemble", "exprès", "debout", "volontiers", "partout",
     # « pas » est aussi un nom — « des pas dans le couloir » — mais c'est
     # mille fois la negation. Le compter comme un pluriel ferait accorder
     # ce qui le suit : « c'est pas vrai » deviendrait « pas vrais ».
@@ -2158,6 +2193,11 @@ def _accord_determinant_nom(ctx: Contexte, i: int):
         return None
     # « quatre-vingt-douze moins neuf font » : un verbe, pas un nom.
     if mot in FORMES_INTOUCHABLES:
+        return None
+
+    # « il est laid mes intéressant » : « mes » est « mais », et la meme
+    # passe ne doit pas accorder ce qu'il n'annonce pas.
+    if determinant == "mes" and _mes_mais(ctx, i - 1) is not None:
         return None
 
     # « il ces passé » : « ces » est « s'est », il n'y a pas de nom a accorder.
