@@ -559,12 +559,26 @@ ses chiffres sont bas par construction, et une partie des « phrases justes »
 qu'il dit abîmées contiennent en réalité d'autres fautes que Papote corrige à
 raison. Il sert à voir ce qui casse et ce qui manque, pas à se comparer.
 
-| | au départ | aujourd'hui |
+Mesures sur la moitié jamais lue de chaque banc :
+
+| | phrases justes touchées | fautes corrigées |
 |---|---|---|
-| phrases justes touchées (moitié lue) | 14,6 % | 8,6 % |
-| phrases justes touchées (moitié à l'écart) | 16,1 % | 13,0 % |
-| fautes corrigées (moitié lue) | 7 % | 12 % |
-| fautes corrigées (moitié à l'écart) | 11 % | 15 % |
+| LanguageTool 6.7 — au départ | 16,1 % | 11 % |
+| LanguageTool 6.7 — aujourd'hui | 9,3 % | 13 % |
+| Grammalecte 2.3.0 — au départ | 4,0 % | 11 % |
+| Grammalecte 2.3.0 — aujourd'hui | 2,7 % | 11 % |
+| Citations du Wiktionnaire (moitié lue) — au départ | 9,1 % | — |
+| Citations du Wiktionnaire (moitié lue) — aujourd'hui | 4,7 % | — |
+
+Sur un échantillon relu à la main, deux « phrases justes » touchées sur trois
+du banc LanguageTool contenaient en fait une faute que Papote corrige à raison
+(« apres », « des nouveau article », « tu a passer ») : la vraie part de fausses
+alertes y tourne autour de 3 %. Sur les citations du Wiktionnaire, ce qui reste
+est surtout du texte en langue étrangère ou en ancien français.
+
+L'orthographe rectifiée de 1990 (« connaitre », « évènement », « boite »,
+« il protègera ») est l'orthographe officielle de l'école : Papote ne la
+« corrige » pas vers l'ancienne.
 
 ## En ligne de commande
 

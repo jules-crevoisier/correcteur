@@ -520,7 +520,8 @@ def test_un_adjectif_epicene_n_a_pas_besoin_du_genre(correcteur):
     # Apostrophes que la coupure generale n'atteint pas.
     ("jusqua ce soir", "jusqu'à ce soir"),
     ("jusquou tu vas", "jusqu'où tu vas"),
-    ("sil vous plait repondez", "s'il vous plaît répondez"),
+    # « plait » sans accent : l'orthographe de 1990, on n'y touche pas.
+    ("sil vous plait repondez", "s'il vous plait répondez"),
     ("aujourdhui il pleut", "aujourd'hui il pleut"),
 ])
 def test_les_composes_et_les_collages(correcteur, avant, apres):

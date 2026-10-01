@@ -27,7 +27,7 @@ import re
 from dataclasses import dataclass
 from typing import Callable
 
-from .lexique import ACCENTUEES, accentue as accentue_mot, sans_accents
+from .lexique import rectification_1990, ACCENTUEES, accentue as accentue_mot, sans_accents
 from .morphologie import (
     CONJUGUES, IMPERATIFS, NOMINAUX, NOMS_PLURIELS, PARTICIPES, PARTICIPES_MASCULINS,
     PLURIELS, Morphologie,
@@ -420,16 +420,34 @@ def sujet_avant(ctx: "Contexte", i: int) -> str:
     # « je te le dis » : jusqu'a trois pronoms se glissent avant le verbe.
     recul = 1
     while (ctx.noyau(i - recul) in PRONOMS_INTERCALES and recul < 4
+           and ctx.noyau(i - recul - 1) in PRONOMS_SUJETS | PRONOMS_INTERCALES
            and ctx.noyau(i - recul - 1) in PRONOMS_INTERCALES):
         recul += 1
     if (ctx.noyau(i - recul) in PRONOMS_INTERCALES
             and ctx.noyau(i - recul - 1) in PRONOMS_SUJETS):
         # « Peux-tu me dire » : le sujet trouve derriere les pronoms est
         # lui-meme inverse.
-        if _sujet_inverse(ctx, i - recul - 1):
+        if _sujet_inverse(ctx, i - recul - 1) or _apres_preposition(ctx, i - recul - 1):
             return ""
         return ctx.noyau(i - recul - 1)
+    if _apres_preposition(ctx, i - 1):
+        return ""
     return precedent
+
+
+def _apres_preposition(ctx: "Contexte", k: int) -> bool:
+    """« l'une d'entre elles saute », « chacun de nous avait » : le pronom
+    complement d'une preposition n'est pas le sujet du verbe qui suit."""
+    if ctx.noyau(k) not in PRONOMS_SUJETS:
+        return False
+    if ctx.elision(k) == "d'":
+        return True
+    if ctx.elision(k):
+        # « pour qu'il comprenne » : « que » s'interpose, le pronom est sujet.
+        return False
+    return ctx.mot(k - 1) in (
+        "entre", "d'entre", "de", "parmi", "avec", "pour", "chez", "sans",
+        "sur", "à", "contre", "vers", "derrière", "devant", "après", "avant")
 
 
 def _sujet_inverse(ctx: "Contexte", k: int) -> bool:
@@ -462,8 +480,11 @@ def _sujet_avant_le_pronom(ctx: "Contexte", i: int) -> bool:
         # ces sujets-la ne sont pas des pronoms personnels.
         if mot in ("ça", "cela", "ceci", "qui", "que", "ce"):
             return True
-        # « Christine Ducos nous font découvrir » : un nom propre.
-        if ctx.brut(i - recul)[:1].isupper() and not ctx.debut_de_segment(i - recul):
+        # « Christine Ducos nous font découvrir », « Xénophon nous apprend » :
+        # un nom propre, meme en tete de phrase.
+        if ctx.brut(i - recul)[:1].isupper() and (
+                not ctx.debut_de_segment(i - recul)
+                or not ctx.morphologie.traits(mot)):
             return True
         if ctx.morphologie.nom(noyau):
             return True
@@ -653,6 +674,15 @@ def _accord_pronom_verbe(ctx: Contexte, i: int):
     personne = PERSONNE_DU_SUJET.get(sujet)
     if personne is None:
         return None
+    # « L'une d'entre elles saute », « autour d'elle se sont réunis »,
+    # « chacun de nous avait » : le pronom suit une preposition.
+    k = i - 1
+    while k > 0 and ctx.noyau(k) != sujet:
+        k -= 1
+    if ctx.elision(k) == "d'" or ctx.mot(k - 1) in ("entre", "d'entre", "de",
+                                                    "parmi", "avec", "pour",
+                                                    "chez", "sans", "sur", "à"):
+        return None
     # « il nous parle », « le prof nous a rendu les copies » : « nous » y
     # est complement, et le verbe a raison. Tout ce qui peut etre un sujet
     # devant lui — un pronom comme un nom — le prive de ce role.
@@ -789,6 +819,17 @@ def _apostrophe_avant_participe(ctx: Contexte, i: int):
         return None
     if not ctx.est_participe(ctx.noyau(i + 1)):
         return None
+    # « de ma cheminée », « je terminai ma traversée » : le mot qui suit est
+    # aussi un nom, et rien devant ne peut etre le sujet de « m'a ».
+    precedent_brut = ctx.mot(i - 1)
+    if ctx.morphologie.nom(ctx.noyau(i + 1)) and (
+            precedent_brut in ("de", "à", "dans", "sur", "par", "pour", "avec",
+                               "sans", "en", "vers", "chez", "et", "ou")
+            or ctx.elision(i - 1) == "d'"
+            or (ctx.morphologie.verbe(precedent_brut)
+                and precedent_brut not in AUXILIAIRES
+                and precedent_brut not in PRONOMS_SUJETS)):
+        return None
 
     precedent = sans_accents(ctx.noyau(i - 1))
     if ctx.mot(i) == "ta" and precedent not in SUJETS_SINGULIER_NUS:
@@ -827,6 +868,14 @@ def _dans_une_locution(ctx: "Contexte", i: int) -> bool:
     return False
 
 
+AVOIR_SUIVIS = {
+    "été", "eu", "pas", "rien", "plus", "jamais", "toujours", "déjà", "bien",
+    "besoin", "peur", "faim", "soif", "raison", "tort", "envie", "mal",
+    "froid", "chaud", "honte", "l'air", "un", "une", "des", "du", "trop",
+    "beaucoup", "encore", "souvent", "fini", "dit", "fait", "pris", "mis",
+}
+
+
 @regle("IL_A", "après un pronom sujet, « a » est le verbe avoir : pas d'accent")
 def _il_a(ctx: Contexte, i: int):
     if _dans_une_locution(ctx, i):
@@ -842,8 +891,14 @@ def _il_a(ctx: Contexte, i: int):
         return None
     # « la personne à qui j'ai parlé », « prendre quelqu'un à partie » : la
     # preposition introduit un relatif ou une locution.
-    if ctx.mot(i + 1) in ("qui", "quoi", "laquelle", "lequel", "lesquels",
-                          "lesquelles", "partie"):
+    suivant = ctx.mot(i + 1)
+    if suivant in ("qui", "quoi", "laquelle", "lequel", "lesquels",
+                   "lesquelles", "partie"):
+        return None
+    # « ceux qui à force de... », « qu'elle à lui », « Tout à la benne » :
+    # seul ce qui suit avoir — un participe, un complement qu'on « a » —
+    # en fait le verbe.
+    if not (ctx.est_participe(suivant) or suivant in AVOIR_SUIVIS):
         return None
     if ctx.noyau(i - 1) in SUJETS_SINGULIER or ctx.elision(i) in ("c'", "ç'"):
         return appliquer_casse(ctx.brut(i), "a")
@@ -901,7 +956,9 @@ def _avoir_suit(ctx: "Contexte", i: int) -> bool:
     « a » le verbe.
     """
     suivant = ctx.mot(i + 1)
-    if suivant in ADVERBES_INTERCALES:
+    if suivant in ADVERBES_INTERCALES or suivant.endswith("ment") or suivant in (
+            "donc", "plutôt", "alors", "aussi", "enfin", "ensuite", "encore",
+            "vite", "longtemps", "souvent", "même"):
         suivant = ctx.mot(i + 2)
     if suivant in ("été", "eu", "pour", "un", "une", "des", "le", "les",
                    "du", "l'", "plus", "beaucoup"):
@@ -957,6 +1014,17 @@ def _et_est(ctx: Contexte, i: int):
         return None
     # « lui et elle », « toi et moi » : une vraie coordination.
     if ctx.mot(i + 1) in PRONOMS_SUJETS | {"moi", "toi", "lui", "eux"}:
+        return None
+    if ctx.noyau(i - 1) in ("tout", "cela", "ceci", "ça", "qui", "personne",
+                            "ce", "celui", "celle") and not ctx.elision(i):
+        # « rien du tout et faillite », « tout ceci et tout cela » : une
+        # coordination plus souvent qu'un verbe.
+        return None
+    if i > 1 and ctx.separateur(i - 2).endswith("-"):
+        # « disait-on, et dans... » : le pronom est inverse.
+        return None
+    if ctx.mot(i + 1) in ("pour", "dans", "de", "à", "en", "sur", "avec",
+                          "tout", "le", "la", "les", "un", "une", "des"):
         return None
     if ctx.elision(i) in ("c'", "ç'") or ctx.noyau(i - 1) in SUJETS_SINGULIER:
         return appliquer_casse(ctx.brut(i), ctx.elision(i) + "est")
@@ -1235,6 +1303,17 @@ def _ou_accent(ctx: Contexte, i: int):
     if ctx.mot(i) != "ou":
         return None
     precedent = ctx.mot(i - 1)
+    # « achetées quelque part ou ce sont les vôtres » : « part » n'est pas
+    # le verbe partir.
+    if precedent == "part" and ctx.mot(i - 2) in ("quelque", "nulle", "autre",
+                                                   "toute", "d'autre"):
+        return None
+    # « Enseigne-t-il encore, ou est-il à la retraite ? », « tu manges à la
+    # maison ou est-ce que tu manges dehors ? » : une alternative entre deux
+    # questions, sauf en tout debut de phrase.
+    if ctx.mot(i + 1) == "est" and ctx.separateur(i + 1) == "-" and i > 0 \
+            and not re.search(r"[.!?…]", ctx.separateur(i - 1)):
+        return None
     # « il est ou était », « ils ont été ou sont » : deux verbes coordonnes.
     # Un verbe juste avant, et « ou » relie deux choix.
     coordonne = (precedent not in VERBES_D_INTERROGATION
@@ -1250,7 +1329,9 @@ def _ou_accent(ctx: Contexte, i: int):
         return appliquer_casse(ctx.brut(i), "où")
     # « là ou j'habite » : apres « là », c'est toujours le lieu. L'accent du
     # « la » est encore a mettre : LA_ACCENT s'en charge, de son cote.
-    if ctx.mot(i - 1) in ("là", "la"):
+    if ctx.mot(i - 1) in ("là", "la") and ctx.mot(i + 1) not in (
+            "le", "la", "les", "un", "une", "des") and ctx.elision(i + 1) != "l'":
+        # « prends la ou les autres » : deux articles au choix.
         return appliquer_casse(ctx.brut(i), "où")
     # « je sais pas ou aller » : devant un infinitif, « ou » n'a pas de sens.
     # Sauf s'il relie deux infinitifs ou deux participes : « en savoir plus
@@ -1346,6 +1427,10 @@ def _peut_suivre_un_article(ctx: "Contexte", i: int) -> bool:
     if not mot or mot in MOTS_INVARIABLES:
         return False
     if mot in DETERMINANTS or _adjectif_antepose(mot):
+        return True
+    # « la protubérance », « la désubjectivation » : un mot que la
+    # morphologie ne connait pas est le plus souvent un nom rare.
+    if len(mot) >= 4 and mot.isalpha() and not ctx.morphologie.traits(mot):
         return True
     return ctx.morphologie.au_pluriel(mot) is not None
 
@@ -1492,7 +1577,10 @@ def _la_accent(ctx: Contexte, i: int):
         return (appliquer_casse(ctx.brut(i), "là-bas"), 2)
     # « la ou j'habite » : l'article ne precede jamais une conjonction, et
     # les deux mots se corrigent ensemble.
-    if ctx.mot(i + 1) in ("ou", "où") and ctx.separateur(i) == " ":
+    if ctx.mot(i + 1) in ("ou", "où") and ctx.separateur(i) == " " \
+            and ctx.mot(i + 2) not in ("le", "la", "les", "l'", "un", "une", "des") \
+            and not ctx.elision(i + 2) == "l'":
+        # « prends la ou les autres » : deux articles au choix.
         return (appliquer_casse(ctx.brut(i), "là où"), 2)
     if ctx.noyau(i - 1) in AVANT_LA_ACCENT and not _peut_suivre_un_article(ctx, i + 1):
         return appliquer_casse(ctx.brut(i), "là")
@@ -1572,6 +1660,32 @@ def _est_ce(ctx: Contexte, i: int):
     return (appliquer_casse(ctx.brut(i), ctx.elision(i) + "est-ce"), 2)
 
 
+FORMES_D_ETRE = {"est", "sont", "était", "étaient", "sera", "seront",
+                 "serait", "seraient", "fut", "soit", "es", "suis"}
+
+
+def _infinitif_attribut(ctx: "Contexte", i: int) -> bool:
+    """« c'est abuser », « lire n'est pas épeler », « ce qu'est aimer ».
+
+    Apres « être », un infinitif est a sa place quand le sujet est « ce »,
+    « ça », un autre infinitif, ou quand « être » est lui-meme inverse.
+    """
+    k = i - 1
+    while k > 0 and ctx.mot(k) in ADVERBES_INTERCALES | {"pas", "plus", "point", "jamais"}:
+        k -= 1
+    if ctx.noyau(k) not in FORMES_D_ETRE:
+        return False
+    if ctx.elision(k) in ("c'", "qu'", "ç'"):
+        return True
+    avant = ctx.mot(k - 1)
+    if avant in ("ce", "ça", "cela", "ceci", "ne", "n'"):
+        avant2 = ctx.mot(k - 2)
+        if avant in ("ne", "n'"):
+            return avant2 in ("ce", "ça", "cela") or ctx.morphologie.est(avant2, "inf")
+        return True
+    return ctx.morphologie.est(avant, "inf")
+
+
 def _a_est_une_preposition(ctx: "Contexte", k: int) -> bool:
     """« il commença a dégeler », « des baguettes a souder » : ce « a » est « à ».
 
@@ -1624,6 +1738,8 @@ def _participe_apres_auxiliaire(ctx: Contexte, i: int):
     if ctx.morphologie.accorder(mot, {"fs"}) is not None:
         return None
     if _a_est_une_preposition(ctx, i - 1):
+        return None
+    if _infinitif_attribut(ctx, i):
         return None
     participe = mot[:-2] + "é"
     if ctx.connait(participe):
@@ -1780,6 +1896,9 @@ def _pronominal(ctx: "Contexte", i: int) -> bool:
     """
     if ctx.elision(i - 1) in ("s'", "m'", "t'"):
         return True
+    if ctx.mot(i - 2) in ("nous", "vous") and ctx.mot(i - 3) == ctx.mot(i - 2):
+        # « le rendez-vous que nous nous sommes donné »
+        return True
     return ctx.mot(i - 2) in ("se", "me", "te")
 
 
@@ -1810,7 +1929,16 @@ def _accord_participe_etre(ctx: Contexte, i: int):
     # « ses chaussures sont marron », « sont bleu-noir », « sont châtain
     # foncé » : les couleurs invariables et composees ne bougent pas.
     if mot in INVARIABLES_ADJECTIFS or _couleur_composee(ctx, i) \
-            or mot in DETERMINANTS or mot in ("un", "une"):
+            or mot in DETERMINANTS or mot in ("un", "une", "si", "point",
+                                              "droit", "bon"):
+        return None
+    # « En elle est contenu le feu » : le pronom est complement d'une
+    # preposition, le sujet vient apres.
+    if ctx.mot(i - 3) in ("en", "à", "dans", "sur", "pour", "avec", "chez"):
+        return None
+    # « elles sont bleu saphir » : une couleur et sa nuance.
+    if mot in COULEURS and ctx.apercu(i + 1) and ctx.morphologie.nom(ctx.apercu(i + 1)) \
+            and ctx.apercu(i + 1) not in DETERMINANTS:
         return None
 
     # « elles se sont écrit » : le complement est indirect, rien ne s'accorde.
@@ -2053,9 +2181,11 @@ def _sujet_pluriel_avant(ctx: "Contexte", i: int) -> bool:
         # un groupe pluriel au milieu de la phrase est souvent le
         # complement d'un sujet singulier qu'on ne voit plus.
         return _ouvre_la_proposition(ctx, position - 1, relatif=recul == 2)
-    # « beaucoup de gens » : la quantite est deux mots plus loin.
+    # « beaucoup de gens » : la quantite est deux mots plus loin. « qui a
+    # plus de toits a » : une quantite derriere un verbe est son complement.
     return (ctx.noyau(position - 1) in ("de", "d'")
-            and ctx.mot(position - 2) in QUANTITES)
+            and ctx.mot(position - 2) in QUANTITES
+            and not ctx.morphologie.verbe(ctx.mot(position - 3)))
 
 
 # Ce qui peut preceder un sujet en tete de proposition.
@@ -2080,12 +2210,19 @@ def _ouvre_la_proposition(ctx: "Contexte", i: int, relatif: bool) -> bool:
     if ctx.debut_de_segment(i):
         return True
     precedent = ctx.mot(i - 1)
+    if precedent in ("et", "ou") and not relatif:
+        # « l'attitude vis-à-vis de la nature et des animaux détermine » :
+        # apres un nom, « et » coordonne deux complements, pas deux sujets.
+        avant = ctx.noyau(i - 2)
+        if avant and ctx.morphologie.nom(avant) and not ctx.debut_de_segment(i - 1):
+            return False
     if precedent in OUVRANTS or ctx.elision(i - 1) == "qu'":
         return True
     # « la plupart des gens pensent », « beaucoup des invités sont » : la
-    # quantite partage le nombre du groupe qu'elle introduit.
+    # quantite partage le nombre du groupe qu'elle introduit. Sauf si elle
+    # est elle-meme complement : « qui a plus de toits a plus de neige ».
     if precedent in QUANTITES:
-        return True
+        return not ctx.morphologie.verbe(ctx.mot(i - 2))
     if not relatif:
         return False
     if precedent in PREPOSITIONS or ctx.elision(i - 1) == "d'":
@@ -2153,11 +2290,63 @@ def _pluriels(ctx: "Contexte", mot: str) -> list[str]:
     return [mot + "s"]
 
 
+LATIN_INVARIABLE = {"minimum", "maximum", "optimum", "minima", "maxima",
+                    "optima", "quorum", "statu", "quo", "veto"}
+
+AVANT_LES_PRONOM = {
+    "je", "tu", "il", "elle", "on", "nous", "vous", "ils", "elles", "qui",
+    "que", "qu'", "ne", "n'", "puis", "et", "mais", "ou", "donc", "alors",
+    "pas", "me", "te", "se", "lui", "y", "en", "les", "ça", "cela", "pour",
+}
+
+
+def _pas_un_nom_a_accorder(ctx: "Contexte", i: int, mot: str,
+                           determinant: str) -> bool:
+    """Ce qui suit un pluriel sans etre un nom qui s'accorde.
+
+    Chaque cas vient d'une phrase juste que Papote abimait :
+
+        « C'est en les suivant »         un participe present
+        « les quelque 3 millions »       « quelque » adverbe, devant un nombre
+        « durant les tout premiers »     « tout » adverbe
+        « trois minimum, cinq maximum »  du latin invariable
+        « vos nom et prénom »            deux singuliers, un determinant
+        « puis les glisse dans »         « les » pronom, devant un verbe
+        « Ils font tous deux partie »    « tous deux » n'est pas un nombre
+        « le numéro deux allemand »      le nombre appartient au nom d'avant
+        « Ces don Juan »                 un nom propre suit
+    """
+    traits = ctx.morphologie.traits(mot)
+    if "ppr" in traits or mot in LATIN_INVARIABLE:
+        return True
+    if mot in ("quelque", "tout") :
+        return True
+    suivant = ctx.apercu(i + 1)
+    if suivant == "et" and ctx.morphologie.nom(ctx.apercu(i + 2)):
+        return True
+    if i + 1 < len(ctx.jetons) and ctx.jetons[i + 1].texte[:1].isupper():
+        return True
+    if determinant == "les" and traits & CONJUGUES \
+            and ctx.mot(i - 2) in AVANT_LES_PRONOM:
+        return True
+    if determinant in NOMBRES_PLURIELS or determinant in UNITES:
+        avant = ctx.mot(i - 2)
+        if avant in ("tous", "toutes"):
+            return True
+        if avant and ctx.morphologie.nom(avant) and avant not in DETERMINANTS \
+                and not _determinant_pluriel(ctx, i - 2):
+            return True
+    return False
+
+
 @regle("ACCORD_DETERMINANT_NOM",
        "le nom s'accorde avec son déterminant pluriel")
 def _accord_determinant_nom(ctx: Contexte, i: int):
     mot = ctx.mot(i)
     determinant = ctx.mot(i - 1)
+
+    if _pas_un_nom_a_accorder(ctx, i, mot, determinant):
+        return None
 
     # « le onze novembre », « le 14 juillet » : une date ne prend pas de « s »
     # parce qu'un nombre la precede.
@@ -2316,6 +2505,46 @@ PREPOSITIONS_HOMOGRAPHES = {
     "avant", "devant", "sauf", "outre", "moins", "plus", "vers", "dans",
 }
 
+def _adjectif_hors_du_groupe(ctx: "Contexte", i: int, mot: str) -> bool:
+    """L'adjectif ne qualifie pas le nom pluriel qui le precede.
+
+        « Il prenait ses repas seul »          il se rapporte au sujet
+        « toutes ces années enterré »          idem
+        « les gouvernements espagnol et        chacun le sien
+          mexicain »
+        « des cheveux blond platine »          une nuance
+        « la succession telle qu'on »          « tel » se rapporte a autre chose
+        « des interfaces homme/machine »       un nom compose
+        « des passagers haut perchés »         un adverbe
+    """
+    if mot in ("tel", "telle", "tels", "telles", "elle", "elles", "lui",
+               "eux", "haut", "bas", "fort", "droit"):
+        return True
+    suivant = ctx.apercu(i + 1)
+    separateur = ctx.separateur(i) if i + 1 < len(ctx.jetons) else ""
+    if suivant in ("et", "ou") or "," in separateur or "/" in separateur \
+            or (i > 0 and "/" in ctx.separateur(i - 1)):
+        return True
+    if mot in COULEURS and suivant and ctx.morphologie.nom(suivant) \
+            and suivant not in DETERMINANTS:
+        return True
+    # Un sujet singulier plus tot dans la phrase : l'adjectif est peut-etre
+    # le sien. Seulement pour un groupe complement (precede d'un verbe).
+    for k in range(i - 1, max(-1, i - 8), -1):
+        if ctx.debut_de_segment(k + 1) and k < i - 1:
+            break
+        if ctx.mot(k) in ("il", "elle", "on", "je", "tu") \
+                and not _sujet_inverse(ctx, k):
+            return True
+    return False
+
+
+COULEURS = {"blanc", "blanche", "noir", "noire", "rouge", "bleu", "bleue",
+            "vert", "verte", "jaune", "rose", "gris", "grise", "brun",
+            "brune", "blond", "blonde", "violet", "violette", "beige",
+            "doré", "dorée", "argenté", "argentée"}
+
+
 # Ce qui suit une couleur pour en preciser la nuance. L'usage veut que
 # l'ensemble reste invariable : « des yeux bleu foncé », « des chemises vert
 # clair ». Papote ecrivait « des yeux bleus foncé », qui n'est correct sous
@@ -2377,7 +2606,8 @@ def _accord_adjectif_pluriel(ctx: Contexte, i: int):
         return None
     # « vos amis essayé ces skis » : suivi de son objet, le participe est le
     # verbe d'une proposition, il ne qualifie pas le nom qui precede.
-    if ctx.est_participe(mot) and ctx.mot(i + 1) in DETERMINANTS:
+    if ctx.est_participe(mot) and (ctx.mot(i + 1) in DETERMINANTS
+                                   or ctx.mot(i + 1) in DETERMINANTS_PLURIELS):
         return None
     if _un_est_un_nombre(ctx, i):
         # « quatre-vingt-un ans » : « un » y est le dernier chiffre d'un
@@ -2390,6 +2620,8 @@ def _accord_adjectif_pluriel(ctx: Contexte, i: int):
     elif _determinant_pluriel(ctx, i - 1) and _est_pluriel(ctx, ctx.mot(i + 1)):
         indice_du_nom = i + 1
     if indice_du_nom is None:
+        return None
+    if _adjectif_hors_du_groupe(ctx, i, mot):
         return None
     # « quelques fois absent » : une locution adverbiale, pas un nom.
     # « verre, bois, métal » : une enumeration, la virgule separe.
@@ -2667,6 +2899,8 @@ DOUBLONS_LEGITIMES = {
     "non", "oui", "eh", "ah", "oh", "ha", "ho", "hi", "na", "chut",
     # Les nombres et les lettres se repetent en enumerant.
     "un", "une", "deux", "a", "à", "y", "en",
+    # « devant lui lui présenta », « à qui mieux mieux ».
+    "lui", "mieux", "moi", "toi",
 }
 
 
@@ -3050,6 +3284,9 @@ def _accent_oublie(ctx: Contexte, i: int):
         return None
 
     avec = accentuees[0]
+    # « boite », « gout », « diner » : l'orthographe de 1990 les admet.
+    if rectification_1990(mot, avec):
+        return None
     rang_sans = ctx.lexique.rang(mot)
     rang_avec = ctx.lexique.rang(avec)
     if rang_avec * ECART_ACCENT_OUBLIE > rang_sans:

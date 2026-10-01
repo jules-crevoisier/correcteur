@@ -20,8 +20,7 @@ FAUTES = [
     ("j'ai mange des gateaux", "j'ai mangé des gâteaux", "accent"),
     ("elle etait la hier", "elle était là hier", "accent"),
     ("quand meme", "quand même", "accent"),
-    ("s'il vous plait", "s'il vous plaît", "accent"),
-    ("il connait la reponse", "il connaît la réponse", "accent"),
+    ("il connait la reponse", "il connait la réponse", "accent"),
     ("un anniverssaire", "un anniversaire", "frappe"),
     ("c'est un exmple", "c'est un exemple", "frappe"),
     ("jai pas compris", "j'ai pas compris", "apostrophe"),
@@ -122,7 +121,7 @@ FAUTES = [
     # -- apostrophes que la coupure generale n'atteint pas
     ("jusqua ce soir", "jusqu'à ce soir", "apostrophe"),
     ("jusquou tu vas", "jusqu'où tu vas", "apostrophe"),
-    ("sil vous plait repondez", "s'il vous plaît répondez", "apostrophe"),
+    ("sil vous plait repondez", "s'il vous plait répondez", "apostrophe"),
     ("aujourdhui il pleut", "aujourd'hui il pleut", "apostrophe"),
     ("lorsquon arrive", "lorsqu'on arrive", "apostrophe"),
 
@@ -539,6 +538,12 @@ INTOUCHABLES = [
     "on publie demain matin",
     "elles sont reparties tôt",
     "sa cote monte",
+    # L'orthographe rectifiee de 1990 n'est pas une faute.
+    "s'il vous plait",
+    "une boite de nuit",
+    "un évènement imprévu",
+    "il protègera ses enfants",
+    "le gout du sucre",
 
     # -- trois lettres que rien ne doit toucher
     "le mode dev est actif",

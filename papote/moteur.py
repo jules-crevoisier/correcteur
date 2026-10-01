@@ -28,7 +28,7 @@ from dataclasses import dataclass
 from . import grammaire, regles
 from .lexique import (
     CLASSE_ACCENT, CLASSE_EDITION, CLASSE_EDITION_DOUBLE, RANG_COURANT,
-    RANG_INCONNU, Lexique, sans_accents,
+    RANG_INCONNU, Lexique, rectification_1990, sans_accents,
 )
 from .morphologie import Morphologie
 from .politique import PARLE, SOUTENU
@@ -97,6 +97,117 @@ def _normaliser_mot(mot: str) -> str:
     return sans_accents(mot.strip(".,;:!?…\"'«»()[]{}-–—*_~")).lower()
 
 
+VOYELLES_ET_H = set("aeiouyàâäéèêëîïôöùûüœh")
+
+# Ce qui se colle a un mot pour en faire un autre.
+PREFIXES = {
+    "re", "ré", "pré", "anti", "ultra", "super", "hyper", "mini", "maxi",
+    "multi", "co", "contre", "sur", "sous", "auto", "semi", "non", "mal",
+    "dé", "dés", "in", "im", "extra", "inter", "néo", "post", "pro", "micro",
+    "macro", "méga", "télé", "bio", "éco", "archi", "demi", "mi", "poly",
+    "mono", "bi", "tri", "para", "pseudo", "proto", "vice", "ex", "trans",
+    "sous", "entre", "outre", "pré", "pos", "géo", "photo", "radio", "neuro",
+    "cyber", "crypto", "euro", "franco", "anglo", "bien",
+}
+
+# Les petits mots a cote desquels on oublie l'espace.
+MOTS_OUTILS = {
+    "je", "tu", "il", "elle", "on", "nous", "vous", "ils", "elles", "ça",
+    "le", "la", "les", "un", "une", "des", "du", "de", "au", "aux", "en",
+    "et", "ou", "ne", "se", "ce", "me", "te", "mon", "ton", "son", "ma", "ta",
+    "sa", "mes", "tes", "ses", "notre", "votre", "leur", "leurs", "à", "a",
+    "y", "va", "vais", "est", "suis", "ai", "as", "sont", "ont", "fait",
+    "que", "qui", "quoi", "pour", "par", "avec", "sans", "dans", "sur",
+    "sous", "chez", "mais", "donc", "car", "pas", "plus", "très", "trop",
+    "bien", "tout", "tous", "toute", "comment", "pourquoi", "quand", "quelque",
+    "si", "ni", "peu", "peut", "faut", "cette", "cet", "ces", "lui", "moi",
+    "toi", "eux", "là", "ici", "alors", "aussi", "encore", "jamais", "rien",
+    "comme", "puis", "après", "avant", "vers", "depuis", "entre",
+}
+
+# La disposition des touches, pour savoir si deux lettres sont voisines. Une
+# faute de frappe remplace une lettre par sa voisine ; « limable » ->
+# « aimable » ou « plogue » -> « blogue » ne sont pas des fautes de frappe,
+# ce sont deux mots differents.
+_RANGEES = {
+    "azerty": ("azertyuiop", "qsdfghjklm", "wxcvbn"),
+    "qwerty": ("qwertyuiop", "asdfghjkl", "zxcvbnm"),
+}
+_POSITIONS = {
+    nom: {lettre: (r, c + 0.5 * r) for r, rangee in enumerate(rangees)
+          for c, lettre in enumerate(rangee)}
+    for nom, rangees in _RANGEES.items()
+}
+_VOYELLES = set("aeiouy")
+# Les confusions de son, qui ne sont pas des voisines au clavier.
+_SONS = [set("ckqs"), set("sz"), set("iy"), set("mn"), set("gj"), set("fv"),
+         set("bp"), set("td")]
+
+
+def _voisines(a: str, b: str) -> bool:
+    for positions in _POSITIONS.values():
+        if a in positions and b in positions:
+            (r1, c1), (r2, c2) = positions[a], positions[b]
+            if abs(r1 - r2) <= 1 and abs(c1 - c2) <= 1.0:
+                return True
+    return False
+
+
+def _substitution_plausible(a: str, b: str) -> bool:
+    if a == b:
+        return True
+    if a in _VOYELLES and b in _VOYELLES:
+        return True
+    if any(a in groupe and b in groupe for groupe in _SONS):
+        return True
+    return _voisines(a, b)
+
+
+def _frappe_plausible(ecrit: str, propose: str) -> bool:
+    """La correction ressemble-t-elle a une faute de frappe ?
+
+    Oubli, ajout, inversion de deux lettres : toujours. Une lettre a la place
+    d'une autre : seulement si elles sont voisines au clavier (AZERTY ou
+    QWERTY), toutes deux voyelles, ou de meme son (« c »/« k »/« s »). Et la
+    premiere lettre ne change que pour sa voisine : on rate rarement le
+    debut d'un mot. Les accents ne comptent pas.
+    """
+    a, b = sans_accents(ecrit), sans_accents(propose)
+    if a == b:
+        return True
+    n, m = len(a), len(b)
+    # Damerau-Levenshtein, avec le souvenir de l'operation choisie.
+    d = [[0] * (m + 1) for _ in range(n + 1)]
+    for i in range(n + 1):
+        d[i][0] = i
+    for j in range(m + 1):
+        d[0][j] = j
+    for i in range(1, n + 1):
+        for j in range(1, m + 1):
+            cout = 0 if a[i - 1] == b[j - 1] else 1
+            d[i][j] = min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cout)
+            if i > 1 and j > 1 and a[i - 1] == b[j - 2] and a[i - 2] == b[j - 1]:
+                d[i][j] = min(d[i][j], d[i - 2][j - 2] + 1)
+    i, j = n, m
+    while i > 0 and j > 0:
+        if a[i - 1] == b[j - 1] and d[i][j] == d[i - 1][j - 1]:
+            i, j = i - 1, j - 1
+        elif i > 1 and j > 1 and a[i - 1] == b[j - 2] and a[i - 2] == b[j - 1] \
+                and d[i][j] == d[i - 2][j - 2] + 1:
+            i, j = i - 2, j - 2
+        elif d[i][j] == d[i - 1][j - 1] + 1:
+            if not _substitution_plausible(a[i - 1], b[j - 1]):
+                return False
+            if i == 1 and not _voisines(a[0], b[0]) and a[0] != b[0]:
+                return False
+            i, j = i - 1, j - 1
+        elif d[i][j] == d[i - 1][j] + 1:
+            i -= 1
+        else:
+            j -= 1
+    return True
+
+
 # Au-dela, un mot a deux frappes d'ecart est trop rare pour qu'on parie.
 RANG_MAXIMAL_EDITION_DOUBLE = 5_000
 
@@ -111,6 +222,26 @@ def _air_etranger(mot: str) -> bool:
     if any(c in "éèêàâùûôîïëç" for c in mot.lower()):
         return False
     return bool(_ETRANGER.search(mot.lower()))
+
+
+def _passage_etranger(correcteur, jetons) -> bool:
+    """Le texte est-il, pour l'essentiel, dans une autre langue ?"""
+    tous = [j.texte.lower() for j in jetons]
+    mots = [j.texte for j in jetons if len(j.texte) >= 3 and j.texte.isalpha()]
+    if len(mots) < 4:
+        return False
+    # Une phrase francaise, meme pleine de fautes, a ses petits mots : « le »,
+    # « de », « et », « je »... « cest vraiment tres interressant se truc »
+    # n'est pas de l'allemand.
+    outils = sum(1 for m in tous if m in MOTS_OUTILS)
+    if outils >= 2 and outils / len(tous) >= 0.15:
+        return False
+    # Un mot inconnu qui a un sosie francais a une lettre pres est une faute
+    # de frappe, pas un mot etranger.
+    inconnus = sum(1 for m in mots
+                   if not correcteur._connu(m) and not correcteur._protege(m)
+                   and correcteur.lexique.suggestion(m.lower(), classe_max=CLASSE_EDITION) is None)
+    return inconnus >= 3 and inconnus / len(mots) > 0.34
 
 
 def _perd_des_accents(mot: str, candidat: str) -> bool:
@@ -232,7 +363,9 @@ class Correcteur:
             # « y » n'etant pas dans la liste de frequences.
             if self.lexique.connait(reste) and (
                     reste == "y" or self.lexique.rang(reste) <= RANG_COURANT):
-                return mot[: len(tete)] + "'" + reste
+                if self._elision_plausible(tete, reste, mot):
+                    return mot[: len(tete)] + "'" + reste
+                continue
             # Un mot capitalise est souvent un nom propre : « Shuman »,
             # « Matra », « Leblanc » ne cachent aucune apostrophe. On n'y
             # coupe que devant un mot courant intact, comme ci-dessus.
@@ -245,7 +378,7 @@ class Correcteur:
             # « cetait » -> « c'était » : le morceau de droite a le droit
             # d'avoir perdu ses accents.
             accentue = self.lexique.suggestion(reste, classe_max=CLASSE_ACCENT)
-            if accentue is not None:
+            if accentue is not None and self._elision_plausible(tete, accentue, mot):
                 return mot[: len(tete)] + "'" + accentue
 
             # « jesper » -> « j'espère » : il a aussi le droit d'avoir une
@@ -265,12 +398,42 @@ class Correcteur:
                                        classe_max=CLASSE_EDITION) is not None:
                 return None
             frappe = self.lexique.suggestion(reste, classe_max=CLASSE_EDITION)
-            if frappe is not None and self.lexique.rang(frappe) <= RANG_COURANT:
+            if frappe is not None and self.lexique.rang(frappe) <= RANG_COURANT \
+                    and self._elision_plausible(tete, frappe, mot) \
+                    and _frappe_plausible(reste.lower(), frappe.lower()):
                 return mot[: len(tete)] + "'" + frappe
         return None
 
+    def _elision_plausible(self, tete: str, reste: str, mot: str) -> bool:
+        """L'apostrophe inventee donne-t-elle une elision qui existe ?
+
+        L'elision ne se fait que devant une voyelle ou un « h » : « s'droit »
+        (pour « seroit »), « c'travailler », « d'star » n'existent pas. Seul
+        « j' » se colle aux consonnes, a l'oral : « j'suis », « j'vais ».
+
+        Et chaque elision a sa place. « s' », « m' », « t' », « n' » et
+        « c' » annoncent un verbe (ou « y », « en », « il ») : « sami » n'est
+        pas « s'ami », ni « marraver » « m'arriver ». Un nom propre ne se
+        fabrique pas non plus en minuscules : « dimérique » n'est pas
+        « d'Amérique ».
+        """
+        tete = tete.lower()
+        if reste[:1].isupper() and not mot[:1].isupper():
+            return False
+        initiale = reste[:1].lower()
+        if tete != "j" and initiale not in VOYELLES_ET_H:
+            return False
+        if tete in ("s", "m", "t", "n", "c"):
+            noyau = reste.lower()
+            if noyau in ("y", "en", "il", "ils", "elle", "elles", "on"):
+                return True
+            return (self.morphologie.verbe(noyau)
+                    or self.morphologie.est(noyau, "inf")
+                    or noyau in ("est", "était", "a", "ai", "as", "es"))
+        return True
+
     def _orthographe(self, mot: str, profond: bool = True,
-                     precedent: str = "") -> str | None:
+                     precedent: str = "", en_tete: bool = False) -> str | None:
         """Le mot correctement orthographie, s'il ne fait aucun doute.
 
         `profond` autorise la recherche a deux frappes d'ecart, qui rattrape
@@ -302,10 +465,16 @@ class Correcteur:
             # « anné » n'est pas « Anne » : c'est « année » mal finie. Rendre
             # ses accents a un mot n'a jamais consiste a lui en retirer.
             accents = None
+        if accents is not None and \
+                rectification_1990(noyau, accents):
+            # « connaitre », « évènement » : l'orthographe de 1990, pas une faute.
+            return None
         if accents is not None:
             return elision + accents
 
-        if not elision:
+        # Un mot capitalise au milieu d'une phrase ne cache pas d'apostrophe :
+        # « Jos », « Leblanc » sont des noms. En tete de phrase, si : « Cest ».
+        if not elision and not (prudent and not en_tete):
             apostrophe = self._apostrophe_manquante(mot, prudent=prudent)
             if apostrophe is not None:
                 return apostrophe
@@ -364,6 +533,13 @@ class Correcteur:
                         else CLASSE_EDITION),
         )
         if frappe is None:
+            return None
+        # « sector » n'est pas « Hector » : un nom propre ne remplace pas un
+        # mot ecrit en minuscules. Et la faute doit ressembler a une faute de
+        # frappe : voir `_frappe_plausible`.
+        if frappe[:1].isupper() and not noyau[:1].isupper():
+            return None
+        if not _frappe_plausible(noyau.lower(), frappe.lower()):
             return None
         if profond and frappe != self.lexique.suggestion(
                 noyau, classe_max=CLASSE_EDITION):
@@ -459,6 +635,21 @@ class Correcteur:
             gauche, droite = minuscule[:i], minuscule[i:]
             if not (self.lexique.connait(gauche)
                     and self.lexique.connait(droite)):
+                continue
+            # « redétecter », « antijaponaise », « ultracontemporaine » : un
+            # prefixe colle a son mot n'est pas une espace oubliee.
+            if gauche in PREFIXES:
+                continue
+            # Les espaces qu'on saute tombent presque toujours a cote d'un
+            # petit mot : « ilfaut », « jevais », « pourque ». Deux mots
+            # pleins colles — « mont réalisation », « clan cher » — sont
+            # bien plus souvent un mot que le dictionnaire ignore.
+            if gauche not in MOTS_OUTILS and droite not in MOTS_OUTILS:
+                continue
+            # Un morceau de deux lettres doit etre un mot outil : « ba gosse »,
+            # « char re ».
+            if (len(gauche) < 3 and gauche not in MOTS_OUTILS) or \
+                    (len(droite) < 3 and droite not in MOTS_OUTILS):
                 continue
             rangs = (self.lexique.rang(gauche), self.lexique.rang(droite))
             if max(rangs) > RANG_MAXIMAL_MORCEAU:
@@ -559,7 +750,8 @@ class Correcteur:
                 traites.add(i)
 
         # -- grammaire : elle voit le contexte, elle passe en premier.
-        suggestions = grammaire.analyser(
+        etranger = _passage_etranger(self, jetons)
+        suggestions = [] if etranger else grammaire.analyser(
             texte, jetons, self.lexique, self.regles_ignorees, self.registre,
             self.morphologie, fin_ouverte,
         )
@@ -596,6 +788,14 @@ class Correcteur:
             traites.update(indices)
 
         # -- orthographe : uniquement les mots qu'aucun dictionnaire ne connait.
+        #
+        # Sauf dans un passage qui n'est pas en francais. « Ein sanfter
+        # Stoff, sanft wie Seide » n'a que des mots inconnus, et chacun
+        # trouvait un sosie : « sanfter » devenait « santé ». Quand plus
+        # d'un tiers des mots sont inconnus, c'est une autre langue, et l'on
+        # ne touche a aucun.
+        if etranger:
+            return self._appliquer(texte, propositions)
         for i, jeton in enumerate(jetons):
             if i in traites or not utilisable(range(i, i + 1), jeton.debut, jeton.fin):
                 continue
@@ -603,7 +803,8 @@ class Correcteur:
                 continue
             remplacement = self._orthographe(
                 jeton.texte, profond, precedent=jetons[i - 1].texte.lower()
-                if i else "")
+                if i else "",
+                en_tete=bool(_DEBUT_DE_PHRASE.search(texte[:jeton.debut])))
             if remplacement is None or remplacement == jeton.texte:
                 continue
             propositions.append(

@@ -78,7 +78,6 @@ HOMOPHONES = [
     {"mon", "m'ont"},
     {"ton", "t'ont"},
     {"quel", "quelle", "quels", "quelles", "qu'elle", "qu'elles"},
-    {"voir", "voire"},
     {"cours", "court", "cour"},
     {"davantage", "d'avantage"},
 ]

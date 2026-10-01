@@ -596,3 +596,37 @@ class Lexique:
             if len(retenus) == maximum:
                 break
         return retenus
+
+
+# -- l'orthographe rectifiee de 1990 ------------------------------------------
+
+# Ceux-la gardent leur accent circonflexe : il les distingue d'un homonyme.
+_CIRCONFLEXES_GARDES = ("sûr", "mûr", "dû", "jeûn", "croît", "croîs")
+
+
+def rectification_1990(ecrit: str, traditionnel: str) -> bool:
+    """`ecrit` est-il la graphie rectifiee (1990) de `traditionnel` ?
+
+    Les rectifications sont l'orthographe officielle de l'Education
+    nationale depuis 2008 ; l'ancienne reste admise. Ni l'une ni l'autre
+    n'est une faute, et Papote n'a pas a ramener « connaitre » a
+    « connaître », ni « évènement » a « événement ».
+
+    Deux regles couvrent l'essentiel :
+    - « î » et « û » perdent leur accent (« connaitre », « gout »,
+      « chaine »), sauf la ou il distingue deux mots (« sûr », « dû »...) ;
+    - « é » devient « è » devant une syllabe muette (« évènement »,
+      « sècheresse », « protègera »).
+    """
+    a, b = ecrit.lower(), traditionnel.lower()
+    if len(a) != len(b) or a == b:
+        return False
+    if b.startswith(_CIRCONFLEXES_GARDES):
+        return False
+    for x, y in zip(a, b):
+        if x == y:
+            continue
+        if (y, x) in (("î", "i"), ("û", "u"), ("é", "è")):
+            continue
+        return False
+    return True

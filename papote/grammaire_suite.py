@@ -412,6 +412,10 @@ def _accord_adjectif_attribut(ctx, i: int):
         return None
     if not (_est_adjectif(ctx, mot) or ctx.est_participe(mot)):
         return None
+    # « tout feu, tout flamme », « bien sûr », « frère et sœur » : des
+    # locutions et des coordinations, pas des adjectifs a accorder.
+    if ctx.mot(i - 1) in ("tout", "bien") or ctx.apercu(i + 1) in ("et", "ou"):
+        return None
     # « elles sont source de débats » : un nom attribut, qui garde son
     # nombre.
     if ctx.apercu(i + 1) in ("de", "d'") or ctx.apercu(i + 1).startswith("d'"):
@@ -1160,7 +1164,9 @@ def _modele_statistique(ctx, i: int):
     marge = MARGES_PARTICULIERES.get(normal, MARGE_STATISTIQUE)
     choix = modele.trancher(suite, place[i], normal, candidats,
                             marge, PREUVES_STATISTIQUE)
-    if choix is None or _veto_statistique(ctx, i, normal, choix):
+    if choix is None or _veto_statistique(ctx, i, normal, choix) \
+            or _retire_ce_qui_est_voulu(normal, choix) \
+            or (classe is not None and not _classe_attendue(ctx, i, choix)):
         return None
     if classe is not None:
         forme = _stat.forme_de_classe(ctx.morphologie, classe[1], choix, mot)
@@ -1215,6 +1221,23 @@ def _veto_statistique(ctx, i: int, ecrit: str, choix: str) -> bool:
                 or ctx.morphologie.verbe(ctx.mot(i - 1))
                 or ctx.morphologie.est(ctx.mot(i - 1), "inf")):
             return True
+    if ecrit == "on" and choix == "ont":
+        # « on dit », « on écrit » : « on » sujet devant son verbe.
+        if ctx.morphologie.verbe(suivant):
+            return True
+    if ecrit.startswith("quel") and choix.startswith("qu'"):
+        # « pour quels gouvernements » : un determinant devant son nom.
+        if ctx.morphologie.nom(suivant):
+            return True
+    if ecrit == "leurs" and choix == "leur" and ctx.morphologie.nom_pluriel(suivant):
+        # « annoncé leurs smartphones » : un possessif devant son nom pluriel.
+        return True
+    if ecrit == "leur" and choix == "leurs" and (
+            ctx.morphologie.verbe(suivant) or suivant in ("en", "y", "a", "ai")):
+        return True
+    if ecrit == "tous" and choix == "tout" and ctx.morphologie.verbe(ctx.mot(i - 1)):
+        # « si on s'y met tous » : le pronom, apres son verbe.
+        return True
     if ecrit == "se" and choix == "ce":
         # « qui se ressemble se gène » : « se » devant un verbe est a sa place.
         if ctx.morphologie.verbe(suivant) or ctx.morphologie.est(suivant, "inf"):
@@ -1245,4 +1268,45 @@ def _veto_statistique(ctx, i: int, ecrit: str, choix: str) -> bool:
     if "-" in precedent_sep or "/" in precedent_sep:
         # « grimpeur/se », « peut-être » : un morceau de mot compose.
         return True
+    return False
+
+
+def _retire_ce_qui_est_voulu(ecrit: str, choix: str) -> bool:
+    """Une apostrophe ou un accent tape ne s'enleve pas sur un pari.
+
+    On oublie un accent ; on n'en ajoute pas un par megarde. « s'y adonnant »,
+    « l'a ralentie », « où flottent », « régler ça » : ce qu'on a pris la
+    peine de taper etait voulu. Seul « à » fait exception : « il à mangé »
+    est une faute courante.
+    """
+    if "'" in ecrit and "'" not in choix:
+        return True
+    if ecrit == "à":
+        return False
+    return _accents(choix) < _accents(ecrit)
+
+
+def _accents(mot: str) -> int:
+    return sum(1 for c in mot if c in "àâäéèêëîïôöùûüç")
+
+
+AVANT_UN_INFINITIF = {"à", "de", "d'", "pour", "sans", "par", "peut", "peux",
+                      "veut", "veux", "doit", "dois", "faut", "va", "vais",
+                      "vas", "vont", "aller", "pouvoir", "vouloir", "devoir",
+                      "falloir", "savoir", "sait", "sais", "aime", "aimes"}
+
+
+def _classe_attendue(ctx, i: int, choix: str) -> bool:
+    """Le modele ne remet une forme verbale que la ou la grammaire l'appelle.
+
+    « leurs loyers diminuer » ne devient pas « diminué » : un participe
+    veut un auxiliaire devant, un infinitif une preposition ou un verbe.
+    """
+    precedent = ctx.noyau(i - 1)
+    if precedent in ("pas", "plus", "jamais", "bien", "déjà", "tout", "rien"):
+        precedent = ctx.noyau(i - 2)
+    if choix == _stat.PP:
+        return precedent in AUXILIAIRES
+    if choix == _stat.INF:
+        return precedent in AVANT_UN_INFINITIF or ctx.elision(i - 1) == "d'"
     return False
