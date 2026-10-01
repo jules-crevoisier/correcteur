@@ -401,6 +401,30 @@ l'autre lecture est impossible :
 | `si j'aurais su` → `si j'avais su` | `je serais ravi de t'aider` |
 | `ils se sont trompé` → `trompés` | `elles se sont écrit` |
 
+### Le modèle statistique
+
+Les règles savent ce qu'on leur a dit. « a » ou « à », « ou » ou « où »,
+« son » ou « sont » se décident surtout par ce qui entoure le mot, de mille
+façons qu'aucune liste ne couvre. Pour ceux-là, Papote a appris l'usage :
+dans 75 millions de mots de français correct, il a compté les contextes de
+deux mots de chaque côté d'une trentaine d'ensembles d'homophones, et
+seulement d'eux (`papote/statistique.py`). Pour corriger, il essaie chaque
+homophone à la place du mot écrit et garde celui dont les contextes sont
+**nettement** plus attestés.
+
+Il pèse 5 Mo et ne ralentit rien : quelques recherches dans un tableau trié par
+mot concerné. Il parle en dernier, quand aucune règle n'a tranché, et se tait
+dès que le doute s'installe : un mot déjà vu dans ce contexte exact reste tel
+quel, un voisin en cours de correction le fait attendre, et des vetos
+grammaticaux couvrent ce que deux mots ne voient pas (« Paul a la clé » : un
+sujet devant, donc le verbe avoir). Sur du texte jamais vu, il touche un mot
+juste sur sept cents et retrouve plus d'une faute d'homophone sur deux.
+
+```
+python outils/entrainer_modele.py entrainer corpus/*.txt   # refaire le modèle
+python outils/entrainer_modele.py mesurer corpus/*.txt     # le mesurer
+```
+
 ### La morphologie
 
 Longtemps, les accords se sont faits en devinant. Le pluriel d'un nom, c'était
@@ -537,10 +561,10 @@ raison. Il sert à voir ce qui casse et ce qui manque, pas à se comparer.
 
 | | au départ | aujourd'hui |
 |---|---|---|
-| phrases justes touchées (moitié lue) | 14,6 % | 7,7 % |
-| phrases justes touchées (moitié à l'écart) | 16,1 % | 12,3 % |
-| fautes corrigées (moitié lue) | 7 % | 9 % |
-| fautes corrigées (moitié à l'écart) | 11 % | 12 % |
+| phrases justes touchées (moitié lue) | 14,6 % | 8,6 % |
+| phrases justes touchées (moitié à l'écart) | 16,1 % | 13,0 % |
+| fautes corrigées (moitié lue) | 7 % | 12 % |
+| fautes corrigées (moitié à l'écart) | 11 % | 15 % |
 
 ## En ligne de commande
 
