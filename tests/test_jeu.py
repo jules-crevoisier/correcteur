@@ -42,6 +42,8 @@ def test_un_raccourci_n_est_jamais_pose_en_bloquant(monkeypatch):
     """`suppress=True` rendrait chaque appui sur Ctrl tributaire de Python."""
     faux = ClavierEspion()
     monkeypatch.setitem(sys.modules, "keyboard", faux)
+    # Sous Windows, RegisterHotKey passe d'abord : on teste le repli.
+    monkeypatch.setattr(Raccourci, "_activer_par_le_systeme", lambda self: False)
     Raccourci("ctrl+alt+c", lambda: None).activer()
     assert faux.appels == [("ctrl+alt+c", False)]
 
@@ -70,7 +72,8 @@ def test_les_combinaisons_sans_sens_sont_refusees(combinaison):
 
 # -- reconnaitre un jeu -----------------------------------------------------
 
-def test_hors_windows_on_ne_reconnait_jamais_un_jeu():
+def test_hors_windows_on_ne_reconnait_jamais_un_jeu(monkeypatch):
+    monkeypatch.setattr(jeu.os, "name", "posix")
     assert jeu.jeu_au_premier_plan(["eldenring.exe"], "eldenring.exe") is False
 
 
