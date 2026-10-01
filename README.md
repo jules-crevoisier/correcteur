@@ -564,17 +564,42 @@ Mesures sur la moitié jamais lue de chaque banc :
 | | phrases justes touchées | fautes corrigées |
 |---|---|---|
 | LanguageTool 6.7 — au départ | 16,1 % | 11 % |
-| LanguageTool 6.7 — aujourd'hui | 9,3 % | 13 % |
+| LanguageTool 6.7 — aujourd'hui | 9,4 % | 15 % |
 | Grammalecte 2.3.0 — au départ | 4,0 % | 11 % |
-| Grammalecte 2.3.0 — aujourd'hui | 2,7 % | 11 % |
+| Grammalecte 2.3.0 — aujourd'hui | 2,8 % | 12 % |
 | Citations du Wiktionnaire (moitié lue) — au départ | 9,1 % | — |
-| Citations du Wiktionnaire (moitié lue) — aujourd'hui | 4,7 % | — |
+| Citations du Wiktionnaire (moitié lue) — aujourd'hui | 5,0 % | — |
 
 Sur un échantillon relu à la main, deux « phrases justes » touchées sur trois
 du banc LanguageTool contenaient en fait une faute que Papote corrige à raison
 (« apres », « des nouveau article », « tu a passer ») : la vraie part de fausses
 alertes y tourne autour de 3 %. Sur les citations du Wiktionnaire, ce qui reste
 est surtout du texte en langue étrangère ou en ancien français.
+
+#### Qui est le sujet de quel verbe
+
+La plupart des règles regardent deux ou trois mots autour de la faute. Pour
+les accords, ce n'est pas assez : dans « le prix des maisons **baissent** »,
+le mot juste avant le verbe n'est pas son sujet. `papote/structure.py` remonte
+du verbe à son sujet en sautant ce qui s'intercale — pronoms compléments,
+compléments du nom, relatives, incises —, reconnaît les sujets coordonnés
+(« mon père et mon oncle »), et suit l'attribut jusqu'au sujet à travers
+« semble », « peut être », « a été » :
+
+```
+Le prix des maisons baissent.                  → baisse
+L'enfant que j'accompagne à l'école arrivent.  → arrive
+Ils semblent avoir été attaqué.                → attaqués
+Mon père et mon oncle sont restés très calme.  → calmes
+```
+
+Il ne répond que quand le chemin est sans ambiguïté, et se tait sinon :
+questions inversées (« Quels gestes accomplit un humaniste ? »), énumérations
+dont on ne voit que la fin, comparaisons (« plus fort que ses frères gagne »),
+noms collectifs (« une foule de gens »), mots qui peuvent être un nom ou un
+verbe (« les cuillères en bois »). Sur les moitiés jamais lues des bancs, il
+corrige 10 % de fautes en plus sur LanguageTool et 18 % sur Grammalecte, pour
+cinq phrases justes touchées de plus sur plusieurs milliers.
 
 L'orthographe rectifiée de 1990 (« connaitre », « évènement », « boite »,
 « il protègera ») est l'orthographe officielle de l'école : Papote ne la

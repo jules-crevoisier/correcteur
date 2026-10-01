@@ -1952,6 +1952,12 @@ def _accord_participe_etre(ctx: Contexte, i: int):
     # avait pas.
     if _pronominal(ctx, i) and _objet_direct_apres(ctx, i):
         return None
+    # « le rendez-vous que nous nous sommes fixé » : l'objet est le relatif,
+    # place avant ; c'est avec lui que le participe s'accorde.
+    if _pronominal(ctx, i) and any(
+            ctx.mot(k) in ("que", "qu'") or ctx.elision(k) == "qu'"
+            for k in range(max(0, i - 6), i)):
+        return None
 
     # « nous sommes arrivé » : le sujet est juste la. « ils se sont trompé » :
     # il est un mot plus loin, derriere le pronom reflechi.
@@ -2217,6 +2223,10 @@ def _ouvre_la_proposition(ctx: "Contexte", i: int, relatif: bool) -> bool:
         if avant and ctx.morphologie.nom(avant) and not ctx.debut_de_segment(i - 1):
             return False
     if precedent in OUVRANTS or ctx.elision(i - 1) == "qu'":
+        if precedent in ("que", "qu'") or ctx.elision(i - 1) == "qu'":
+            # « plus fort que ses frères gagne » : une comparaison.
+            from .structure import _que_subordonnant
+            return _que_subordonnant(ctx, i - 1)
         return True
     # « la plupart des gens pensent », « beaucoup des invités sont » : la
     # quantite partage le nombre du groupe qu'elle introduit. Sauf si elle
@@ -3385,3 +3395,4 @@ def _accord_determinant_singulier(ctx: Contexte, i: int):
 # Les regles de tous les jours vivent a part ; elles se declarent a
 # l'import, apres celles-ci, et passent donc apres elles.
 from . import grammaire_suite  # noqa: E402,F401
+from . import structure  # noqa: E402,F401

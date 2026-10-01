@@ -937,6 +937,9 @@ def _accord_sujet_nominal_singulier(ctx, i: int):
     # n'a rien a corriger.
     if not traits or "3s" in traits or not traits & {"1s", "2s"}:
         return None
+    # « ton amie et ma mère réunis » : un participe, pas un verbe conjugue.
+    if traits & {"pms", "pmp", "pfs", "pfp"}:
+        return None
     if traits & NOMINAUX_SUITE or mot in MOTS_INVARIABLES:
         return None
     k = i - 1
