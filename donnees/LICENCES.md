@@ -34,6 +34,24 @@ Ordre de fréquence extrait de [wordfreq](https://github.com/rspeer/wordfreq)
 ci-dessus. Le fichier ne contient que des mots, dans l'ordre du plus courant au
 plus rare : il sert à départager deux corrections également plausibles.
 
+## `modele_fr.bin.gz` — le modèle statistique des homophones
+
+Des empreintes de contextes (deux mots de chaque côté de « a/à », « ou/où »,
+« son/sont »… et des formes en [e] des verbes du premier groupe) et le nombre
+de fois où chacun a été vu. Aucune phrase n'y figure : seulement des comptes,
+sous forme d'empreintes CRC32 non réversibles. Fabriqué par
+`outils/entrainer_modele.py` à partir de :
+
+| Corpus | Licence | Mots |
+|---|---|---|
+| [Mozilla Common Voice](https://github.com/common-voice/common-voice), phrases françaises | CC0 | 15 M |
+| [Tatoeba](https://tatoeba.org), phrases françaises | CC-BY 2.0 France — © les contributeurs de tatoeba.org | 1,4 M |
+| [ELTeC-fra](https://github.com/COST-ELTeC/ELTeC-fra), 100 romans 1840–1920 | textes du domaine public, encodage CC-BY 4.0 (COST Action CA16204) | 8 M |
+| [Europarl v7](https://www.statmt.org/europarl/), débats du Parlement européen | réutilisation libre avec mention de la source (Koehn, 2005) | 51 M |
+
+Les comptes sont une œuvre dérivée de ces corpus ; leurs licences autorisent
+cette réutilisation avec attribution, faite ici.
+
 ## Le reste du projet
 
 Le code du correcteur ne dépend d'aucune bibliothèque de correction : tout ce

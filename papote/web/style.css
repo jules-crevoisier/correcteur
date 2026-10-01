@@ -8,14 +8,20 @@
   - des surfaces qui se distinguent par leur clarte, pas par des bordures.
     Un trait a 6 % d'opacite se lit comme un pli du papier ; a 40 %, comme
     une couture ;
+  - une seule couleur d'accent. Le vert dit « corrige », l'ambre « a
+    verifier », le rouge « on ne revient pas en arriere » — et rien d'autre
+    n'a de couleur ;
   - un seul rayon de coin par famille d'objets ;
   - des transitions courtes, sur une courbe qui ralentit a l'arrivee. Le
     mouvement lineaire a l'air mecanique ;
   - le texte au repos n'est jamais blanc pur sur noir pur : le contraste
-    maximal fatigue et fait vibrer les caracteres.
+    maximal fatigue et fait vibrer les caracteres. Mais tout texte qu'on doit
+    lire tient le contraste AA, y compris le gris des explications.
 
-  Le theme suit celui de Windows. Les deux sont ecrits ici, et c'est le
-  systeme qui choisit.
+  La fenetre est faite de deux plans : la colonne, posee sur le fond, et la
+  zone de travail, une feuille aux coins arrondis posee a cote — comme les
+  reglages de Windows 11. Le theme suit celui de Windows. Les deux sont
+  ecrits ici, et c'est le systeme qui choisit.
 */
 
 /* ==========================================================================
@@ -23,72 +29,123 @@
    ========================================================================== */
 
 :root {
+  color-scheme: dark;
+
+  /* Le fond est celui que pose `fenetre_web.py` avant que la page n'arrive :
+     les deux doivent etre identiques, ou l'ouverture clignote. */
   --fond: #0e1014;
-  --fond-voile: rgba(14, 16, 20, 0.72);
-  --surface: #161922;
-  --surface-haute: #1e2230;
-  --surface-pressee: #121620;
+  --panneau: #13161c;
+  --surface: #191d25;
+  --surface-haute: #20252f;
+  --surface-pressee: #282e3a;
+  --surface-flottante: #1e232c;
+  --champ-fond: #111419;
+  --entree-active: rgba(255, 255, 255, 0.075);
 
-  --trait: rgba(255, 255, 255, 0.07);
-  --trait-net: rgba(255, 255, 255, 0.12);
+  --trait: rgba(255, 255, 255, 0.065);
+  --trait-net: rgba(255, 255, 255, 0.11);
+  --trait-fort: rgba(255, 255, 255, 0.2);
 
-  --texte: #e9ebf0;
-  --texte-doux: #9aa2b6;
-  --texte-eteint: #667090;
+  --texte: #eceef3;
+  --texte-doux: #a4abbb;
+  --texte-eteint: #858c9d;
 
-  --accent: #5b8cff;
-  --accent-vif: #7aa2ff;
-  --accent-sourd: rgba(91, 140, 255, 0.14);
-  --sur-accent: #0b1020;
+  /* Le bleu de la marque, un ton plus profond quand il porte du texte
+     blanc : #5b8cff sous du blanc ne tient pas le contraste. */
+  --accent: #3a6df0;
+  --accent-survol: #3463e0;
+  --accent-texte: #8cb0ff;
+  --accent-sourd: rgba(91, 140, 255, 0.15);
+  --accent-anneau: rgba(91, 140, 255, 0.38);
+  --accent-ombre: rgba(58, 109, 240, 0.45);
+  --sur-accent: #ffffff;
 
-  --succes: #3ecf8e;
-  --succes-sourd: rgba(62, 207, 142, 0.14);
+  --succes: #4fd69c;
+  --succes-sourd: rgba(62, 207, 142, 0.13);
+  --succes-trait: rgba(62, 207, 142, 0.55);
   --alerte: #ffb454;
-  --alerte-sourd: rgba(255, 180, 84, 0.14);
+  --alerte-sourd: rgba(255, 180, 84, 0.13);
+  --alerte-trait: rgba(255, 180, 84, 0.7);
+  --danger: #ff8a80;
+  --danger-sourd: rgba(255, 110, 100, 0.13);
 
-  --ombre: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.28);
-  --ombre-haute: 0 2px 6px rgba(0, 0, 0, 0.35), 0 18px 48px rgba(0, 0, 0, 0.42);
+  --ombre-panneau: 0 0 0 1px rgba(0, 0, 0, 0.25), 0 8px 30px rgba(0, 0, 0, 0.25);
+  --ombre-carte: inset 0 1px 0 rgba(255, 255, 255, 0.025), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --ombre-bouton: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --ombre-haute: 0 18px 50px rgba(0, 0, 0, 0.55), 0 4px 12px rgba(0, 0, 0, 0.35);
+  --bouton-fond: #232833;
+  --bouton-survol: #2a303c;
 
-  --rayon: 12px;
+  --rayon-grand: 14px;
+  --rayon: 10px;
   --rayon-petit: 8px;
   --rayon-rond: 999px;
 
   /* Elle ralentit fort a l'arrivee : c'est ce qui donne l'impression que
      l'objet a un poids plutot que d'etre teleporte. */
   --courbe: cubic-bezier(0.22, 1, 0.36, 1);
-  --vitesse: 180ms;
+  --vitesse: 160ms;
 
   --rail: 232px;
+  --borne: 880px;
+
+  /* Segoe UI Variable est la police de Windows 11 ; les suivantes servent
+     partout ailleurs. On ne telecharge rien : une police qui met une
+     seconde a arriver fait sauter toute la page. */
+  --police: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI",
+            -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial,
+            system-ui, sans-serif;
+  --police-titre: "Segoe UI Variable Display", "Segoe UI Variable", "Segoe UI",
+                  -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial,
+                  system-ui, sans-serif;
+  --police-mono: "Cascadia Code", "Cascadia Mono", Consolas, ui-monospace,
+                 "DejaVu Sans Mono", monospace;
 }
 
 @media (prefers-color-scheme: light) {
   :root {
-    --fond: #f6f7f9;
-    --fond-voile: rgba(246, 247, 249, 0.75);
+    color-scheme: light;
+
+    --fond: #eceef2;
+    --panneau: #f8f9fb;
     --surface: #ffffff;
-    --surface-haute: #f0f2f6;
-    --surface-pressee: #e7eaf0;
+    --surface-haute: #f2f4f7;
+    --surface-pressee: #e6e9ef;
+    --surface-flottante: #ffffff;
+    --champ-fond: #ffffff;
+    --entree-active: #ffffff;
 
-    --trait: rgba(9, 13, 25, 0.08);
-    --trait-net: rgba(9, 13, 25, 0.14);
+    --trait: rgba(15, 23, 42, 0.075);
+    --trait-net: rgba(15, 23, 42, 0.13);
+    --trait-fort: rgba(15, 23, 42, 0.24);
 
-    --texte: #11151f;
-    --texte-doux: #5a6379;
-    --texte-eteint: #8d95a8;
+    --texte: #10141c;
+    --texte-doux: #535b6c;
+    --texte-eteint: #687082;
 
-    --accent: #2f6bff;
-    --accent-vif: #1f57e8;
-    --accent-sourd: rgba(47, 107, 255, 0.10);
+    --accent: #2b5fe8;
+    --accent-survol: #234fd0;
+    --accent-texte: #2557dc;
+    --accent-sourd: rgba(43, 95, 232, 0.09);
+    --accent-anneau: rgba(43, 95, 232, 0.3);
+    --accent-ombre: rgba(43, 95, 232, 0.3);
     --sur-accent: #ffffff;
 
-    --succes: #129a63;
-    --succes-sourd: rgba(18, 154, 99, 0.10);
-    --alerte: #b56a00;
-    --alerte-sourd: rgba(181, 106, 0, 0.10);
+    --succes: #11804f;
+    --succes-sourd: rgba(17, 150, 90, 0.09);
+    --succes-trait: rgba(17, 128, 79, 0.55);
+    --alerte: #995700;
+    --alerte-sourd: rgba(214, 138, 0, 0.11);
+    --alerte-trait: rgba(204, 122, 0, 0.85);
+    --danger: #c42b1c;
+    --danger-sourd: rgba(196, 43, 28, 0.08);
 
-    --ombre: 0 1px 2px rgba(16, 24, 40, 0.06), 0 8px 24px rgba(16, 24, 40, 0.08);
-    --ombre-haute: 0 2px 6px rgba(16, 24, 40, 0.08),
-                   0 18px 48px rgba(16, 24, 40, 0.12);
+    --ombre-panneau: 0 0 0 1px rgba(15, 23, 42, 0.06), 0 6px 24px rgba(15, 23, 42, 0.06);
+    --ombre-carte: 0 1px 2px rgba(15, 23, 42, 0.05), 0 1px 1px rgba(15, 23, 42, 0.03);
+    --ombre-bouton: 0 1px 2px rgba(15, 23, 42, 0.06);
+    --ombre-haute: 0 18px 48px rgba(15, 23, 42, 0.16), 0 3px 10px rgba(15, 23, 42, 0.08);
+    --bouton-fond: #ffffff;
+    --bouton-survol: #f4f6f9;
   }
 }
 
@@ -112,40 +169,61 @@ html, body {
 body {
   background: var(--fond);
   color: var(--texte);
-  /* Segoe UI Variable est la police de Windows 11 ; les suivantes servent
-     partout ailleurs. On ne telecharge rien : une police qui met une seconde
-     a arriver fait sauter toute la page. */
-  font-family: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI",
-               system-ui, -apple-system, "Inter", sans-serif;
+  font-family: var(--police);
   font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  font-feature-settings: "ss01", "cv11";
 }
 
-::selection { background: var(--accent-sourd); }
+button { font: inherit; color: inherit; }
+
+::selection { background: var(--accent-anneau); }
 
 /* Le defilement doit se voir sans encombrer. */
 * { scrollbar-width: thin; scrollbar-color: var(--trait-net) transparent; }
-*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar { width: 12px; height: 12px; }
+*::-webkit-scrollbar-track { background: transparent; }
 *::-webkit-scrollbar-thumb {
   background: var(--trait-net);
-  border: 3px solid transparent;
+  border: 4px solid transparent;
   background-clip: content-box;
   border-radius: var(--rayon-rond);
 }
-*::-webkit-scrollbar-thumb:hover { background-color: var(--texte-eteint);
-  background-clip: content-box; }
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--texte-eteint);
+  background-clip: content-box;
+}
 
+/* Le contour de focus ne se montre qu'au clavier, et se voit alors
+   toujours : deux pixels d'accent, decolles de l'objet. */
+:focus { outline: none; }
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--accent-texte);
   outline-offset: 2px;
-  border-radius: var(--rayon-petit);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  * { transition-duration: 1ms !important; animation-duration: 1ms !important; }
+  *, *::before, *::after {
+    transition-duration: 1ms !important;
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
 }
+
+/* Pour les lecteurs d'ecran : present, mais invisible. */
+.hors-champ {
+  position: fixed;
+  left: -9999px;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.icone { flex: none; display: block; }
 
 /* ==========================================================================
    Ossature
@@ -153,14 +231,8 @@ body {
 
 .cadre {
   display: grid;
-  grid-template-columns: var(--rail) 1fr;
+  grid-template-columns: var(--rail) minmax(0, 1fr);
   height: 100%;
-}
-
-/* En dessous, la colonne passe en bandeau horizontal : la fenetre reste
-   utilisable a la moitie de sa largeur. */
-@media (max-width: 720px) {
-  .cadre { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
 }
 
 /* -------------------- la colonne -------------------- */
@@ -168,141 +240,243 @@ body {
 .rail {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 14px 12px;
-  background: var(--fond-voile);
-  backdrop-filter: blur(24px) saturate(160%);
-  border-right: 1px solid var(--trait);
+  gap: 6px;
+  padding: 16px 12px 14px;
+  min-width: 0;
   overflow: hidden;
-}
-
-@media (max-width: 720px) {
-  .rail {
-    border-right: 0;
-    border-bottom: 1px solid var(--trait);
-    padding: 10px 12px;
-  }
-  .rail-pied { display: none; }
 }
 
 .marque {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 6px 8px 14px;
+  padding: 4px 10px 18px;
 }
 .marque-logo { display: flex; }
-.marque-logo svg { display: block; }
-.marque-texte { display: flex; flex-direction: column; line-height: 1.15; }
-.marque-texte strong { font-size: 15px; letter-spacing: -0.01em; }
-.marque-texte small { color: var(--texte-eteint); font-size: 11px; }
+.marque-logo svg { display: block; width: 28px; height: 28px; }
+.marque-texte { display: flex; flex-direction: column; line-height: 1.2; }
+.marque-texte strong {
+  font-family: var(--police-titre);
+  font-size: 15.5px;
+  font-weight: 650;
+  letter-spacing: -0.012em;
+}
+.marque-texte small {
+  color: var(--texte-eteint);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
 
 nav { display: flex; flex-direction: column; gap: 2px; }
 
-/* En bandeau, les entrees s'enroulent sur deux rangees plutot que de
-   deborder. Elles debordaient : « overflow-x: auto » promet un defilement
-   qu'aucune molette ne declenche horizontalement dans cette fenetre, et les
-   deux dernieres pages — « Dicter » et « Réglages » — etaient simplement
-   hors d'atteinte a la largeur minimale de la fenetre elle-meme. */
-@media (max-width: 720px) {
-  .marque { padding: 0 8px 10px; }
-  nav {
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: 2px 4px;
-    padding-bottom: 2px;
-  }
-  nav .entree { white-space: nowrap; padding: 6px 9px; gap: 7px; }
-}
-
 .entree {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
+  gap: 11px;
+  height: 38px;
+  padding: 0 12px;
   border: 0;
   border-radius: var(--rayon-petit);
   background: transparent;
   color: var(--texte-doux);
-  font: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
   text-align: left;
+  white-space: nowrap;
   cursor: pointer;
   transition: background var(--vitesse) var(--courbe),
-              color var(--vitesse) var(--courbe);
+              color var(--vitesse) var(--courbe),
+              box-shadow var(--vitesse) var(--courbe);
 }
-.entree svg { flex: none; opacity: 0.85; }
-.entree:hover { background: var(--surface-haute); color: var(--texte); }
+.entree .icone { opacity: 0.85; transition: color var(--vitesse) var(--courbe); }
+.entree:hover { background: var(--entree-active); color: var(--texte); }
 .entree[aria-current="page"] {
-  background: var(--accent-sourd);
-  color: var(--accent-vif);
+  background: var(--entree-active);
+  color: var(--texte);
   font-weight: 600;
+  box-shadow: var(--ombre-bouton);
 }
-.entree[aria-current="page"] svg { opacity: 1; }
+.entree[aria-current="page"] .icone { color: var(--accent-texte); opacity: 1; }
+/* Le trait d'accent de Windows 11 : il dit « vous etes ici » sans
+   repeindre toute l'entree. */
+.entree::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 3px;
+  height: 16px;
+  margin-top: -8px;
+  border-radius: var(--rayon-rond);
+  background: var(--accent-texte);
+  transform: scaleY(0);
+  transition: transform 220ms var(--courbe);
+}
+.entree[aria-current="page"]::before { transform: scaleY(1); }
+.entree:focus-visible { outline-offset: -2px; }
 
-.rail-pied { margin-top: auto; }
+.rail-pied {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sceau {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 12px;
+  color: var(--texte-eteint);
+  font-size: 12px;
+}
+.sceau .icone { color: var(--succes); }
 
 .annonce {
-  background: var(--succes-sourd);
-  border: 1px solid var(--trait);
-  border-radius: var(--rayon);
-  padding: 12px;
   display: flex;
   flex-direction: column;
   gap: 6px;
+  padding: 14px;
+  border: 1px solid var(--trait);
+  border-radius: var(--rayon);
+  background:
+    linear-gradient(160deg, var(--accent-sourd), transparent 70%),
+    var(--surface);
+  box-shadow: var(--ombre-carte);
   animation: surgir 320ms var(--courbe);
 }
-.annonce-titre { color: var(--succes); font-weight: 600; font-size: 13px; }
-.annonce-texte { margin: 0 0 4px; color: var(--texte-doux); font-size: 12px; }
+.annonce-titre { font-weight: 600; font-size: 13px; }
+.annonce-texte { margin: 0 0 6px; color: var(--texte-doux); font-size: 12px; }
 
 @keyframes surgir {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: none; }
 }
 
 /* -------------------- la zone de travail -------------------- */
 
-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  margin: 8px 8px 8px 0;
+  border: 1px solid var(--trait);
+  border-radius: var(--rayon-grand);
+  background: var(--panneau);
+  box-shadow: var(--ombre-panneau);
+  overflow: hidden;
+}
+
+.borne {
+  width: 100%;
+  max-width: var(--borne);
+  margin: 0 auto;
+}
 
 .entete {
-  padding: 26px 32px 18px;
-  border-bottom: 1px solid var(--trait);
+  position: relative;
+  z-index: 2;
+  padding: 30px 40px 18px;
+  border-bottom: 1px solid transparent;
+  transition: border-color var(--vitesse) var(--courbe),
+              box-shadow var(--vitesse) var(--courbe);
+}
+/* L'en-tete se detache quand le contenu passe dessous. */
+.defilee .entete {
+  border-bottom-color: var(--trait);
+  box-shadow: 0 6px 16px -12px rgba(0, 0, 0, 0.5);
 }
 .entete h1 {
   margin: 0;
+  font-family: var(--police-titre);
   font-size: 26px;
-  font-weight: 600;
+  font-weight: 650;
+  line-height: 1.2;
   /* Un titre resserre se lit comme un titre ; a l'interlettrage du corps de
      texte, il a l'air d'un paragraphe en gras. */
   letter-spacing: -0.022em;
 }
-.entete p { margin: 3px 0 0; color: var(--texte-doux); }
-
-@media (max-width: 720px) {
-  .entete { padding: 18px 20px 14px; }
-  .entete h1 { font-size: 21px; }
-}
+.entete p { margin: 5px 0 0; color: var(--texte-doux); font-size: 14px; }
 
 .defile {
   flex: 1;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 22px 32px 40px;
+  padding: 6px 40px 48px;
 }
-@media (max-width: 720px) { .defile { padding: 16px 20px 32px; } }
 
-.page { display: none; flex-direction: column; gap: 18px; }
-.page.active { display: flex; animation: entrer 260ms var(--courbe); }
+.page { display: none; flex-direction: column; gap: 22px; }
+.page.active { display: flex; animation: entrer 280ms var(--courbe); }
 
 @keyframes entrer {
-  from { opacity: 0; transform: translateY(6px); }
+  from { opacity: 0; transform: translateY(5px); }
   to   { opacity: 1; transform: none; }
 }
 
 .colonnes {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
   gap: 18px;
   align-items: start;
+}
+
+/* En dessous, la colonne passe en bandeau horizontal : la fenetre reste
+   utilisable a la moitie de sa largeur. Les entrees s'enroulent plutot que
+   de deborder : un defilement horizontal ne se declenche a la molette nulle
+   part dans cette fenetre, et les dernieres pages etaient hors d'atteinte a
+   la largeur minimale de la fenetre elle-meme. */
+@media (max-width: 720px) {
+  .cadre { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; }
+  .rail {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    padding: 10px 12px 8px;
+  }
+  .rail-pied { display: none; }
+  .marque { padding: 0 6px 0 4px; }
+  .marque-texte small { display: none; }
+  nav {
+    flex: 1;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 2px;
+  }
+  .entree { height: 34px; padding: 0 10px; gap: 7px; font-size: 13px; }
+  .entree::before {
+    left: 50%;
+    top: auto;
+    bottom: 0;
+    width: 16px;
+    height: 3px;
+    margin: 0 0 0 -8px;
+    transform: scaleX(0);
+  }
+  .entree[aria-current="page"]::before { transform: scaleX(1); }
+  main { margin: 0 8px 8px; }
+  .entete { padding: 20px 20px 12px; }
+  .entete h1 { font-size: 22px; }
+  .entete p { font-size: 13px; }
+  .defile { padding: 4px 20px 32px; }
+}
+
+/* Plus etroit encore, seule la page ouverte garde son nom : les autres se
+   reconnaissent a leur icone, et se nomment au survol. */
+@media (max-width: 640px) {
+  .entree:not([aria-current="page"]) { padding: 0 9px; }
+  .entree:not([aria-current="page"]) .entree-nom {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 }
 
 /* ==========================================================================
@@ -312,23 +486,91 @@ main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .carte {
   background: var(--surface);
   border: 1px solid var(--trait);
-  border-radius: var(--rayon);
-  padding: 18px 20px;
-  box-shadow: var(--ombre);
+  border-radius: var(--rayon-grand);
+  padding: 20px 22px;
+  box-shadow: var(--ombre-carte);
+  min-width: 0;
 }
-.carte h2 {
-  margin: 0 0 2px;
+.carte h2, .carte-tete h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.006em;
+}
+.carte-tete {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin-bottom: 10px;
+}
+.carte-tete h2 { flex: 1; min-width: 0; }
+
+.tuile {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: var(--accent-sourd);
+  color: var(--accent-texte);
+}
+.tuile.petite {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: var(--surface-haute);
+  color: var(--texte-doux);
+}
+
+.nombre {
+  padding: 1px 9px;
+  border-radius: var(--rayon-rond);
+  background: var(--surface-haute);
+  color: var(--texte-doux);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.aide {
+  margin: 0 0 16px;
+  color: var(--texte-doux);
+  font-size: 13px;
+  line-height: 1.5;
+  max-width: 64ch;
+}
+
+.carte-pied {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+  margin: 18px -22px -20px;
+  padding: 12px 16px 12px 22px;
+  border-top: 1px solid var(--trait);
+  background: color-mix(in srgb, var(--surface-haute) 45%, transparent);
+  border-radius: 0 0 var(--rayon-grand) var(--rayon-grand);
+}
+
+/* Les groupes de la page « Reglages » : le titre au-dessus de la carte,
+   comme dans les reglages de Windows, et les rangees a l'interieur. */
+.groupe { display: flex; flex-direction: column; gap: 8px; }
+.groupe-titre {
+  margin: 4px 2px 0;
   font-size: 14px;
   font-weight: 600;
-  letter-spacing: -0.005em;
+  letter-spacing: -0.003em;
 }
-.aide {
-  margin: 0 0 14px;
+.groupe-aide {
+  margin: -4px 2px 2px;
   color: var(--texte-doux);
-  font-size: 12.5px;
-  max-width: 62ch;
+  font-size: 13px;
+  max-width: 70ch;
 }
-.carte h2 + .aide { margin-top: 6px; }
+.carte.rangs { padding: 0; overflow: hidden; }
+.carte.rangs .carte-pied { margin: 0; }
 
 /* ==========================================================================
    L'editeur
@@ -336,46 +578,415 @@ main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 
 .editeur {
   background: var(--surface);
-  border: 1px solid var(--trait);
-  border-radius: var(--rayon);
-  box-shadow: var(--ombre);
-  overflow: hidden;
+  border: 1px solid var(--trait-net);
+  border-radius: var(--rayon-grand);
+  box-shadow: var(--ombre-carte);
   transition: border-color var(--vitesse) var(--courbe),
               box-shadow var(--vitesse) var(--courbe);
 }
 .editeur:focus-within {
-  border-color: var(--accent);
-  box-shadow: var(--ombre), 0 0 0 3px var(--accent-sourd);
+  border-color: var(--accent-anneau);
+  box-shadow: var(--ombre-carte), 0 0 0 4px var(--accent-sourd);
 }
 
-#champ {
+.editeur-corps { position: relative; }
+
+/* Le champ et le rendu partagent tout ce qui decide de la place d'un mot :
+   passer de l'un a l'autre ne doit rien deplacer d'un pixel. */
+.zone-texte {
   display: block;
   width: 100%;
-  min-height: 210px;
-  max-height: 46vh;
-  resize: vertical;
-  padding: 18px 20px;
+  height: clamp(200px, 38vh, 560px);
+  margin: 0;
+  padding: 22px 26px;
   border: 0;
+  border-radius: var(--rayon-grand) var(--rayon-grand) 0 0;
   background: transparent;
   color: var(--texte);
-  font: inherit;
-  font-size: 15px;
-  line-height: 1.65;
+  font-family: var(--police);
+  font-size: 16px;
+  line-height: 1.7;
+  letter-spacing: 0;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: normal;
+  tab-size: 4;
+  overflow-y: auto;
+  resize: none;
 }
-#champ:focus { outline: none; }
+.zone-texte:focus, .zone-texte:focus-visible { outline: none; }
 #champ::placeholder { color: var(--texte-eteint); }
+
+.rendu { cursor: text; }
+
+/* Les mots touches. Le vert dit « Papote a change ceci » ; l'ambre ondule,
+   comme partout ou l'on doute d'un mot. Ni marge ni bordure : le mot ne
+   doit pas bouger d'un pixel entre les deux vues. */
+.repere {
+  color: inherit;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background var(--vitesse) var(--courbe),
+              box-shadow var(--vitesse) var(--courbe);
+}
+.repere.corrige {
+  background: var(--succes-sourd);
+  box-shadow: inset 0 -2px 0 var(--succes-trait);
+}
+.repere.corrige:hover, .repere.corrige.eclaire, .repere.corrige.ouvert {
+  background: color-mix(in srgb, var(--succes) 24%, transparent);
+  box-shadow: inset 0 -2px 0 var(--succes);
+}
+.repere.douteux {
+  text-decoration: underline wavy var(--alerte-trait);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 4px;
+  text-decoration-skip-ink: none;
+}
+.repere.douteux:hover, .repere.douteux.eclaire, .repere.douteux.ouvert {
+  background: var(--alerte-sourd);
+  text-decoration-color: var(--alerte);
+}
+.repere:focus-visible { outline: 2px solid var(--accent-texte); outline-offset: 1px; }
 
 .editeur-barre {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 12px 10px 14px;
   border-top: 1px solid var(--trait);
-  background: var(--surface-haute);
 }
 .pousse { flex: 1; }
-.compteur { color: var(--texte-eteint); font-size: 12px;
-  font-variant-numeric: tabular-nums; }
+.compteur {
+  padding-left: 4px;
+  color: var(--texte-eteint);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+#modifier + .compteur { padding-left: 2px; }
+
+/* A l'etroit, les actions secondaires gardent leur icone et perdent leur
+   nom — qui reste lisible au survol et pour les lecteurs d'ecran — pour que
+   « Corriger » ne passe jamais a la ligne. */
+@media (max-width: 640px) {
+  .editeur-barre { gap: 4px; padding: 8px 10px; }
+  .editeur-barre .bouton.discret { padding: 0 9px; }
+  .editeur-barre .bouton.discret .icone { margin: 0; }
+  .editeur-barre .libelle {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .compteur .signes { display: none; }
+  #corriger kbd { display: none; }
+}
+
+/* -------------------- avant la premiere correction -------------------- */
+
+.accueil {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px 18px;
+  margin: 0;
+  padding: 0 4px;
+  list-style: none;
+  animation: surgir 360ms var(--courbe) 80ms backwards;
+}
+.accueil li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: var(--texte-doux);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.accueil li > .icone {
+  margin-top: 1px;
+  padding: 6px;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--trait);
+  color: var(--texte-doux);
+}
+.accueil kbd { margin: 0 1px; }
+
+/* -------------------- la relecture -------------------- */
+
+.relecture { display: flex; flex-direction: column; gap: 14px; }
+.relecture-tete {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.relecture-tete h2 {
+  margin: 0 6px 0 2px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.pastille {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: var(--rayon-rond);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.pastille::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: var(--rayon-rond);
+  background: currentColor;
+}
+.pastille.succes { background: var(--succes-sourd); color: var(--succes); }
+.pastille.alerte { background: var(--alerte-sourd); color: var(--alerte); }
+
+.perimee-note { display: none; }
+.relecture.perimee .perimee-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 9px 12px;
+  border-radius: var(--rayon);
+  background: var(--surface-haute);
+  color: var(--texte-doux);
+  font-size: 12.5px;
+}
+.relecture.perimee .groupe-liste { opacity: 0.72; }
+
+.propre {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  border: 1px solid var(--trait);
+  border-radius: var(--rayon-grand);
+  background:
+    linear-gradient(100deg, var(--succes-sourd), transparent 65%),
+    var(--surface);
+  box-shadow: var(--ombre-carte);
+  animation: surgir 300ms var(--courbe);
+}
+.propre-icone {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--rayon-rond);
+  background: var(--succes-sourd);
+  color: var(--succes);
+}
+.propre-icone .icone { width: 18px; height: 18px; stroke-width: 2; }
+.propre div { display: flex; flex-direction: column; }
+.propre strong { font-size: 14px; font-weight: 600; }
+.propre span { color: var(--texte-doux); font-size: 13px; }
+
+.groupe-liste {
+  border: 1px solid var(--trait);
+  border-radius: var(--rayon-grand);
+  background: var(--surface);
+  box-shadow: var(--ombre-carte);
+  overflow: hidden;
+  transition: opacity var(--vitesse) var(--courbe);
+}
+.groupe-liste-tete {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  padding: 12px 18px 11px;
+  border-bottom: 1px solid var(--trait);
+}
+.groupe-liste-tete h3 { margin: 0; font-size: 13px; font-weight: 600; }
+.groupe-liste-tete .aide { margin: 0; font-size: 12.5px; }
+
+.groupe-lignes { margin: 0; padding: 0; list-style: none; }
+.groupe-lignes > li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 14px;
+  padding: 12px 14px 12px 18px;
+  cursor: default;
+  transition: background var(--vitesse) var(--courbe);
+  animation: surgir 260ms var(--courbe) backwards;
+}
+.groupe-lignes > li + li { border-top: 1px solid var(--trait); }
+.groupe-lignes > li:hover { background: color-mix(in srgb, var(--surface-haute) 55%, transparent); }
+
+.puce {
+  display: grid;
+  place-items: center;
+  align-self: start;
+  margin-top: 1px;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--rayon-rond);
+}
+.puce .icone { stroke-width: 2; }
+.correction .puce { background: var(--succes-sourd); color: var(--succes); }
+.inconnu .puce { background: var(--alerte-sourd); color: var(--alerte); }
+
+.corps { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+
+.changement {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  font-size: 14px;
+}
+.changement del {
+  color: var(--texte-eteint);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--texte-eteint) 70%, transparent);
+}
+.changement ins {
+  color: var(--succes);
+  text-decoration: none;
+  font-weight: 600;
+}
+.changement .fleche { display: inline-flex; color: var(--texte-eteint); }
+
+.pourquoi { color: var(--texte-doux); font-size: 13px; }
+.pourquoi::first-letter { text-transform: uppercase; }
+
+/* Une correction refusee : c'est le mot d'origine qui reste, il reprend
+   l'encre ; le mot propose s'efface. */
+.correction.refusee .puce { background: var(--surface-haute); color: var(--texte-eteint); }
+.correction.refusee del { color: var(--texte); text-decoration: none; }
+.correction.refusee ins {
+  color: var(--texte-eteint);
+  font-weight: 400;
+  text-decoration: line-through;
+}
+.correction.refusee .pourquoi { color: var(--texte-eteint); }
+
+.etiquette {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 9px;
+  border-radius: var(--rayon-rond);
+  background: var(--surface-haute);
+  color: var(--texte-doux);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.etiquette.accent { background: var(--accent-sourd); color: var(--accent-texte); }
+
+.inconnu-mot { font-weight: 600; font-size: 14px; }
+
+.propositions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+.propositions .aide { margin: 0; }
+
+/* Une proposition : on la prend d'un clic. */
+.proposition {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid var(--trait-net);
+  border-radius: var(--rayon-rond);
+  background: var(--bouton-fond);
+  color: var(--texte);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: var(--ombre-bouton);
+  transition: background var(--vitesse) var(--courbe),
+              border-color var(--vitesse) var(--courbe),
+              color var(--vitesse) var(--courbe),
+              transform 90ms var(--courbe);
+}
+.proposition:hover {
+  border-color: var(--accent-anneau);
+  background: var(--accent-sourd);
+  color: var(--accent-texte);
+}
+.proposition:active { transform: translateY(1px); }
+
+@media (max-width: 720px) {
+  .groupe-lignes > li { grid-template-columns: auto minmax(0, 1fr); }
+  .groupe-lignes > li > .bouton,
+  .groupe-lignes > li > .etiquette { grid-column: 2; justify-self: start; margin-top: 4px; }
+}
+
+/* -------------------- l'infobulle d'un mot -------------------- */
+
+.infobulle {
+  position: fixed;
+  z-index: 20;
+  width: min(330px, calc(100vw - 24px));
+  padding: 14px 16px 14px;
+  border: 1px solid var(--trait-net);
+  border-radius: 12px;
+  background: var(--surface-flottante);
+  box-shadow: var(--ombre-haute);
+  animation: eclore 170ms var(--courbe);
+  transform-origin: top center;
+}
+.infobulle[data-cote="dessus"] { transform-origin: bottom center; }
+@keyframes eclore {
+  from { opacity: 0; transform: translateY(-3px) scale(0.97); }
+  to   { opacity: 1; transform: none; }
+}
+.infobulle-genre {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.infobulle-genre::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: var(--rayon-rond);
+  background: currentColor;
+}
+.infobulle.corrige .infobulle-genre { color: var(--succes); }
+.infobulle.douteux .infobulle-genre { color: var(--alerte); }
+.infobulle .changement { font-size: 16px; }
+.infobulle-texte {
+  margin: 6px 0 0;
+  color: var(--texte-doux);
+  font-size: 13px;
+}
+.infobulle-texte::first-letter { text-transform: uppercase; }
+.infobulle .propositions { margin-top: 10px; }
+.infobulle-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--trait);
+}
 
 /* ==========================================================================
    Boutons
@@ -384,50 +995,130 @@ main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .bouton {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 7px 14px;
+  justify-content: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 14px;
   border: 1px solid var(--trait-net);
-  border-radius: var(--rayon-petit);
-  background: var(--surface);
+  border-radius: 9px;
+  background: var(--bouton-fond);
   color: var(--texte);
-  font: inherit;
   font-size: 13px;
   font-weight: 500;
+  line-height: 1;
   cursor: pointer;
   white-space: nowrap;
+  box-shadow: var(--ombre-bouton);
   transition: background var(--vitesse) var(--courbe),
               border-color var(--vitesse) var(--courbe),
+              color var(--vitesse) var(--courbe),
+              box-shadow var(--vitesse) var(--courbe),
               transform 90ms var(--courbe);
 }
-.bouton:hover { background: var(--surface-haute); border-color: var(--texte-eteint); }
-/* Deux pixels d'enfoncement : assez pour que le clic se sente, trop peu pour
+.bouton:hover { background: var(--bouton-survol); border-color: var(--trait-fort); }
+/* Un pixel d'enfoncement : assez pour que le clic se sente, trop peu pour
    qu'on le remarque. */
 .bouton:active { transform: translateY(1px); background: var(--surface-pressee); }
-.bouton[disabled] { opacity: 0.5; cursor: default; transform: none; }
+.bouton[disabled] { opacity: 0.55; cursor: default; transform: none; }
+.bouton .icone { margin-left: -2px; }
 
 .bouton.principal {
   background: var(--accent);
   border-color: transparent;
   color: var(--sur-accent);
   font-weight: 600;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16),
+              0 1px 2px rgba(0, 0, 0, 0.25),
+              0 4px 14px -4px var(--accent-ombre);
 }
-.bouton.principal:hover { background: var(--accent-vif); border-color: transparent; }
+.bouton.principal:hover { background: var(--accent-survol); border-color: transparent; }
+.bouton.principal:active { background: var(--accent-survol); }
+.bouton.principal[disabled] { opacity: 0.8; }
+
 .bouton.discret {
   background: transparent;
   border-color: transparent;
+  box-shadow: none;
   color: var(--texte-doux);
 }
 .bouton.discret:hover { background: var(--surface-haute); color: var(--texte); }
-.bouton.etroit { justify-content: center; width: 100%; }
-.bouton.minuscule { padding: 4px 9px; font-size: 12px; }
+.bouton.danger { color: var(--danger); }
+.bouton.danger:hover { background: var(--danger-sourd); color: var(--danger); }
+.bouton.fait { color: var(--succes); border-color: var(--succes-trait); }
+.bouton.etroit { width: 100%; }
+.bouton.minuscule { height: 28px; padding: 0 10px; gap: 6px; font-size: 12.5px; }
+
+#corriger { padding: 0 12px 0 14px; }
+
+/* Un bouton arme : il a ete presse une fois, le suivant efface. La couleur
+   dit ce que le libelle dit deja, pour que cela se voie du coin de l'oeil. */
+.bouton.arme,
+.bouton.discret.arme {
+  background: var(--danger-sourd);
+  border-color: color-mix(in srgb, var(--danger) 55%, transparent);
+  color: var(--danger);
+  font-weight: 600;
+}
+
+/* Le petit « retirer » des listes. */
+.retirer {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--texte-eteint);
+  cursor: pointer;
+  transition: background var(--vitesse) var(--courbe),
+              color var(--vitesse) var(--courbe);
+}
+.retirer:hover { background: var(--danger-sourd); color: var(--danger); }
 
 kbd {
-  padding: 1px 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border: 1px solid var(--trait-net);
+  border-bottom-width: 2px;
   border-radius: 5px;
+  background: var(--surface);
+  color: var(--texte-doux);
+  padding-top: 1px;
+  font: 600 11px/1 var(--police);
+  vertical-align: 1px;
+}
+.bouton.principal kbd {
+  margin-left: 2px;
+  border-color: rgba(255, 255, 255, 0.22);
+  border-bottom-width: 1px;
   background: rgba(255, 255, 255, 0.16);
-  font: inherit;
-  font-size: 11px;
-  opacity: 0.9;
+  color: var(--sur-accent);
+}
+
+/* L'attente d'un traitement qui ne rend pas la main tout de suite. Le rouet
+   tourne lentement : vite, il donne l'impression que la machine peine. */
+.rouet {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border: 2px solid color-mix(in srgb, currentColor 30%, transparent);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: tourner 0.9s linear infinite;
+}
+@keyframes tourner { to { transform: rotate(360deg); } }
+
+/* Immobile pour qui a demandé moins de mouvement : la couleur suffit à dire
+   qu'il se passe quelque chose. */
+@media (prefers-reduced-motion: reduce) {
+  .rouet { animation: none; border-color: currentColor; opacity: 0.6; }
 }
 
 /* ==========================================================================
@@ -436,25 +1127,49 @@ kbd {
 
 .saisie { display: flex; gap: 8px; align-items: center; margin-bottom: 14px; }
 .saisie input { flex: 1; min-width: 0; }
-.fleche { color: var(--texte-eteint); }
+.saisie .fleche { color: var(--texte-eteint); }
 
-input[type="text"], input:not([type]) {
-  padding: 7px 11px;
+input[type="text"], input:not([type]), .champ {
+  height: 36px;
+  padding: 0 12px;
   border: 1px solid var(--trait-net);
-  border-radius: var(--rayon-petit);
-  background: var(--surface-haute);
+  border-radius: 9px;
+  background: var(--champ-fond);
   color: var(--texte);
   font: inherit;
-  font-size: 13px;
+  font-size: 13.5px;
   transition: border-color var(--vitesse) var(--courbe),
               box-shadow var(--vitesse) var(--courbe);
 }
-input:focus {
+input:hover, .champ:hover { border-color: var(--trait-fort); }
+input:focus, input:focus-visible, .champ:focus, .champ:focus-visible {
   outline: none;
-  border-color: var(--accent);
+  border-color: var(--accent-texte);
   box-shadow: 0 0 0 3px var(--accent-sourd);
 }
 input::placeholder { color: var(--texte-eteint); }
+
+select.champ { padding-right: 8px; cursor: pointer; }
+input.champ[type="number"] { width: 84px; text-align: right; font-variant-numeric: tabular-nums; }
+
+.champ-nombre {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--texte-doux);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+/* L'application au premier plan, proposee sous le champ. */
+.courante {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: -4px 0 14px;
+  font-size: 12.5px;
+}
 
 /* ==========================================================================
    Listes
@@ -465,30 +1180,16 @@ input::placeholder { color: var(--texte-eteint); }
 .jeton {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 6px 4px 11px;
+  gap: 2px;
+  height: 30px;
+  padding: 0 3px 0 12px;
   border: 1px solid var(--trait);
   border-radius: var(--rayon-rond);
   background: var(--surface-haute);
-  font-size: 12.5px;
+  font-size: 13px;
   animation: surgir 220ms var(--courbe);
 }
-.jeton button {
-  display: grid;
-  place-items: center;
-  width: 17px; height: 17px;
-  border: 0;
-  border-radius: var(--rayon-rond);
-  background: transparent;
-  color: var(--texte-eteint);
-  font: inherit;
-  font-size: 14px;
-  line-height: 1;
-  cursor: pointer;
-  transition: background var(--vitesse) var(--courbe),
-              color var(--vitesse) var(--courbe);
-}
-.jeton button:hover { background: var(--alerte-sourd); color: var(--alerte); }
+.jeton .retirer { width: 24px; height: 24px; border-radius: var(--rayon-rond); }
 
 .lignes { margin: 0; padding: 0; list-style: none;
   display: flex; flex-direction: column; }
@@ -496,62 +1197,43 @@ input::placeholder { color: var(--texte-eteint); }
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 9px 2px;
+  min-height: 46px;
+  padding: 8px 0;
   border-bottom: 1px solid var(--trait);
-  font-size: 13px;
+  font-size: 13.5px;
   animation: surgir 220ms var(--courbe);
 }
 .lignes li:last-child { border-bottom: 0; }
-.lignes .pousse { flex: 1; }
-.lignes code {
-  padding: 1px 6px;
-  border-radius: 5px;
+.lignes .fleche { display: inline-flex; color: var(--texte-eteint); }
+.lignes code, code.chemin {
+  padding: 2px 7px;
+  border-radius: 6px;
   background: var(--surface-haute);
-  font-family: "Cascadia Code", "Consolas", ui-monospace, monospace;
-  font-size: 12px;
-}
-
-.vide { color: var(--texte-eteint); font-size: 12.5px; font-style: italic;
-  padding: 6px 2px; }
-
-/* ==========================================================================
-   Corrections et mots inconnus
-   ========================================================================== */
-
-.corrections {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-}
-.correction {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 6px;
-  padding: 5px 11px;
-  border-radius: var(--rayon-rond);
-  background: var(--succes-sourd);
-  font-size: 12.5px;
-  animation: surgir 240ms var(--courbe) backwards;
-}
-.correction del { color: var(--texte-eteint); text-decoration: line-through; }
-.correction ins { color: var(--succes); text-decoration: none; font-weight: 600; }
-
-.inconnus { display: flex; flex-direction: column; gap: 8px; }
-.inconnu {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 7px;
-  padding: 10px 14px;
-  background: var(--surface);
   border: 1px solid var(--trait);
-  border-radius: var(--rayon);
-  animation: surgir 240ms var(--courbe) backwards;
+  font-family: var(--police-mono);
+  font-size: 12.5px;
 }
-.inconnu-mot { font-weight: 600; }
-.inconnu-mot::after { content: " →"; color: var(--texte-eteint);
-  font-weight: 400; }
+.lignes .vers { font-weight: 500; }
+
+.lignes.fichiers li { align-items: flex-start; gap: 12px; padding: 12px 0; }
+.lignes.fichiers .fichier { flex: 1; min-width: 0; }
+.lignes.fichiers .ligne-titre { font-family: var(--police-mono); font-size: 13px; }
+.lignes.fichiers .aide { margin: 2px 0 0; font-size: 12.5px; }
+.lignes .compte {
+  color: var(--texte-doux);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  padding-top: 2px;
+}
+
+.vide {
+  color: var(--texte-eteint);
+  font-size: 13px;
+  padding: 6px 2px;
+  list-style: none;
+}
+.lignes li.vide { border: 0; min-height: 0; }
 
 /* ==========================================================================
    Interrupteurs et segments
@@ -560,133 +1242,274 @@ input::placeholder { color: var(--texte-eteint); }
 .ligne-action {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 11px 0;
-  border-bottom: 1px solid var(--trait);
+  gap: 20px;
+  padding: 14px 20px;
+  transition: background var(--vitesse) var(--courbe);
 }
-.ligne-action:last-child { border-bottom: 0; }
+.ligne-action + .ligne-action { border-top: 1px solid var(--trait); }
 .ligne-action > div:first-child { flex: 1; min-width: 0; }
-.ligne-titre { font-size: 13.5px; }
-.ligne-action .aide { margin: 1px 0 0; font-size: 12px; }
+.ligne-action.cliquable { cursor: pointer; }
+.ligne-action.cliquable:hover { background: color-mix(in srgb, var(--surface-haute) 60%, transparent); }
+.ligne-titre { display: block; font-size: 14px; font-weight: 500; }
+.ligne-action .aide { margin: 2px 0 0; font-size: 12.5px; }
+
+@media (max-width: 560px) {
+  .ligne-action { flex-wrap: wrap; gap: 10px 16px; }
+}
 
 .bascule {
   position: relative;
   flex: none;
-  width: 40px; height: 23px;
+  width: 42px;
+  height: 24px;
+  padding: 0;
   border: 0;
   border-radius: var(--rayon-rond);
   background: var(--surface-pressee);
-  box-shadow: inset 0 0 0 1px var(--trait-net);
+  box-shadow: inset 0 0 0 1px var(--trait-fort);
   cursor: pointer;
-  transition: background var(--vitesse) var(--courbe);
+  transition: background var(--vitesse) var(--courbe),
+              box-shadow var(--vitesse) var(--courbe);
 }
 .bascule::after {
   content: "";
   position: absolute;
-  top: 3px; left: 3px;
-  width: 17px; height: 17px;
+  top: 4px;
+  left: 4px;
+  width: 16px;
+  height: 16px;
   border-radius: var(--rayon-rond);
   background: var(--texte-doux);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
-  transition: transform var(--vitesse) var(--courbe),
-              background var(--vitesse) var(--courbe);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  transition: transform 200ms var(--courbe),
+              background var(--vitesse) var(--courbe),
+              width 120ms var(--courbe);
 }
-.bascule[aria-checked="true"] { background: var(--accent);
-  box-shadow: inset 0 0 0 1px transparent; }
-.bascule[aria-checked="true"]::after { transform: translateX(17px);
-  background: #fff; }
+.bascule:active::after { width: 19px; }
+.bascule[aria-checked="true"] {
+  background: var(--accent);
+  box-shadow: inset 0 0 0 1px transparent;
+}
+.bascule[aria-checked="true"]::after { transform: translateX(18px); background: #fff; }
+.bascule[aria-checked="true"]:active::after { transform: translateX(15px); }
 
 .segments {
   display: inline-flex;
+  flex: none;
   gap: 2px;
   padding: 3px;
-  border-radius: var(--rayon-petit);
+  border-radius: 10px;
   background: var(--surface-haute);
   box-shadow: inset 0 0 0 1px var(--trait);
 }
 .segment {
-  padding: 6px 16px;
+  height: 30px;
+  padding: 0 16px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 7px;
   background: transparent;
   color: var(--texte-doux);
-  font: inherit;
   font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
   transition: background var(--vitesse) var(--courbe),
-              color var(--vitesse) var(--courbe);
+              color var(--vitesse) var(--courbe),
+              box-shadow var(--vitesse) var(--courbe);
 }
+.segment:hover { color: var(--texte); }
 .segment[aria-pressed="true"] {
-  background: var(--surface);
+  background: var(--bouton-fond);
   color: var(--texte);
   font-weight: 600;
-  box-shadow: var(--ombre);
+  box-shadow: 0 0 0 1px var(--trait-net), 0 1px 3px rgba(0, 0, 0, 0.18);
 }
+.segment:focus-visible { outline-offset: 0; }
 
+/* La position de la bulle : un petit ecran, une bulle par coin. */
+.ecran-choix {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+.segments.ecran {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 4px;
+  width: 136px;
+  height: 88px;
+  padding: 6px 6px 12px;
+  border-radius: 10px;
+  background:
+    linear-gradient(var(--trait-net), var(--trait-net)) bottom 5px center / 40% 2px no-repeat,
+    var(--surface-haute);
+  box-shadow: inset 0 0 0 1px var(--trait-net);
+}
+.ecran .segment {
+  display: flex;
+  height: auto;
+  padding: 5px;
+  border-radius: 6px;
+}
+.ecran .segment::before {
+  content: "";
+  width: 26px;
+  height: 12px;
+  border-radius: 4px;
+  background: var(--trait-fort);
+  transition: background var(--vitesse) var(--courbe), transform 200ms var(--courbe);
+}
+.ecran .segment:hover::before { background: var(--texte-eteint); }
+.ecran .segment[aria-pressed="true"] { background: var(--accent-sourd); box-shadow: none; }
+.ecran .segment[aria-pressed="true"]::before {
+  background: var(--accent);
+  transform: scale(1.08);
+}
+.ecran .segment-nom {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.ecran [data-cle="haut-gauche"] { grid-area: 1 / 1; align-items: flex-start; justify-content: flex-start; }
+.ecran [data-cle="haut-droite"] { grid-area: 1 / 2; align-items: flex-start; justify-content: flex-end; }
+.ecran [data-cle="bas-gauche"]  { grid-area: 2 / 1; align-items: flex-end;   justify-content: flex-start; }
+.ecran [data-cle="bas-droite"]  { grid-area: 2 / 2; align-items: flex-end;   justify-content: flex-end; }
+.ecran-nom { color: var(--texte-doux); font-size: 12px; }
+
+/* Un raccourci se montre en touches, et s'ecoute quand on le clique. */
 .raccourci-champ {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
   flex: none;
   min-width: 132px;
-  justify-content: center;
-  font-family: "Cascadia Code", "Consolas", ui-monospace, monospace;
-  font-size: 12px;
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--trait-net);
+  border-radius: 9px;
+  background: var(--champ-fond);
+  cursor: pointer;
+  transition: border-color var(--vitesse) var(--courbe),
+              box-shadow var(--vitesse) var(--courbe);
 }
+.raccourci-champ:hover { border-color: var(--trait-fort); }
+.raccourci-champ kbd { height: 22px; min-width: 24px; background: var(--surface-haute); color: var(--texte); }
+.raccourci-champ .aucun { color: var(--texte-eteint); font-size: 12.5px; padding: 0 4px; }
 .raccourci-champ.ecoute {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: var(--accent-sourd);
+  border-color: var(--accent-texte);
+  box-shadow: 0 0 0 3px var(--accent-sourd);
 }
+.raccourci-champ.ecoute .aucun { color: var(--accent-texte); animation: battre 1.2s ease-in-out infinite; }
+@keyframes battre { 50% { opacity: 0.45; } }
 
 /* ==========================================================================
    Vos fautes
    ========================================================================== */
 
-.total {
-  font-size: 34px;
-  font-weight: 600;
-  letter-spacing: -0.03em;
+.carte-chiffre {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px 32px;
+  padding: 24px 26px;
+  background:
+    radial-gradient(120% 160% at 0% 0%, var(--accent-sourd), transparent 55%),
+    var(--surface);
+}
+.total { display: flex; flex-direction: column; gap: 2px; }
+.total-nombre {
+  font-family: var(--police-titre);
+  font-size: 46px;
+  font-weight: 650;
+  line-height: 1.05;
+  letter-spacing: -0.035em;
   font-variant-numeric: tabular-nums;
 }
-.total small { font-size: 14px; font-weight: 400; color: var(--texte-doux);
-  letter-spacing: 0; margin-left: 6px; }
+.total-libelle { color: var(--texte-doux); font-size: 13.5px; }
+.carte-chiffre .aide {
+  display: flex;
+  gap: 10px;
+  max-width: 38ch;
+  margin: 0;
+}
+.carte-chiffre .aide .icone { color: var(--succes); margin-top: 2px; }
 
-.barres { margin: 0 0 14px; padding: 0; list-style: none;
-  display: flex; flex-direction: column; gap: 7px; }
-.barres li { display: grid; grid-template-columns: 8.5rem 1fr auto;
-  align-items: center; gap: 10px; font-size: 13px; }
-.barres .mot { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.barres .piste { height: 7px; border-radius: var(--rayon-rond);
+.barres { margin: 4px 0 0; padding: 0; list-style: none;
+  display: flex; flex-direction: column; gap: 4px; }
+.barres li {
+  display: grid;
+  grid-template-columns: 22px minmax(5rem, 9rem) minmax(0, 1fr) 3.2rem;
+  align-items: center;
+  gap: 14px;
+  min-height: 32px;
+  font-size: 13.5px;
+}
+.barres .rang {
+  color: var(--texte-eteint);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.barres .mot { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.barres .piste { height: 8px; border-radius: var(--rayon-rond);
   background: var(--surface-haute); overflow: hidden; }
 .barres .part {
   height: 100%;
   border-radius: var(--rayon-rond);
-  background: linear-gradient(90deg, var(--accent), var(--accent-vif));
+  background: linear-gradient(90deg, var(--accent), #6f9bff);
   transform-origin: left;
-  animation: pousser 520ms var(--courbe) backwards;
+  animation: pousser 560ms var(--courbe) backwards;
 }
-.barres .compte { color: var(--texte-doux); font-size: 12px;
+.barres li:first-child .part { background: linear-gradient(90deg, var(--accent), #8cb0ff); }
+.barres .compte { color: var(--texte-doux); font-size: 12.5px; text-align: right;
   font-variant-numeric: tabular-nums; }
+.barres li.vide { display: block; }
 
 @keyframes pousser { from { transform: scaleX(0); } to { transform: none; } }
 
+@media (max-width: 560px) {
+  .barres li { grid-template-columns: 18px minmax(4rem, 6.5rem) minmax(0, 1fr) 2.6rem; gap: 10px; }
+}
+
 /* ==========================================================================
-   Journal
+   Journal et chemin
    ========================================================================== */
 
 .journal {
-  max-height: 190px;
+  max-height: 200px;
   overflow: auto;
-  margin: 0 0 12px;
-  padding: 12px 14px;
-  border-radius: var(--rayon-petit);
-  background: var(--surface-haute);
+  margin: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--trait);
+  border-radius: var(--rayon);
+  background: var(--champ-fond);
   color: var(--texte-doux);
-  font-family: "Cascadia Code", "Consolas", ui-monospace, monospace;
-  font-size: 11.5px;
-  line-height: 1.6;
+  font-family: var(--police-mono);
+  font-size: 12px;
+  line-height: 1.65;
   white-space: pre-wrap;
   word-break: break-word;
 }
-.rangee { display: flex; gap: 8px; flex-wrap: wrap; }
+.journal.vide { font-family: var(--police); font-size: 13px; color: var(--texte-eteint); }
+
+/* Le chemin du dossier de reglages : on doit pouvoir le lire et le copier,
+   donc une chasse fixe, et un retour a la ligne plutot qu'un debordement. */
+.chemin {
+  flex: 1;
+  min-width: 0;
+  color: var(--texte-doux);
+  word-break: break-all;
+  user-select: all;
+}
+code.chemin { padding: 5px 9px; }
 
 /* ==========================================================================
    Le mot de la fin
@@ -695,208 +1518,39 @@ input::placeholder { color: var(--texte-eteint); }
 .toast {
   position: fixed;
   left: 50%;
-  bottom: 26px;
-  transform: translate(-50%, 18px);
+  bottom: 24px;
+  z-index: 30;
+  transform: translate(-50%, 14px) scale(0.98);
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 10px;
   max-width: min(560px, calc(100vw - 48px));
-  padding: 10px 18px;
-  border: 1px solid var(--trait);
+  padding: 10px 18px 10px 14px;
+  border: 1px solid var(--trait-net);
   border-radius: var(--rayon-rond);
-  background: var(--surface);
+  background: var(--surface-flottante);
   box-shadow: var(--ombre-haute);
   font-size: 13px;
+  font-weight: 500;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 220ms var(--courbe), transform 220ms var(--courbe);
+  transition: opacity 220ms var(--courbe), transform 260ms var(--courbe);
 }
 .toast.visible { opacity: 1; transform: translate(-50%, 0); }
 .toast::before {
   content: "";
   flex: none;
-  width: 7px; height: 7px;
+  width: 8px;
+  height: 8px;
   border-radius: var(--rayon-rond);
   background: var(--texte-eteint);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--texte-eteint) 18%, transparent);
 }
-.toast.succes::before { background: var(--succes); }
-.toast.alerte::before { background: var(--alerte); }
-
-/* -------------------------------------------------------------------------
-   Dicter
-
-   Une transcription se lit comme une piece de theatre : le nom en retrait,
-   la replique en dessous. Le nom est un bouton parce qu'il en est un — c'est
-   la qu'on dit qui parlait.
-   ------------------------------------------------------------------------- */
-
-.ligne-boutons {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  flex-wrap: wrap;
-  margin-top: 14px;
+.toast.succes::before {
+  background: var(--succes);
+  box-shadow: 0 0 0 4px var(--succes-sourd);
 }
-
-.champ-ligne {
-  flex: 1 1 200px;
-  min-width: 0;
-  padding: 9px 12px;
-  border-radius: var(--rond-petit, 8px);
-  border: 1px solid var(--bord);
-  background: var(--fond-champ, var(--fond-carte));
-  color: var(--texte);
-  font: inherit;
+.toast.alerte::before {
+  background: var(--alerte);
+  box-shadow: 0 0 0 4px var(--alerte-sourd);
 }
-
-.champ-ligne:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-
-.liste {
-  list-style: none;
-  margin: 12px 0 0;
-  padding: 0;
-  display: grid;
-  gap: 6px;
-}
-
-.liste li {
-  color: var(--texte-doux);
-  font-size: 13px;
-}
-
-.liste li.fait { color: var(--accent); }
-
-.tours {
-  display: grid;
-  gap: 16px;
-  margin-top: 6px;
-  max-height: 46vh;
-  overflow-y: auto;
-}
-
-.tour p {
-  margin: 4px 0 0;
-  line-height: 1.55;
-}
-
-.locuteur {
-  background: none;
-  border: 0;
-  padding: 0;
-  font: inherit;
-  font-weight: 600;
-  color: var(--accent);
-  cursor: pointer;
-  border-bottom: 1px dashed transparent;
-}
-
-.locuteur:hover { border-bottom-color: currentColor; }
-
-.bouton.danger {
-  border-color: color-mix(in srgb, var(--alerte, #e5484d) 45%, transparent);
-  color: var(--alerte, #e5484d);
-}
-
-/* Une case a cocher ordinaire : « .bascule » est un interrupteur, ce n'est
-   pas la meme chose et cela ne se dessine pas pareil. */
-.case {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  margin-top: 12px;
-  color: var(--texte-doux);
-  font-size: 13px;
-  cursor: pointer;
-}
-
-.case input {
-  width: 15px;
-  height: 15px;
-  accent-color: var(--accent);
-  cursor: pointer;
-}
-
-
-/* Un bouton arme : il a ete presse une fois, le suivant efface. La couleur
-   dit ce que le libelle dit deja, pour que cela se voie du coin de l'oeil. */
-.bouton.arme,
-.bouton.discret.arme {
-  background: var(--alerte-sourd);
-  border-color: color-mix(in srgb, var(--alerte) 55%, transparent);
-  color: var(--alerte);
-}
-
-
-/* Le chemin du dossier de reglages : on doit pouvoir le lire et le copier,
-   donc une chasse fixe, et un retour a la ligne plutot qu'un debordement. */
-.chemin {
-  font-family: "Cascadia Code", "Consolas", ui-monospace, monospace;
-  font-size: 12px;
-  color: var(--texte-doux);
-  background: var(--surface-haute);
-  border: 1px solid var(--trait);
-  border-radius: var(--rayon-petit);
-  padding: 6px 9px;
-  word-break: break-all;
-  user-select: all;
-}
-
-
-/* Les trois reglages fins. Le style des champs texte s'arretait a
-   « input[type="text"] » : un nombre et une liste deroulante n'en heritaient
-   pas, et tombaient sur le dessin du systeme — blanc sur fond sombre. */
-.champ {
-  padding: 7px 11px;
-  border: 1px solid var(--trait-net);
-  border-radius: var(--rayon-petit);
-  background: var(--surface-haute);
-  color: var(--texte);
-  font: inherit;
-  font-size: 13px;
-}
-.champ:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-input.champ[type="number"] { width: 78px; text-align: right; }
-
-.champ-nombre {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 6px;
-  color: var(--texte-eteint);
-  font-size: 12px;
-  white-space: nowrap;
-}
-
-
-/* L'attente d'un traitement qui ne rend pas la main tout de suite. Le rouet
-   tourne lentement : vite, il donne l'impression que la machine peine. */
-.attente {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--texte-doux);
-  font-size: 13px;
-}
-
-.rouet {
-  width: 13px;
-  height: 13px;
-  border: 2px solid var(--trait-net);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: tourner 0.9s linear infinite;
-}
-
-@keyframes tourner { to { transform: rotate(360deg); } }
-
-/* Immobile pour qui a demandé moins de mouvement : la couleur suffit à dire
-   qu'il se passe quelque chose. */
-@media (prefers-reduced-motion: reduce) {
-  .rouet { animation: none; }
-}
-

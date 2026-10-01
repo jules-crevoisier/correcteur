@@ -26,7 +26,7 @@ from pathlib import Path
 RACINE = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(RACINE))
 
-DESTINATION = Path("/tmp/apercu-papote")
+DESTINATION = Path(__import__("os").environ.get("APERCU", "/tmp/apercu-papote"))
 
 # La fenetre s'ouvre a cette taille ; c'est donc la que le dessin doit tomber
 # juste. Les autres largeurs se demandent avec « --large ».
@@ -37,9 +37,7 @@ def _donnees() -> dict:
     """Ce que la passerelle rendrait, sur une configuration d'exemple.
 
     L'exemple est garni : une fenetre vide est facile a trouver belle, et ne
-    dit rien de ce qu'elle devient une fois remplie. La page « Dicter » est
-    montree dans son etat le plus interessant — modeles installes, reunion
-    deja transcrite —, qui est celui qu'on veut regarder quand on dessine.
+    dit rien de ce qu'elle devient une fois remplie.
     """
     from papote import config as config_mod
     from papote.app import Application
@@ -83,33 +81,6 @@ def _donnees() -> dict:
                 {"mot": "tous le monde", "compte": 4},
             ],
         },
-        "dictee": {
-            "disponible": {"vosk": True, "sounddevice": True},
-            "en_cours": False,
-            "reunion": True,
-            "erreur": "",
-            "modele_langue": "precis",
-            "modeles": [
-                {"nom": "vosk-model-fr-0.22",
-                 "role": "entendre le français (précis)",
-                 "taille": 1_400_000_000, "installe": False},
-                {"nom": "vosk-model-spk-0.4",
-                 "role": "distinguer les voix",
-                 "taille": 13_000_000, "installe": False},
-            ],
-            "poids_installe": 0,
-            "participants": ["Marion", "Personne 2"],
-            "tours": [
-                {"locuteur": "Marion", "debut": 0.0, "fin": 12.0,
-                 "texte": "Bonjour à tous. Moi c'est Marion. On passe au "
-                          "budget de janvier. Est-ce qu'on a les chiffres ?"},
-                {"locuteur": "Personne 2", "debut": 12.0, "fin": 31.0,
-                 "texte": "Pas encore. Je m'occupe de relancer la compta "
-                          "d'ici vendredi."},
-                {"locuteur": "Marion", "debut": 31.0, "fin": 48.0,
-                 "texte": "Très bien. Donc on part sur la deuxième option."},
-            ],
-        },
         "journal": {
             "chemin": r"C:\Users\vous\AppData\Roaming\Papote\journal.log",
             "contenu": "2026-09-16 14:02:11  [info]  Papote démarre (v1.0.30)\n"
@@ -145,7 +116,21 @@ DOUBLURE = """
   const api = {
     demarrer: async () => donnees.demarrer,
     corriger: async () => donnees.corriger,
-    remplacer: async (texte) => ({ texte, remplaces: 0, inconnus: [] }),
+    // Les deux reecritures du texte sont rejouees ici, en gros : sans
+    // elles, refuser une correction dans l'apercu ne faisait rien, et l'on
+    // ne pouvait pas regarder une ligne refusee.
+    remplacer: async (texte, mot, par) => {
+      const nouveau = texte.split(mot).join(par);
+      return { texte: nouveau, remplaces: nouveau === texte ? 0 : 1,
+               inconnus: donnees.corriger.inconnus.filter(
+                 (i) => i.mot !== mot && nouveau.includes(i.mot)) };
+    },
+    retablir: async (texte, avant, apres) => {
+      const rang = texte.indexOf(apres);
+      if (rang < 0) return { texte, retablie: false };
+      return { texte: texte.slice(0, rang) + avant + texte.slice(rang + apres.length),
+               retablie: true };
+    },
     dictionnaire: async () => donnees.dictionnaire,
     applications: async () => donnees.applications,
     fautes: async () => donnees.fautes,
@@ -167,13 +152,6 @@ DOUBLURE = """
     redemarrer: async () => rien,
     effacer_historique: async () => rien,
     vider_journal: async () => rien,
-    etat_dictee: async () => donnees.dictee,
-    installer_modeles: async () => rien,
-    commencer_dictee: async () => rien,
-    arreter_dictee: async () => rien,
-    renommer_locuteur: async () => rien,
-    compte_rendu: async () => ({ ok: true, texte: "# Compte rendu" }),
-    oublier_dictee: async () => rien,
   };
   window.pywebview = { api };
 })();
@@ -226,10 +204,8 @@ def photographier(pages: list[str], clair: bool, largeur: int,
             if cle == "corriger":
                 # Montrer la page au travail plutot qu'a vide.
                 page.evaluate(
-                    "(d) => { document.querySelector('#champ').value = d.corriger.texte;"
-                    "         compter();"
-                    "         montrerCorrections(d.corriger.corrections);"
-                    "         montrerInconnus(d.corriger.inconnus); }",
+                    "(d) => { ecrire(d.corriger.texte);"
+                    "         montrerResultat(d.corriger); }",
                     donnees)
             page.wait_for_timeout(420)      # laisser les animations finir
             nom = f"{cle}{'-clair' if clair else ''}-{largeur}.png"

@@ -51,6 +51,10 @@ SEPARATEURS = " \t\n.,;:!?…\"()[]{}«»/\\|"
 # arriere envoyee dans le second champ, qui n'en contenait que trois.
 FINS_DE_PHRASE = ".!?…\n\t"
 
+# Ceux-la disent ce qui suit le mot : la phrase, ou au moins le membre de
+# phrase, est close. Avec une espace, le mot suivant n'est pas encore ecrit.
+FINS_DE_MEMBRE = ".,;:!?…\n"
+
 # Touches qui deplacent le curseur : ce qui est a l'ecran nous echappe.
 TOUCHES_DE_DEPLACEMENT = {
     "left", "right", "up", "down", "home", "end", "page up", "page down",
@@ -220,8 +224,13 @@ class Frappe:
         # Ni majuscule ni point final — la phrase n'est pas finie — et pas de
         # recherche a deux frappes d'ecart : elle coute deux dixiemes de
         # seconde sur un mot inconnu, ce qui se sentirait sous les doigts.
+        #
+        # Une espace n'annonce pas la fin de la phrase : « c'est la » attend
+        # « vie ». Une virgule ou un point, si — et c'est alors que le
+        # dernier mot peut etre juge sur ce qui le suit.
         corrige, corrections = self.correcteur.corriger(
-            corps, mise_en_forme=False, profond=False)
+            corps, mise_en_forme=False, profond=False,
+            fin_ouverte=separateur not in FINS_DE_MEMBRE)
         if corrige == corps or not corrections:
             return None
 
@@ -326,7 +335,7 @@ class Frappe:
         dernier_mot = self._debut_du_mot_en_cours()
 
         corrige, corrections = self.correcteur.corriger(
-            corps, mise_en_forme=False, profond=True)
+            corps, mise_en_forme=False, profond=True, fin_ouverte="pause")
         if corrige == corps or not corrections:
             return None
 
@@ -409,8 +418,15 @@ class EcouteClavier:
                  politique: politique_mod.Politique | None = None,
                  application: Callable[[], str | None] | None = None,
                  correcteur_pour: Callable[[str], object] | None = None,
-                 bulle=None, touche_prediction: str = "tab"):
+                 bulle=None, touche_prediction: str = "tab",
+                 detecteur_jeu: Callable[[], bool] | None = None,
+                 sur_veille: Callable[[bool], None] | None = None):
         self.frappe = frappe
+        # Un jeu au premier plan : on decroche les crochets clavier et souris
+        # plutot que de faire passer chaque touche par Python. Voir `jeu.py`.
+        self.detecteur_jeu = detecteur_jeu
+        self.sur_veille = sur_veille
+        self.en_veille = False
         # Sans bulle, la prediction ne s'affiche pas et la touche de
         # validation reste a l'application : c'est le comportement par defaut.
         self.bulle = bulle
@@ -460,18 +476,81 @@ class EcouteClavier:
     # -- cycle de vie -------------------------------------------------------
 
     def activer(self) -> None:
-        import keyboard
-
-        if self._branchement is not None:
+        if self._guetteur is not None:
             return
         self.frappe.oublier()
         self._defaisable = None
-        self._branchement = keyboard.hook(self._sur_evenement)
-        self._ecouter_la_souris()
+        self.en_veille = False
+        self._brancher()
         self.actif = True
         self._arret.clear()
         self._guetteur = threading.Thread(target=self._guetter, daemon=True)
         self._guetteur.start()
+
+    def _brancher(self) -> None:
+        import keyboard
+
+        if self._branchement is not None:
+            return
+        self._branchement = keyboard.hook(self._sur_evenement)
+        self._ecouter_la_souris()
+
+    def _debrancher(self) -> None:
+        """Decroche le clavier et la souris. Le systeme n'y repasse plus."""
+        branchement, self._branchement = self._branchement, None
+        souris, self._branchement_souris = self._branchement_souris, None
+        self._desarmer_la_touche()
+        if branchement is not None:
+            try:
+                import keyboard
+
+                keyboard.unhook(branchement)
+            except Exception:                      # noqa: BLE001
+                pass
+        if souris is not None:
+            try:
+                import mouse
+
+                mouse.unhook(souris)
+            except Exception:                      # noqa: BLE001
+                pass
+
+    # -- jeux ----------------------------------------------------------------
+    #
+    # Un crochet clavier global fait transiter *chaque* touche du systeme par
+    # ce processus : dans un jeu, qui lit le clavier a chaque image, tout
+    # ralentissement de Python devient un retard sur les touches — Ctrl en
+    # premier, puisque c'est la que les raccourcis s'accrochaient. On ne
+    # corrige pas de texte en pleine partie : on decroche, et on raccroche
+    # quand on revient a autre chose.
+
+    def _surveiller_le_jeu(self) -> None:
+        if self.detecteur_jeu is None:
+            return
+        try:
+            jeu = bool(self.detecteur_jeu())
+        except Exception:                          # noqa: BLE001
+            jeu = False
+        if jeu == self.en_veille or not self.actif:
+            return
+        if jeu:
+            self.en_veille = True
+            self._retirer_la_bulle()
+            self._debrancher()
+            with self._verrou:
+                self.frappe.oublier()
+                self._defaisable = None
+        else:
+            with self._verrou:
+                self.frappe.oublier()
+                self._defaisable = None
+            self._brancher()
+            self.en_veille = False
+        if self.sur_veille is not None:
+            try:
+                self.sur_veille(jeu)
+            except Exception:                      # noqa: BLE001
+                pass
 
     # Passe ce delai sans frappe, on ne sait plus ou est le curseur : une
     # annulation taperait au hasard.
@@ -527,8 +606,6 @@ class EcouteClavier:
             pass
 
     def desactiver(self) -> None:
-        import keyboard
-
         self.actif = False
         self._arret.set()
         guetteur, self._guetteur = self._guetteur, None
@@ -540,21 +617,8 @@ class EcouteClavier:
         if self.bulle is not None:
             self.bulle.fermer()
         self.frappe.oublier()
-        if self._branchement is None:
-            return
-        try:
-            keyboard.unhook(self._branchement)
-        except (KeyError, ValueError):
-            pass
-        if getattr(self, "_branchement_souris", None) is not None:
-            try:
-                import mouse
-
-                mouse.unhook(self._branchement_souris)
-            except Exception:                      # noqa: BLE001
-                pass
-            self._branchement_souris = None
-        self._branchement = None
+        self._debrancher()
+        self.en_veille = False
 
     # -- reception des touches ----------------------------------------------
 
@@ -826,6 +890,9 @@ class EcouteClavier:
         """
         while not self._arret.wait(self.BATTEMENT):
             try:
+                self._surveiller_le_jeu()
+                if self.en_veille:
+                    continue
                 self._relire_si_pause()
                 self._perimer_la_bulle()
             except Exception:

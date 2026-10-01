@@ -125,6 +125,21 @@ l'onglet *Applications* laisse compléter la liste.
 Le plus rapide : clic droit sur l'icône → **Ne plus corriger dans…**, qui
 propose le programme où vous veniez d'écrire.
 
+### Il s'efface pendant les jeux
+
+Un programme qui écoute le clavier fait passer chaque touche par lui. Dans un
+jeu, qui lit le clavier à chaque image, ce détour se sent : Papote se retire.
+Dès qu'une fenêtre plein écran sans bordure passe au premier plan, il lâche
+ses crochets clavier et souris — plus rien ne transite par lui —, et les
+reprend quand vous revenez à autre chose. Un jeu fenêtré, ou qu'il ne
+reconnaît pas, se désigne dans `applications_jeux` du fichier de réglages
+(`"applications_jeux": ["eldenring.exe"]`). Le réglage *Me mettre en pause
+dans les jeux* l'éteint.
+
+Les raccourcis globaux, eux, ne passent par aucun crochet : ils sont confiés à
+Windows (`RegisterHotKey`), qui ne prévient Papote que lorsque la combinaison
+est complète. `Ctrl`, `Alt` et les autres touches ne sont plus retardées.
+
 ### Il corrige aussi à la demande
 
 Pour un texte déjà écrit — un message collé, un vieux brouillon :
@@ -221,6 +236,7 @@ soit à la main.
 |---|---|---|
 | Corriger pendant que j'écris | activé | La correction au fil de la frappe |
 | Recoller le texte corrigé | activé | Sinon `Ctrl+Alt+C` se contente du presse-papiers |
+| Me mettre en pause dans les jeux | activé | Plein écran : plus aucun crochet clavier |
 | Notifications | activé | Le résumé des corrections près de l'horloge |
 | Apprendre de mes annulations | activé | Trois refus et il cède |
 | Typographie française | désactivé | `…`, guillemets `« »`, espaces insécables |
@@ -324,6 +340,12 @@ touches, une flèche, un clic ailleurs, cinq secondes de silence — et le tampo
 repart de zéro. Une correction manquée ne se voit pas ; une correction
 appliquée au mauvais endroit détruit le texte.
 
+Une espace ne dit pas que la phrase est finie : `c'est la` attend `vie`. Tant
+qu'un mot est le dernier du tampon, les règles qui devraient connaître le mot
+suivant s'abstiennent ; une virgule ou un point les autorise à trancher. Ainsi
+`c'est la vie` reste intact en cours de frappe, et `je suis la.` devient
+`je suis là.`
+
 Rien de ce qui est tapé n'est conservé : le tampon vit en mémoire, quelques
 centaines de caractères, et rien n'en sort — ni fichier, ni réseau. Dès qu'une
 touche de commande est enfoncée, il s'efface.
@@ -378,6 +400,30 @@ l'autre lecture est impossible :
 | `des voitures rouge` → `rouges` | `il se lave les mains avant de manger` |
 | `si j'aurais su` → `si j'avais su` | `je serais ravi de t'aider` |
 | `ils se sont trompé` → `trompés` | `elles se sont écrit` |
+
+### Le modèle statistique
+
+Les règles savent ce qu'on leur a dit. « a » ou « à », « ou » ou « où »,
+« son » ou « sont » se décident surtout par ce qui entoure le mot, de mille
+façons qu'aucune liste ne couvre. Pour ceux-là, Papote a appris l'usage :
+dans 75 millions de mots de français correct, il a compté les contextes de
+deux mots de chaque côté d'une trentaine d'ensembles d'homophones, et
+seulement d'eux (`papote/statistique.py`). Pour corriger, il essaie chaque
+homophone à la place du mot écrit et garde celui dont les contextes sont
+**nettement** plus attestés.
+
+Il pèse 5 Mo et ne ralentit rien : quelques recherches dans un tableau trié par
+mot concerné. Il parle en dernier, quand aucune règle n'a tranché, et se tait
+dès que le doute s'installe : un mot déjà vu dans ce contexte exact reste tel
+quel, un voisin en cours de correction le fait attendre, et des vetos
+grammaticaux couvrent ce que deux mots ne voient pas (« Paul a la clé » : un
+sujet devant, donc le verbe avoir). Sur du texte jamais vu, il touche un mot
+juste sur sept cents et retrouve plus d'une faute d'homophone sur deux.
+
+```
+python outils/entrainer_modele.py entrainer corpus/*.txt   # refaire le modèle
+python outils/entrainer_modele.py mesurer corpus/*.txt     # le mesurer
+```
 
 ### La morphologie
 
@@ -493,6 +539,71 @@ Les phrases du corpus n'ont pas été choisies pour flatter l'outil : elles ont
 dégradations que la précédente ne voyait pas — `il n'y à plus rien`,
 `nous sommons allés`, `ces quelques minutent`. Ce sont elles qui ont dicté les
 garde-fous.
+
+#### Un banc que nous n'avons pas écrit
+
+Nos corpus partagent les angles morts de ceux qui ont écrit les règles. Le
+banc `outils/banc_languagetool.py` prend les exemples des règles françaises de
+[LanguageTool](https://languagetool.org) — plus de quatre mille fautes
+corrigées par d'autres, six mille phrases justes — téléchargés à la première
+utilisation (LGPL, non copiés dans le dépôt), et les coupe en deux moitiés :
+l'une se lit et sert à corriger, l'autre ne donne que son score.
+
+```
+python outils/banc_languagetool.py --categories
+PAPOTE_BANC=1 python -m pytest tests/test_banc_languagetool.py
+```
+
+Ce banc juge le français écrit soutenu, avec des exemples faits pour piéger :
+ses chiffres sont bas par construction, et une partie des « phrases justes »
+qu'il dit abîmées contiennent en réalité d'autres fautes que Papote corrige à
+raison. Il sert à voir ce qui casse et ce qui manque, pas à se comparer.
+
+Mesures sur la moitié jamais lue de chaque banc :
+
+| | phrases justes touchées | fautes corrigées |
+|---|---|---|
+| LanguageTool 6.7 — au départ | 16,1 % | 11 % |
+| LanguageTool 6.7 — aujourd'hui | 9,4 % | 15 % |
+| Grammalecte 2.3.0 — au départ | 4,0 % | 11 % |
+| Grammalecte 2.3.0 — aujourd'hui | 2,8 % | 12 % |
+| Citations du Wiktionnaire (moitié lue) — au départ | 9,1 % | — |
+| Citations du Wiktionnaire (moitié lue) — aujourd'hui | 5,0 % | — |
+
+Sur un échantillon relu à la main, deux « phrases justes » touchées sur trois
+du banc LanguageTool contenaient en fait une faute que Papote corrige à raison
+(« apres », « des nouveau article », « tu a passer ») : la vraie part de fausses
+alertes y tourne autour de 3 %. Sur les citations du Wiktionnaire, ce qui reste
+est surtout du texte en langue étrangère ou en ancien français.
+
+#### Qui est le sujet de quel verbe
+
+La plupart des règles regardent deux ou trois mots autour de la faute. Pour
+les accords, ce n'est pas assez : dans « le prix des maisons **baissent** »,
+le mot juste avant le verbe n'est pas son sujet. `papote/structure.py` remonte
+du verbe à son sujet en sautant ce qui s'intercale — pronoms compléments,
+compléments du nom, relatives, incises —, reconnaît les sujets coordonnés
+(« mon père et mon oncle »), et suit l'attribut jusqu'au sujet à travers
+« semble », « peut être », « a été » :
+
+```
+Le prix des maisons baissent.                  → baisse
+L'enfant que j'accompagne à l'école arrivent.  → arrive
+Ils semblent avoir été attaqué.                → attaqués
+Mon père et mon oncle sont restés très calme.  → calmes
+```
+
+Il ne répond que quand le chemin est sans ambiguïté, et se tait sinon :
+questions inversées (« Quels gestes accomplit un humaniste ? »), énumérations
+dont on ne voit que la fin, comparaisons (« plus fort que ses frères gagne »),
+noms collectifs (« une foule de gens »), mots qui peuvent être un nom ou un
+verbe (« les cuillères en bois »). Sur les moitiés jamais lues des bancs, il
+corrige 10 % de fautes en plus sur LanguageTool et 18 % sur Grammalecte, pour
+cinq phrases justes touchées de plus sur plusieurs milliers.
+
+L'orthographe rectifiée de 1990 (« connaitre », « évènement », « boite »,
+« il protègera ») est l'orthographe officielle de l'école : Papote ne la
+« corrige » pas vers l'ancienne.
 
 ## En ligne de commande
 

@@ -270,45 +270,21 @@ def test_sans_relecture_le_champ_reste_vide(passerelle):
     assert passerelle.demarrer()["texte_a_relire"] == ""
 
 
-# -- la dictee : ce qui manque, et ce qui s'installe -------------------------
-
-def test_le_moteur_vocal_figure_parmi_ce_qui_s_installe(passerelle):
-    """Il n'est pas embarqué : son absence est normale, et réparable.
-
-    La page se servait de « disponible » pour cacher le bouton
-    d'installation. Y laisser le moteur rendait son propre téléchargement
-    inatteignable.
-    """
-    etat = passerelle.etat_dictee()
-    assert "vosk" not in etat.get("disponible", {})
-    assert any(m["nom"] == "vosk" for m in etat.get("modeles", []))
 
 
-def test_ce_qui_manque_vraiment_reste_signale(passerelle):
-    """« sounddevice » est embarqué : s'il manque, aucun bouton n'y peut rien."""
-    assert "sounddevice" in passerelle.etat_dictee().get("disponible", {})
 
 
-# -- le modele de dictee -----------------------------------------------------
-
-def test_le_modele_de_dictee_se_regle(passerelle):
-    assert passerelle.demarrer()["reglages"]["modele_dictee"] == "precis"
-    passerelle.regler("modele_dictee", "rapide")
-    assert passerelle.demarrer()["reglages"]["modele_dictee"] == "rapide"
+def test_retablir_ne_defait_qu_une_correction(passerelle):
+    reponse = passerelle.retablir("ça va, ça marche", "sa", "ça")
+    assert reponse == {"texte": "sa va, ça marche", "retablie": True}
 
 
-def test_la_page_suit_le_modele_choisi(passerelle):
-    """Le réglage change pendant que Papote tourne : il se relit à chaque fois."""
-    passerelle.regler("modele_dictee", "rapide")
-    noms = [m["nom"] for m in passerelle.etat_dictee()["modeles"]]
-    assert "vosk-model-small-fr-0.22" in noms
-
-    passerelle.regler("modele_dictee", "precis")
-    noms = [m["nom"] for m in passerelle.etat_dictee()["modeles"]]
-    assert "vosk-model-fr-0.22" in noms
+def test_retablir_un_mot_absent_ne_change_rien(passerelle):
+    assert passerelle.retablir("bonjour", "sa", "ça")["retablie"] is False
 
 
-def test_l_autre_modele_ne_manque_pas(passerelle):
-    """Seul le modèle choisi compte : l'autre peut rester absent."""
-    etat = passerelle.etat_dictee()
-    assert len([m for m in etat["modeles"] if "fr" in m["nom"]]) == 1
+def test_chaque_correction_dit_pourquoi(passerelle):
+    reponse = passerelle.corriger("jai mange des gateaux")
+    messages = [c["message"] for c in reponse["corrections"]]
+    assert messages and all(messages)
+    assert "il manquait une apostrophe" in messages

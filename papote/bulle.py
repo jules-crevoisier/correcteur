@@ -33,6 +33,7 @@ agrement en moins ; une exception qui remonte emporterait le clavier.
 from __future__ import annotations
 
 import queue
+import time
 import threading
 
 from . import couleurs
@@ -157,12 +158,14 @@ class Bulle:
         tkinter n'accepte d'ordres que du fil qui l'a cree ; c'est donc ici,
         et seulement ici, qu'on touche a la fenetre.
         """
+        recu = False
         try:
             while True:
                 try:
                     ordre, charge = self._file.get_nowait()
                 except queue.Empty:
                     break
+                recu = True
                 if ordre == "montrer":
                     self._afficher(*charge)
                 elif ordre == "cacher":
@@ -174,7 +177,14 @@ class Bulle:
             self._echouee = True
         finally:
             if self._racine is not None:
-                self._racine.after(40, self._vider_la_file)
+                # Vingt-cinq reveils par seconde pendant qu'on tape, pour que
+                # la bulle suive les doigts ; six quand rien ne se passe, pour
+                # ne pas tenir le processeur eveille toute la journee.
+                maintenant = time.monotonic()
+                if recu:
+                    self._dernier_ordre = maintenant
+                actif = maintenant - getattr(self, "_dernier_ordre", 0.0) < 2.0
+                self._racine.after(40 if actif else 160, self._vider_la_file)
 
     def _afficher(self, mot: str, propositions: list[str],
                   touche: str) -> None:

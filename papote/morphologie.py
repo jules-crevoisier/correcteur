@@ -47,6 +47,7 @@ import gzip
 from pathlib import Path
 
 from .chemins import dossier_donnees
+from .table import TableTriee, position as position_table
 
 # Les traits qui marquent un pluriel, et ceux qui marquent un singulier. Un
 # mot peut porter les deux — « le prix », « les prix » — et c'est justement
@@ -91,6 +92,11 @@ class Morphologie:
         self._dossier = dossier
         self._analyses = sorted(analyses) if analyses is not None else None
         self._flexions = sorted(flexions) if flexions is not None else None
+        # Les memes mots reviennent sans cesse — « les », « est », « pas » —
+        # et chaque regle repose la question. Une reponse retenue evite une
+        # dichotomie.
+        self._entrees: dict[str, tuple[frozenset[str], tuple[str, ...]]] = {}
+        self._paradigmes: dict[str, list[dict[str, frozenset[str]]]] = {}
 
     @classmethod
     def depuis_paradigmes(cls, paradigmes: dict) -> "Morphologie":
@@ -124,8 +130,9 @@ class Morphologie:
             # La morphologie est un supplement : sans elle les regles
             # d'accord se taisent, le reste du correcteur fonctionne.
             return []
-        with gzip.open(chemin, "rt", encoding="utf-8") as f:
-            return f.read().split("\n")
+        with gzip.open(chemin, "rb") as f:
+            # Un seul bloc plutot qu'une liste : voir « table.py ».
+            return TableTriee(f.read())
 
     @property
     def analyses(self) -> list[str]:
@@ -146,7 +153,7 @@ class Morphologie:
 
     @staticmethod
     def _ligne(lignes: list[str], cle: str) -> str | None:
-        position = bisect.bisect_left(lignes, cle)
+        position = position_table(lignes, cle)
         if position >= len(lignes):
             return None
         ligne = lignes[position]
@@ -154,7 +161,21 @@ class Morphologie:
 
     # -- consultation -------------------------------------------------------
 
+    # Au-dela, la memoire des reponses repart de zero : quelques milliers de
+    # mots couvrent l'essentiel d'une session.
+    MEMOIRE_MAXIMALE = 20_000
+
     def _entree(self, mot: str) -> tuple[frozenset[str], tuple[str, ...]]:
+        connue = self._entrees.get(mot)
+        if connue is not None:
+            return connue
+        if len(self._entrees) >= self.MEMOIRE_MAXIMALE:
+            self._entrees.clear()
+        entree = self._chercher_entree(mot)
+        self._entrees[mot] = entree
+        return entree
+
+    def _chercher_entree(self, mot: str) -> tuple[frozenset[str], tuple[str, ...]]:
         if not mot:
             return frozenset(), ()
         ligne = self._ligne(self.analyses, mot)
@@ -179,6 +200,16 @@ class Morphologie:
 
     def paradigme(self, lemme: str) -> list[dict[str, frozenset[str]]]:
         """Toutes les formes d'un lemme, un groupe par temps."""
+        connu = self._paradigmes.get(lemme)
+        if connu is not None:
+            return connu
+        if len(self._paradigmes) >= self.MEMOIRE_MAXIMALE // 4:
+            self._paradigmes.clear()
+        groupes = self._lire_paradigme(lemme)
+        self._paradigmes[lemme] = groupes
+        return groupes
+
+    def _lire_paradigme(self, lemme: str) -> list[dict[str, frozenset[str]]]:
         ligne = self._ligne(self.flexions, lemme)
         if ligne is None:
             return []

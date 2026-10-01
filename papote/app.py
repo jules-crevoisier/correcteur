@@ -14,6 +14,7 @@ from . import apprentissage as apprentissage_mod
 from . import memoire as memoire_mod
 from . import config as config_mod
 from . import demarrage, frappe as frappe_mod, grammaire, journal as journal_mod
+from . import jeu as jeu_mod
 from . import lexique, maj, moteur
 from . import morphologie
 from . import politique as politique_mod
@@ -239,8 +240,23 @@ class Application:
                 correcteur_pour=self.correcteur_pour,
                 bulle=self._bulle(),
                 touche_prediction=self.config.get("touche_prediction", "tab"),
+                detecteur_jeu=(self._jeu_au_premier_plan
+                               if self.config.get("pause_en_jeu", True)
+                               else None),
+                sur_veille=self._sur_veille,
             )
         return self._ecoute
+
+    def _jeu_au_premier_plan(self) -> bool:
+        return jeu_mod.jeu_au_premier_plan(
+            self.config.get("applications_jeux") or [])
+
+    def _sur_veille(self, en_jeu: bool) -> None:
+        """Pendant une partie, Papote ne garde aucun crochet sur le clavier."""
+        if en_jeu:
+            self._desactiver_raccourcis()
+        else:
+            self._activer_raccourcis()
 
     def _predicteur(self):
         """Le devineur de mots, ou rien si la prediction est eteinte."""

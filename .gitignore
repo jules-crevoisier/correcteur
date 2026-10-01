@@ -7,3 +7,4 @@ dist/
 correcteur/version_compilee.py
 installateur/*.bmp
 installateur/*.ico
+outils/cache/

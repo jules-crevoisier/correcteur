@@ -28,7 +28,6 @@ import re
 
 from . import __version__, config as config_mod
 from . import demarrage, grammaire, journal as journal_mod, logo, maj, regles
-from .dictee import Dictee
 from .lexique import LexiqueIntrouvable
 from .politique import PARLE, REGISTRES, SOUTENU
 
@@ -47,12 +46,14 @@ DESCRIPTIONS = {
                              "jour. Un numéro de version, rien de vous.",
 }
 
-# Les dossiers, decrits comme les fichiers. Ils pesent lourd — c'est
-# justement pour cela qu'on les montre.
+# Les dossiers, decrits comme les fichiers. Ceux de l'ancienne dictee
+# (modeles vocaux, moteur telecharge) sont encore montres s'ils trainent :
+# ils pesent lourd, et l'on doit pouvoir les voir pour les supprimer.
 DESCRIPTIONS_DOSSIERS = {
-    "modeles": "Les modèles de reconnaissance vocale de la dictée.",
-    "bibliotheques": "Le moteur de reconnaissance vocale, téléchargé au "
-                     "premier usage plutôt qu'embarqué.",
+    "modeles": "Les modèles vocaux de l'ancienne dictée, retirée de Papote. "
+               "Ce dossier peut être supprimé.",
+    "bibliotheques": "Le moteur vocal de l'ancienne dictée, retirée de "
+                     "Papote. Ce dossier peut être supprimé.",
 }
 
 
@@ -93,8 +94,6 @@ PAGES = (
      "soustitre": "Ce que vous corrigez le plus, compté chez vous."},
     {"cle": "applications", "nom": "Applications", "icone": "fenetre",
      "soustitre": "Où se taire, et où hausser le ton."},
-    {"cle": "dicter", "nom": "Dicter", "icone": "micro",
-     "soustitre": "Parlez, Papote écrit. Et relit ce qu'il a écrit."},
     {"cle": "reglages", "nom": "Réglages", "icone": "reglages",
      "soustitre": "Tout ce qui se réglait dans un fichier."},
 )
@@ -111,6 +110,9 @@ INTERRUPTEURS = (
     {"cle": "prediction", "libelle": "Proposer la suite des mots",
      "explication": "Une bulle dans un coin de l'écran, Tab pour "
                     "accepter."},
+    {"cle": "pause_en_jeu", "libelle": "Me mettre en pause dans les jeux",
+     "explication": "En plein écran, Papote lâche le clavier : aucun retard "
+                    "sur vos touches."},
     {"cle": "apprentissage", "libelle": "Retenir mes habitudes",
      "explication": "Trois annulations sur le même mot, et Papote n'y "
                     "touche plus."},
@@ -138,6 +140,29 @@ def _normaliser_mot(mot: str) -> str:
     return mot.lower().replace("’", "'")
 
 
+def _explication(correction) -> str:
+    """Le pourquoi d'une correction, dit pour quelqu'un qui n'a pas le code."""
+    from .lexique import sans_accents
+    if correction.regle == "ORTHOGRAPHE":
+        if correction.avant.replace("'", "") == correction.apres.replace("'", ""):
+            return "il manquait une apostrophe"
+        if sans_accents(correction.avant).lower() == \
+                sans_accents(correction.apres.replace("'", "")).lower():
+            return "il manquait une apostrophe et un accent"
+        if " " in correction.apres and " " not in correction.avant:
+            return "il manquait une espace entre deux mots"
+        if sans_accents(correction.avant).lower() == sans_accents(correction.apres).lower():
+            return "il manquait un accent"
+        return "faute de frappe : ce mot n'existe pas"
+    if correction.regle == "REMPLACEMENT_PERSO":
+        return "un remplacement de votre dictionnaire"
+    if correction.regle == "APOSTROPHE_AVANT_PARTICIPE":
+        # Le message de la regle ne parle que de « ma » ; il vaut pour « ta ».
+        return (f"« {correction.avant} » est un possessif ; devant un "
+                f"participe, c'est « {correction.apres} »")
+    return correction.message
+
+
 class Passerelle:
     """L'unique porte entre la page et le reste de Papote."""
 
@@ -147,19 +172,6 @@ class Passerelle:
         # Le dernier texte corrige, pour que « remplacer un mot » sache sur
         # quoi travailler sans que la page ait a le renvoyer en entier.
         self._dernier_texte = ""
-        # La dictee se monte au premier usage : elle charge des modeles de
-        # cinquante megaoctets, et neuf personnes sur dix n'y toucheront pas.
-        self._dictee: Dictee | None = None
-
-    @property
-    def dictee(self) -> "Dictee":
-        if self._dictee is None:
-            self._dictee = Dictee(
-                fabriquer_correcteur=lambda: self.app.correcteur,
-                journal=getattr(self.app, "journal", None),
-                lire_config=lambda: self.config.get("modele_dictee"),
-            )
-        return self._dictee
 
     # -- au chargement de la page -------------------------------------------
 
@@ -223,7 +235,7 @@ class Passerelle:
             for cle in [i["cle"] for i in INTERRUPTEURS]
             + [r["cle"] for r in RACCOURCIS]
             + ["registre", "delai_oubli", "position_bulle",
-               "touche_prediction", "delai_copie", "modele_dictee"]
+               "touche_prediction", "delai_copie"]
         }
 
     # -- page « Corriger » --------------------------------------------------
@@ -245,7 +257,7 @@ class Passerelle:
             "texte": corrige,
             "corrections": [
                 {"avant": c.avant, "apres": c.apres, "regle": c.regle,
-                 "message": c.message}
+                 "message": _explication(c)}
                 for c in corrections
             ],
             "inconnus": self._inconnus(corrige),
@@ -284,6 +296,19 @@ class Passerelle:
             if len(inconnus) >= INCONNUS_MONTRES:
                 break
         return inconnus
+
+    def retablir(self, texte: str, avant: str, apres: str) -> dict:
+        """Defait une seule correction : la premiere occurrence de `apres`.
+
+        Le correcteur a pu se tromper, et l'on ne veut pas toujours tout
+        annuler pour autant. On rend sa forme d'origine au premier endroit ou
+        la correction apparait, sans toucher au reste du texte.
+        """
+        if not apres:
+            return {"texte": texte, "retablie": False}
+        motif = re.compile(rf"(?<!\w){re.escape(apres)}(?!\w)")
+        nouveau, nombre = motif.subn(avant.replace("\\", "\\\\"), texte, count=1)
+        return {"texte": nouveau, "retablie": bool(nombre)}
 
     def remplacer(self, texte: str, mot: str, remplacement: str) -> dict:
         """Remplace un mot entier partout dans le texte."""
@@ -491,41 +516,6 @@ class Passerelle:
                            "Cette fenêtre peut être fermée."}
 
     # -- journal ------------------------------------------------------------
-
-    # -- dicter --------------------------------------------------------------
-
-    def etat_dictee(self) -> dict:
-        """Tout ce que la page « Dicter » a besoin de savoir."""
-        return _sans_bruit(self.dictee.etat, {"disponible": {}, "tours": []})
-
-    def installer_modeles(self, pour_reunion: bool = True) -> dict:
-        """Telecharge les modeles. Long : la page previent avant d'appeler."""
-        return _sans_bruit(
-            lambda: self.dictee.installer(bool(pour_reunion)),
-            {"ok": False, "erreur": "Le téléchargement a échoué."})
-
-    def commencer_dictee(self, reunion: bool = False,
-                         capter_les_autres: bool = False) -> dict:
-        return _sans_bruit(
-            lambda: self.dictee.commencer(bool(reunion),
-                                          capter_les_autres=bool(capter_les_autres)),
-            {"ok": False, "erreur": "Le micro n'a pas pu être ouvert."})
-
-    def arreter_dictee(self) -> dict:
-        return _sans_bruit(self.dictee.arreter, {"ok": True, "tours": []})
-
-    def renommer_locuteur(self, ancien: str, nouveau: str) -> dict:
-        return _sans_bruit(
-            lambda: self.dictee.renommer(str(ancien), str(nouveau)),
-            {"ok": False, "erreur": "Le renommage a échoué."})
-
-    def compte_rendu(self, titre: str = "", date: str = "") -> dict:
-        return _sans_bruit(
-            lambda: self.dictee.compte_rendu(str(titre), str(date)),
-            {"ok": False, "erreur": "Le compte rendu a échoué."})
-
-    def oublier_dictee(self) -> dict:
-        return _sans_bruit(self.dictee.oublier, {"ok": True})
 
     # -- ce qui est ecrit sur le disque -------------------------------------
 
