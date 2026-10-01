@@ -306,6 +306,7 @@ FAUTES = [
     ("il a dit quil viendrai", "il a dit qu'il viendrait", "conjugaison"),
     ("bonne anné", "bonne année", "accent"),
     ("il faut que je y aille", "il faut que j'y aille", "apostrophe"),
+    ("du cote de chez moi", "du côté de chez moi", "accent"),
 ]
 
 # Phrases correctes : elles doivent ressortir a l'identique.
@@ -537,7 +538,7 @@ INTOUCHABLES = [
     "tu cites un exemple connu",
     "on publie demain matin",
     "elles sont reparties tôt",
-    "du cote de chez moi",
+    "sa cote monte",
 
     # -- trois lettres que rien ne doit toucher
     "le mode dev est actif",

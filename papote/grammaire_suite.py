@@ -24,7 +24,7 @@ faire que corriger a tort.
 from __future__ import annotations
 
 from .grammaire import (
-    PRONOMS_COMPLEMENTS,
+    PRONOMS_COMPLEMENTS, CONJUGUES,
     AUXILIAIRES, CONJUGUES, DETERMINANTS, MOTS_INVARIABLES, PRONOMS_SUJETS,
     TRAITS_ETRE, _accord_sujet_nominal_etre, _est_adjectif, _est_pluriel,
     _sujet_avant_le_pronom,
@@ -659,3 +659,423 @@ def _en_tete_de_liste(nom: str) -> None:
 
 
 _en_tete_de_liste("CONDITIONNEL_APRES_DIT")
+
+
+# ===========================================================================
+# Ce que le banc LanguageTool a montre : les fautes les plus courantes qui
+# passaient. Voir « outils/banc_languagetool.py ».
+# ===========================================================================
+
+from .grammaire import (  # noqa: E402
+    CHARNIERES, DETERMINANTS_PLURIELS, accorder_le_verbe, sujet_avant,
+    PERSONNE_DU_SUJET,
+)
+
+# -- le subjonctif : « il faut que tu viens » --------------------------------
+
+# Ce qui, devant « que », appelle le subjonctif.
+APPELLENT_LE_SUBJONCTIF = {
+    "faut", "faudrait", "fallait", "faudra", "veux", "veut", "voulons",
+    "voulez", "veulent", "voudrais", "voudrait", "voudrions", "voudriez",
+    "voudraient", "aimerais", "aimerait", "souhaite", "souhaites",
+    "souhaitons", "souhaitez", "souhaiterais", "souhaiterait", "préfère",
+    "préfères", "préférerais", "préférerait", "avant", "pour", "afin", "sans",
+    "condition", "attends", "attendre", "exige", "exiges", "peur", "dommage",
+    "important", "nécessaire", "essentiel", "possible", "impossible",
+    "temps", "bien", "quoique", "jusqu'à", "sorte", "ordonne", "veille",
+}
+
+
+def subjonctif(ctx, mot: str, personne: str) -> str | None:
+    """La forme du subjonctif present qui correspond a ce present de l'indicatif.
+
+    Le dictionnaire range le paradigme par temps : le present de l'indicatif
+    est le deuxieme groupe, le subjonctif present le septieme quand il
+    existe. Les verbes du premier groupe n'en ont pas a part : leur
+    subjonctif se confond avec le present, sauf a « nous » et « vous », ou
+    il emprunte l'imparfait (« que nous mangions »).
+    """
+    reponses = set()
+    for lemme in ctx.morphologie.lemmes(mot):
+        groupes = ctx.morphologie.paradigme(lemme)
+        # « que vous alliez » : imparfait d'aller autant que present
+        # d'allier. Un mot qui vit dans un autre temps n'est pas a changer.
+        if any(mot in g for k, g in enumerate(groupes) if k not in (0, 1)):
+            return None
+        if len(groupes) < 7 or mot not in groupes[1]:
+            continue
+        if len(groupes) >= 8:
+            cible = groupes[6]
+        elif personne in ("1p", "2p"):
+            cible = groupes[2]
+        else:
+            cible = groupes[1]
+        formes = [f for f, t in cible.items() if personne in t]
+        if formes:
+            reponses.add(formes[0])
+    if len(reponses) != 1:
+        return None
+    return reponses.pop()
+
+
+@regle("SUBJONCTIF", "après « il faut que », « pour que »… le verbe est au subjonctif")
+def _subjonctif(ctx, i: int):
+    """« il faut que tu viens » -> « il faut que tu viennes »."""
+    if ctx.elision(i):
+        return None
+    sujet = sujet_avant(ctx, i)
+    personne = PERSONNE_DU_SUJET.get(sujet)
+    if personne is None or sujet == "ça":
+        return None
+    # Ou est le sujet ? Juste avant, ou derriere des pronoms complements.
+    k = i - 1
+    while ctx.noyau(k) != sujet and k > i - 4:
+        k -= 1
+    if ctx.noyau(k) != sujet:
+        return None
+    # Le « que » : colle au sujet (« qu'il ») ou juste devant.
+    if ctx.elision(k) == "qu'":
+        avant_que = k - 1
+    elif ctx.mot(k - 1) in ("que", "qu'"):
+        avant_que = k - 2
+    else:
+        return None
+    declencheur = ctx.mot(avant_que)
+    if declencheur not in APPELLENT_LE_SUBJONCTIF:
+        # « à condition que », « bien que » : un mot plus loin.
+        if ctx.mot(avant_que) not in ("à", "en", "de") or \
+                ctx.mot(avant_que + 1) not in APPELLENT_LE_SUBJONCTIF:
+            return None
+    # « pour que » et « sans que » ne valent que comme conjonctions : « pour »
+    # ou « sans » juste devant « que ».
+    mot = ctx.mot(i)
+    if personne not in ctx.morphologie.traits(mot):
+        return None
+    voulu = subjonctif(ctx, mot, personne)
+    if voulu is None or voulu == mot:
+        return None
+    return appliquer_casse(ctx.brut(i), voulu)
+
+
+# -- « c'est moi qui est » ---------------------------------------------------
+
+PERSONNE_DE_L_ANTECEDENT = {"moi": "1s", "toi": "2s", "nous": "1p", "vous": "2p"}
+
+
+@regle("QUI_ACCORD_ANTECEDENT", "après « moi qui », le verbe s'accorde avec « moi »")
+def _qui_antecedent(ctx, i: int):
+    """« c'est moi qui est » -> « c'est moi qui suis »."""
+    k = i - 1
+    while ctx.mot(k) in ("me", "te", "lui", "leur", "nous", "vous", "le",
+                         "la", "les", "y", "en", "ne", "n'") and k > i - 3:
+        k -= 1
+    if ctx.mot(k) != "qui":
+        return None
+    personne = PERSONNE_DE_L_ANTECEDENT.get(ctx.mot(k - 1))
+    if personne is None:
+        return None
+    # Seulement « c'est moi qui », « c'était toi qui », ou « moi qui » en tete :
+    # « l'animal en moi qui le veut », « lui ou moi qui a gagné », « savez-vous
+    # qui est » ne mettent pas le pronom en sujet.
+    presentatif = ctx.elision(k - 2) in ("c'", "ç'") or ctx.mot(k - 2) in (
+        "est", "était", "sera", "suis", "es")
+    if not (presentatif or (ctx.debut_de_segment(k - 1)
+                            and not ctx.separateur(k - 2).endswith("-"))):
+        return None
+    if ctx.mot(k - 2) in ("ou", "et", "ni"):
+        return None
+    # « c'est moi qui », « toi qui », mais pas « chez moi qui » (rare) ni
+    # « à vous qui » (on s'adresse, le verbe suit la 2e personne aussi).
+    return accorder_le_verbe(ctx, i, personne)
+
+
+# -- l'inversion du sujet ----------------------------------------------------
+
+@regle("ACCORD_INVERSION", "le pronom inversé s'accorde avec son verbe")
+def _accord_inversion(ctx, i: int):
+    """« sont-il » -> « sont-ils », « pouvait-ils » -> « pouvait-il »."""
+    pronom = ctx.mot(i)
+    if pronom not in ("il", "ils", "elle", "elles") or i == 0:
+        return None
+    if not ctx.separateur(i - 1).endswith("-"):
+        return None
+    verbe = ctx.mot(i - 1)
+    if verbe == "t":
+        verbe = ctx.mot(i - 2)
+    traits = ctx.morphologie.traits(verbe)
+    if not traits & CONJUGUES:
+        return None
+    if pronom in ("il", "elle") and "3p" in traits and "3s" not in traits:
+        return appliquer_casse(ctx.brut(i), pronom + "s")
+    if pronom in ("ils", "elles") and "3s" in traits and "3p" not in traits:
+        return appliquer_casse(ctx.brut(i), pronom[:-1])
+    return None
+
+
+PRONOMS_INVERSIBLES = {"tu", "vous", "il", "elle", "on", "nous", "ils", "elles"}
+INTERROGATIFS_DEVANT = {"où", "quand", "comment", "pourquoi", "que", "qu'",
+                        "combien", "quel", "quelle", "quels", "quelles"}
+
+
+@regle("INVERSION_SANS_TRAIT", "dans une question inversée, le verbe et le pronom se lient")
+def _inversion_sans_trait(ctx, i: int):
+    """« peut tu venir » -> « peux-tu venir », « a il fini » -> « a-t-il fini »."""
+    pronom = ctx.mot(i + 1)
+    if pronom not in PRONOMS_INVERSIBLES or ctx.separateur(i) != " ":
+        return None
+    if not (ctx.debut_de_segment(i) or ctx.mot(i - 1) in INTERROGATIFS_DEVANT):
+        return None
+    verbe = ctx.mot(i)
+    if ctx.elision(i) or not ctx.morphologie.verbe(verbe) \
+            or ctx.morphologie.nom(verbe) or verbe in MOTS_INVARIABLES:
+        return None
+    # « attends tu vas voir », « regarde il pleut » : un imperatif suivi
+    # d'une nouvelle proposition. Ce qui suit le pronom ne doit pas etre un
+    # verbe conjugue.
+    k = i + 2
+    while ctx.mot(k) in ("y", "en", "ne", "n'", "le", "la", "les", "me", "te",
+                         "se", "lui", "leur", "nous", "vous") and k < i + 5:
+        k += 1
+    apres = ctx.noyau(k)
+    if not apres or (ctx.morphologie.verbe(apres)
+                     and not ctx.morphologie.est(apres, "inf")
+                     and not ctx.est_participe(apres)):
+        return None
+    personne = PERSONNE_DU_SUJET[pronom]
+    if personne not in ctx.morphologie.traits(verbe):
+        # On n'ajuste le verbe qu'a « je » et « tu » : « peut tu » est
+        # « peux-tu ». Devant « nous » ou « elles », c'est le pronom qui
+        # est le plus souvent complement (« venez nous aider », « à elles
+        # d'assumer »).
+        if pronom != "tu":
+            return None
+        accorde = ctx.morphologie.accorder(verbe, personne)
+        if accorde is None:
+            return None
+        verbe_ecrit = appliquer_casse(ctx.brut(i), accorde)
+    else:
+        verbe_ecrit = ctx.brut(i)
+    liaison = "-t-" if (pronom in ("il", "elle", "on")
+                        and verbe_ecrit.lower().endswith(("a", "e", "c"))) else "-"
+    return (verbe_ecrit + liaison + ctx.brut(i + 1), 2)
+
+
+# -- « j'eu », « je pu » : l'auxiliaire oublie ---------------------------------
+
+PARTICIPES_SANS_AUXILIAIRE = {
+    "eu", "pu", "su", "vu", "bu", "lu", "cru", "dû", "voulu", "reçu",
+    "connu", "vécu", "perdu", "attendu", "entendu", "répondu", "vendu",
+    "rendu", "fallu", "plu", "couru", "pris", "mis", "appris", "compris",
+    "promis", "permis", "écrit", "ouvert", "offert", "souffert",
+}
+AUXILIAIRE_DE = {"je": "ai", "tu": "as", "il": "a", "elle": "a", "on": "a",
+                 "nous": "avons", "vous": "avez", "ils": "ont", "elles": "ont"}
+
+
+@regle("AUXILIAIRE_OUBLIE", "il manque l'auxiliaire avant ce participe")
+def _auxiliaire_oublie(ctx, i: int):
+    """« j'eu la chance » -> « j'ai eu la chance », « je pu » -> « j'ai pu »."""
+    mot = ctx.noyau(i)
+    if mot not in PARTICIPES_SANS_AUXILIAIRE or ctx.morphologie.verbe(mot):
+        return None
+    if ctx.elision(i) == "j'":
+        # « j'eu » : le sujet est colle au participe.
+        return appliquer_casse(ctx.brut(i), "j'ai " + mot)
+    return None
+
+
+def _sujet_est_inverse(ctx, k: int) -> bool:
+    return k > 0 and (ctx.separateur(k - 1).endswith("-") or ctx.mot(k - 1) == "t")
+
+
+@regle("AUXILIAIRE_OUBLIE_APRES_SUJET", "il manque l'auxiliaire avant ce participe")
+def _auxiliaire_oublie_apres_sujet(ctx, i: int):
+    """« je pu venir » -> « j'ai pu venir », « il vu » -> « il a vu ».
+
+    On se place sur le pronom sujet, qui recoit l'auxiliaire.
+    """
+    sujet = ctx.mot(i)
+    auxiliaire = AUXILIAIRE_DE.get(sujet)
+    if auxiliaire is None or ctx.separateur(i) != " ":
+        return None
+    if ctx.mot(i + 1) not in PARTICIPES_SANS_AUXILIAIRE or _sujet_est_inverse(ctx, i):
+        return None
+    # « je pris une douche », « on écrit » : un passe simple ou un present
+    # qui s'ecrit comme le participe.
+    if ctx.morphologie.verbe(ctx.mot(i + 1)):
+        return None
+    # « nous » et « vous » complements : « il nous vu » n'est pas « nous avons ».
+    if sujet in ("nous", "vous") and not ctx.debut_de_segment(i) \
+            and ctx.mot(i - 1) not in CHARNIERES:
+        return None
+    if sujet == "je":
+        return (appliquer_casse(ctx.brut(i), "j'ai"), 1)
+    return (ctx.brut(i) + " " + auxiliaire, 1)
+
+
+# -- l'accord avec un sujet nominal singulier --------------------------------
+
+DETERMINANTS_SINGULIERS_SUJET = {
+    "le", "la", "un", "une", "ce", "cet", "cette", "mon", "ma", "ton", "ta",
+    "son", "sa", "notre", "votre", "leur", "chaque",
+}
+
+
+@regle("ACCORD_SUJET_NOMINAL_SINGULIER", "le verbe s'accorde avec son sujet au singulier")
+def _accord_sujet_nominal_singulier(ctx, i: int):
+    """« l'enfant dis merci » -> « l'enfant dit merci »."""
+    mot = ctx.mot(i)
+    if ctx.elision(i) or not mot:
+        return None
+    traits = ctx.morphologie.traits(mot)
+    # Seulement une forme qui ne peut pas etre la 3e personne : « dis »,
+    # « fais », « viens », « es ». « mange » est aussi une 3e personne et
+    # n'a rien a corriger.
+    if not traits or "3s" in traits or not traits & {"1s", "2s"}:
+        return None
+    if traits & NOMINAUX_SUITE or mot in MOTS_INVARIABLES:
+        return None
+    k = i - 1
+    while ctx.mot(k) in ("me", "te", "lui", "leur", "nous", "vous", "le",
+                         "la", "les", "y", "en", "ne", "n'", "qui") and k > i - 4:
+        k -= 1
+    nom = ctx.noyau(k)
+    if not nom or not ctx.morphologie.nom(nom) or not ctx.morphologie.singulier(nom):
+        return None
+    if ctx.elision(k) == "l'":
+        ouvrant = k
+    elif ctx.mot(k - 1) in DETERMINANTS_SINGULIERS_SUJET:
+        ouvrant = k - 1
+    else:
+        return None
+    if not (ctx.debut_de_segment(ouvrant) or ctx.mot(ouvrant - 1) in CHARNIERES):
+        return None
+    return accorder_le_verbe(ctx, i, "3s")
+
+
+from .morphologie import NOMINAUX as NOMINAUX_SUITE  # noqa: E402
+
+
+# -- les confusions de mots, avec leur contexte ------------------------------
+
+AVANT_COTE = {"à", "a", "de", "du", "aux", "ses", "mes", "tes", "nos", "vos",
+              "leurs", "son", "mon", "ton", "notre", "votre", "leur", "un",
+              "chaque", "l'autre", "autre"}
+
+
+@regle("CONFUSIONS_EN_CONTEXTE", "ce mot existe, mais le contexte en appelle un autre")
+def _confusions_en_contexte(ctx, i: int):
+    """« à coté » -> « à côté », « des que » -> « dès que », « mauvaise foie »."""
+    mot = ctx.mot(i)
+    precedent = ctx.mot(i - 1)
+    suivant = ctx.mot(i + 1)
+    brut = ctx.brut(i)
+
+    if mot in ("coté", "cotés", "cote", "cotes") and precedent in AVANT_COTE:
+        if mot.startswith("cote") and precedent not in ("à", "a", "de", "du", "aux"):
+            # « ses cotes » (cotations), « mes cotes » : douteux.
+            if not mot.endswith("s") or ctx.mot(i - 2) not in ("à", "a", "de"):
+                return None
+        return appliquer_casse(brut, "côtés" if mot.endswith("s") else "côté")
+
+    if mot == "des" and (suivant in ("que", "lors", "aujourd'hui", "demain",
+                                     "maintenant")
+                         or ctx.elision(i + 1) == "qu'"
+                         or (suivant == "le" and ctx.mot(i + 2) in (
+                             "début", "départ", "lendemain", "matin"))):
+        return appliquer_casse(brut, "dès")
+
+    if mot in ("fois", "foie") and precedent in ("bonne", "mauvaise") \
+            and suivant not in ("pour", "de", "que", "qu'"):
+        return appliquer_casse(brut, "foi")
+    if mot in ("fois", "foie") and suivant == "en" and ctx.mot(i + 2) in (
+            "dieu", "toi", "moi", "lui", "elle", "eux", "vous", "nous", "l'avenir"):
+        return appliquer_casse(brut, "foi")
+
+    if mot in ("pêché", "pêchés") and precedent in (
+            "un", "le", "les", "ses", "mes", "tes", "des", "nos", "vos",
+            "leurs", "son", "mon", "ton", "ce", "ces", "du", "au", "aux"):
+        return appliquer_casse(brut, "péché" + ("s" if mot.endswith("s") else ""))
+
+    if mot == "prés" and (suivant in ("de", "du", "des") or ctx.elision(i + 1) == "d'") \
+            and precedent not in DETERMINANTS | DETERMINANTS_PLURIELS \
+            and not (ctx.morphologie.nom(precedent)
+                     and not ctx.morphologie.verbe(precedent)):
+        # « les prés du prieuré », « de vastes prés » : les prairies.
+        return appliquer_casse(brut, "près")
+
+    if mot == "mêmes" and suivant in ("si", "s'il", "s'ils", "pas", "quand"):
+        return appliquer_casse(brut, "même")
+    if mot == "mêmes" and ctx.elision(i + 1) == "s'":
+        return appliquer_casse(brut, "même")
+
+    if mot == "tout" and suivant in ("deux", "trois", "quatre") \
+            and precedent in ("sont", "étaient", "ils", "elles", "nous", "vous",
+                              "seront", "êtes", "sommes"):
+        return appliquer_casse(brut, "tous")
+
+    if mot == "soit" and precedent == "chez":
+        return appliquer_casse(brut, "soi")
+
+    if mot in ("marrons", "oranges") and _est_pluriel(ctx, precedent) \
+            and precedent not in ("des", "les", "ces", "mes", "tes", "ses") \
+            and ctx.morphologie.nom(precedent):
+        return appliquer_casse(brut, mot[:-1])
+
+    if mot == "j'est":
+        return appliquer_casse(brut, "j'ai")
+    return None
+
+
+@regle("OU_LIEU_TEMPS", "après un nom de lieu ou de moment, « où » est le relatif")
+def _ou_lieu_temps(ctx, i: int):
+    """« au moment ou elle est sortie » -> « au moment où », « d'ou viens-tu »."""
+    if ctx.noyau(i) != "ou":
+        return None
+    if ctx.elision(i) in ("d'", "jusqu'"):
+        return appliquer_casse(ctx.brut(i), ctx.elision(i) + "où")
+    if ctx.elision(i):
+        return None
+    precedent = ctx.mot(i - 1)
+    if precedent in ("par", "d'ici", "jusque"):
+        if ctx.mot(i + 1) in PRONOMS_SUJETS or ctx.morphologie.verbe(ctx.mot(i + 1)):
+            return appliquer_casse(ctx.brut(i), "où")
+        return None
+    if precedent not in ("moment", "instant", "jour", "époque", "heure",
+                         "année", "soir", "matin", "période", "endroit",
+                         "lieu", "minute", "seconde", "nuit"):
+        return None
+    if ctx.mot(i - 2) not in ("le", "la", "l'", "au", "à", "ce", "cet",
+                              "cette", "du", "un", "une", "dès", "depuis") \
+            and ctx.elision(i - 1) != "l'":
+        return None
+    # Un sujet doit suivre : « au moment où il part ». « Un jour ou
+    # l'autre », « un soir ou deux » gardent leur conjonction.
+    suivant = ctx.mot(i + 1)
+    if suivant in PRONOMS_SUJETS or suivant in ("ça", "tout") \
+            or ctx.elision(i + 1) in ("j'", "c'", "t'", "s'", "m'", "n'"):
+        return appliquer_casse(ctx.brut(i), "où")
+    return None
+
+
+@regle("A_ACCENT_RELATIF", "devant « laquelle », « lequel », c'est la préposition « à »")
+def _a_accent_relatif(ctx, i: int):
+    """« l'adresse a laquelle » -> « l'adresse à laquelle »."""
+    if ctx.mot(i) != "a":
+        return None
+    if ctx.mot(i + 1) in ("laquelle", "lequel", "lesquels", "lesquelles"):
+        return appliquer_casse(ctx.brut(i), "à")
+    if ctx.mot(i - 1) in ("dû", "due", "dus", "dues", "grâce", "jusqu'"):
+        return appliquer_casse(ctx.brut(i), "à")
+    return None
+
+
+@regle("CE_SONT_EN_TETE", "en tête de phrase, « se sont » est « ce sont »")
+def _ce_sont_en_tete(ctx, i: int):
+    """« Se sont des histoires » -> « Ce sont des histoires »."""
+    if ctx.mot(i) != "se" or not ctx.debut_de_segment(i):
+        return None
+    if ctx.mot(i + 1) == "sont" and \
+            ctx.mot(i + 2) in DETERMINANTS | DETERMINANTS_PLURIELS:
+        return appliquer_casse(ctx.brut(i), "ce")
+    return None

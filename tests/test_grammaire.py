@@ -278,7 +278,12 @@ def test_deux_participes_qui_se_ressemblent_ne_se_tranchent_pas(correcteur):
 
 def test_un_mot_a_plusieurs_accents_possibles_reste_intact(correcteur):
     """« cote » peut être « côte », « côté » ou « coté » : rien ne tranche."""
-    assert correcteur.corriger("du cote de chez moi")[0] == "du cote de chez moi"
+    assert correcteur.corriger("sa cote monte")[0] == "sa cote monte"
+
+
+def test_le_determinant_tranche_entre_les_accents(correcteur):
+    """« du » est masculin : ni « côte » ni « cote », seul « côté » reste."""
+    assert correcteur.corriger("du cote de chez moi")[0] == "du côté de chez moi"
 
 
 # -- un determinant singulier veut un nom singulier -------------------------
