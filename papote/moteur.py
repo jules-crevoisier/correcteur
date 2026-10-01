@@ -355,9 +355,13 @@ class Correcteur:
         if self.lexique.rang(noyau) != RANG_INCONNU:
             return None
 
+        # La recherche a deux frappes coute un quart de seconde de calcul ; on
+        # ne la lance que sur un mot assez long pour qu'elle puisse aboutir
+        # (voir plus bas).
         frappe = self.lexique.suggestion(
             noyau,
-            classe_max=CLASSE_EDITION_DOUBLE if profond else CLASSE_EDITION,
+            classe_max=(CLASSE_EDITION_DOUBLE if profond and len(noyau) >= 6
+                        else CLASSE_EDITION),
         )
         if frappe is None:
             return None

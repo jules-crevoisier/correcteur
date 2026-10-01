@@ -37,6 +37,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .chemins import dossier_donnees
+from .table import TableTriee, position as position_table
 
 # Lettres utilisees pour fabriquer les variantes a une frappe d'ecart. Les
 # accents n'y figurent pas : ils sont deja couverts par l'index des squelettes.
@@ -216,10 +217,22 @@ class Lexique:
         with gzip.open(chemin, "rt", encoding="utf-8") as f:
             return f.read().split("\n")
 
+    def _lire_table(self, nom: str) -> TableTriee:
+        """Comme `_lire`, en un seul bloc : voir « table.py »."""
+        dossier = self._dossier or dossier_donnees()
+        chemin = dossier / nom
+        if not chemin.is_file():
+            raise LexiqueIntrouvable(
+                f"Le fichier {chemin} est introuvable.\n"
+                "Le dossier « donnees » doit accompagner l'application."
+            )
+        with gzip.open(chemin, "rb") as f:
+            return TableTriee(f.read())
+
     @property
-    def lignes(self) -> list[str]:
+    def lignes(self):
         if self._lignes is None:
-            self._lignes = self._lire("lexique_fr.txt.gz")
+            self._lignes = self._lire_table("lexique_fr.txt.gz")
         return self._lignes
 
     @property
@@ -234,13 +247,15 @@ class Lexique:
         """Force la lecture des fichiers, pour la faire au moment choisi."""
         self.lignes  # noqa: B018
         self.rangs  # noqa: B018
+        if isinstance(self.lignes, TableTriee):
+            self.lignes.empreintes()
 
     # -- consultation -------------------------------------------------------
 
     def _ligne(self, nu: str) -> str | None:
         """La ligne du lexique decrivant ce squelette, par dichotomie."""
         lignes = self.lignes
-        position = bisect.bisect_left(lignes, nu)
+        position = position_table(lignes, nu)
         if position >= len(lignes):
             return None
         ligne = lignes[position]
@@ -261,6 +276,9 @@ class Lexique:
 
     def existe(self, nu: str) -> bool:
         """Ce squelette figure-t-il au lexique ?"""
+        lignes = self.lignes
+        if isinstance(lignes, TableTriee):
+            return lignes.contient_cle(nu)
         return self._ligne(nu) is not None
 
     def connait(self, mot: str) -> bool:
@@ -353,6 +371,17 @@ class Lexique:
         seconde : mieux vaut trier les candidats et parcourir le lexique une
         seule fois, cote a cote, comme on fusionne deux listes triees.
         """
+        lignes = self.lignes
+        if isinstance(lignes, TableTriee):
+            # Le meme test que `existe`, deroule ici : sur cent mille
+            # candidats, deux appels de fonction de moins par candidat
+            # divisent le temps par deux.
+            empreintes = lignes.empreintes()
+            total = len(empreintes)
+            chercher = bisect.bisect_left
+            return {c for c in candidats
+                    if (i := chercher(empreintes, h := hash(c.encode("utf-8")))) < total
+                    and empreintes[i] == h}
         if len(candidats) <= self.SEUIL_FUSION:
             return {candidat for candidat in candidats if self.existe(candidat)}
 
@@ -360,7 +389,7 @@ class Lexique:
         lignes = self.lignes
         position = 0
         for candidat in sorted(candidats):
-            position = bisect.bisect_left(lignes, candidat, position)
+            position = position_table(lignes, candidat, position)
             if position >= len(lignes):
                 break
             ligne = lignes[position]
