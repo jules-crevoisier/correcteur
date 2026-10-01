@@ -26,7 +26,7 @@ from pathlib import Path
 RACINE = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(RACINE))
 
-DESTINATION = Path("/tmp/apercu-papote")
+DESTINATION = Path(__import__("os").environ.get("APERCU", "/tmp/apercu-papote"))
 
 # La fenetre s'ouvre a cette taille ; c'est donc la que le dessin doit tomber
 # juste. Les autres largeurs se demandent avec « --large ».

@@ -308,16 +308,41 @@ async function corriger() {
   }
 }
 
+/* Chaque correction dit pourquoi elle a ete faite, et peut etre refusee
+   seule. Une puce barree ne suffisait pas : on voyait ce qui avait change,
+   jamais la raison — et pour revenir sur une seule correction, il fallait
+   tout annuler. */
 function montrerCorrections(corrections) {
   const zone = vider($("#corrections"));
   zone.hidden = !corrections.length;
   corrections.forEach((correction, rang) => {
-    const puce = creer("span", "correction");
-    puce.style.animationDelay = Math.min(rang * 28, 320) + "ms";
-    puce.title = correction.message || "";
-    puce.appendChild(creer("del", null, correction.avant));
-    puce.appendChild(creer("ins", null, correction.apres));
-    zone.appendChild(puce);
+    const rangee = creer("div", "correction");
+    rangee.style.animationDelay = Math.min(rang * 28, 320) + "ms";
+
+    const changement = creer("span", "changement");
+    changement.appendChild(creer("del", null, correction.avant));
+    changement.appendChild(creer("span", "fleche", "→"));
+    changement.appendChild(creer("ins", null, correction.apres));
+    rangee.appendChild(changement);
+
+    rangee.appendChild(creer("span", "pourquoi", correction.message || ""));
+
+    const garder = creer("button", "bouton discret minuscule",
+                         "garder « " + correction.avant + " »");
+    garder.title = "Remettre ce que vous aviez écrit, ici seulement";
+    garder.addEventListener("click", async () => {
+      retenirLetat();
+      const reponse = repondre(await appeler(
+        "retablir", $("#champ").value, correction.avant, correction.apres));
+      if (reponse.erreur || !reponse.retablie) return;
+      $("#champ").value = reponse.texte;
+      compter();
+      rangee.classList.add("refusee");
+      garder.disabled = true;
+      dire("« " + correction.avant + " » rétabli.", "succes");
+    });
+    rangee.appendChild(garder);
+    zone.appendChild(rangee);
   });
 }
 

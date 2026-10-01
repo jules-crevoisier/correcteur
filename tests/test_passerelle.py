@@ -312,3 +312,19 @@ def test_l_autre_modele_ne_manque_pas(passerelle):
     """Seul le modèle choisi compte : l'autre peut rester absent."""
     etat = passerelle.etat_dictee()
     assert len([m for m in etat["modeles"] if "fr" in m["nom"]]) == 1
+
+
+def test_retablir_ne_defait_qu_une_correction(passerelle):
+    reponse = passerelle.retablir("ça va, ça marche", "sa", "ça")
+    assert reponse == {"texte": "sa va, ça marche", "retablie": True}
+
+
+def test_retablir_un_mot_absent_ne_change_rien(passerelle):
+    assert passerelle.retablir("bonjour", "sa", "ça")["retablie"] is False
+
+
+def test_chaque_correction_dit_pourquoi(passerelle):
+    reponse = passerelle.corriger("jai mange des gateaux")
+    messages = [c["message"] for c in reponse["corrections"]]
+    assert messages and all(messages)
+    assert "il manquait une apostrophe" in messages

@@ -520,22 +520,41 @@ input::placeholder { color: var(--texte-eteint); }
 
 .corrections {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 6px;
-  align-items: center;
 }
 .correction {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 8px 8px 8px 14px;
+  background: var(--surface);
+  border: 1px solid var(--trait);
+  border-left: 3px solid var(--succes);
+  border-radius: var(--rayon);
+  font-size: 13px;
+  animation: surgir 240ms var(--courbe) backwards;
+}
+.correction .changement {
   display: inline-flex;
   align-items: baseline;
   gap: 6px;
-  padding: 5px 11px;
-  border-radius: var(--rayon-rond);
-  background: var(--succes-sourd);
-  font-size: 12.5px;
-  animation: surgir 240ms var(--courbe) backwards;
+  flex: none;
 }
 .correction del { color: var(--texte-eteint); text-decoration: line-through; }
 .correction ins { color: var(--succes); text-decoration: none; font-weight: 600; }
+.correction .fleche { color: var(--texte-eteint); font-size: 12px; }
+.correction .pourquoi {
+  flex: 1;
+  min-width: 160px;
+  color: var(--texte-doux);
+  font-size: 12.5px;
+}
+.correction .pourquoi::first-letter { text-transform: uppercase; }
+.correction.refusee { border-left-color: var(--trait-net); opacity: 0.6; }
+.correction.refusee ins { color: var(--texte-eteint); text-decoration: line-through; }
+.correction.refusee del { color: var(--texte); text-decoration: none; }
 
 .inconnus { display: flex; flex-direction: column; gap: 8px; }
 .inconnu {

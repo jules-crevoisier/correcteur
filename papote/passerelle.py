@@ -141,6 +141,29 @@ def _normaliser_mot(mot: str) -> str:
     return mot.lower().replace("’", "'")
 
 
+def _explication(correction) -> str:
+    """Le pourquoi d'une correction, dit pour quelqu'un qui n'a pas le code."""
+    from .lexique import sans_accents
+    if correction.regle == "ORTHOGRAPHE":
+        if correction.avant.replace("'", "") == correction.apres.replace("'", ""):
+            return "il manquait une apostrophe"
+        if sans_accents(correction.avant).lower() == \
+                sans_accents(correction.apres.replace("'", "")).lower():
+            return "il manquait une apostrophe et un accent"
+        if " " in correction.apres and " " not in correction.avant:
+            return "il manquait une espace entre deux mots"
+        if sans_accents(correction.avant).lower() == sans_accents(correction.apres).lower():
+            return "il manquait un accent"
+        return "faute de frappe : ce mot n'existe pas"
+    if correction.regle == "REMPLACEMENT_PERSO":
+        return "un remplacement de votre dictionnaire"
+    if correction.regle == "APOSTROPHE_AVANT_PARTICIPE":
+        # Le message de la regle ne parle que de « ma » ; il vaut pour « ta ».
+        return (f"« {correction.avant} » est un possessif ; devant un "
+                f"participe, c'est « {correction.apres} »")
+    return correction.message
+
+
 class Passerelle:
     """L'unique porte entre la page et le reste de Papote."""
 
@@ -248,7 +271,7 @@ class Passerelle:
             "texte": corrige,
             "corrections": [
                 {"avant": c.avant, "apres": c.apres, "regle": c.regle,
-                 "message": c.message}
+                 "message": _explication(c)}
                 for c in corrections
             ],
             "inconnus": self._inconnus(corrige),
@@ -287,6 +310,19 @@ class Passerelle:
             if len(inconnus) >= INCONNUS_MONTRES:
                 break
         return inconnus
+
+    def retablir(self, texte: str, avant: str, apres: str) -> dict:
+        """Defait une seule correction : la premiere occurrence de `apres`.
+
+        Le correcteur a pu se tromper, et l'on ne veut pas toujours tout
+        annuler pour autant. On rend sa forme d'origine au premier endroit ou
+        la correction apparait, sans toucher au reste du texte.
+        """
+        if not apres:
+            return {"texte": texte, "retablie": False}
+        motif = re.compile(rf"(?<!\w){re.escape(apres)}(?!\w)")
+        nouveau, nombre = motif.subn(avant.replace("\\", "\\\\"), texte, count=1)
+        return {"texte": nouveau, "retablie": bool(nombre)}
 
     def remplacer(self, texte: str, mot: str, remplacement: str) -> dict:
         """Remplace un mot entier partout dans le texte."""
