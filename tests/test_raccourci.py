@@ -66,6 +66,9 @@ class FauxClavier(types.ModuleType):
 def clavier(monkeypatch):
     faux = FauxClavier(refuse={"ctrl+alt+¤"})
     monkeypatch.setitem(sys.modules, "keyboard", faux)
+    # Sous Windows, RegisterHotKey passerait avant : ces tests visent le
+    # repli sur « keyboard ».
+    monkeypatch.setattr(Raccourci, "_activer_par_le_systeme", lambda self: False)
     return faux
 
 
