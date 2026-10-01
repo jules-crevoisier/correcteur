@@ -102,6 +102,9 @@ class Application:
 
         # La version telechargee qui attend le prochain demarrage, s'il y en a.
         self.maj_prete: maj.Version | None = None
+        # Appele des qu'une version est telechargee : l'icone y redessine son
+        # menu pour afficher « Redémarrer ».
+        self.sur_maj_prete = lambda _version: None
 
         # Le texte que le raccourci de relecture vient de capturer, en
         # attendant que la fenetre le reclame. Il ne vit qu'en memoire, et
@@ -633,14 +636,15 @@ class Application:
             return None
 
         self.maj_prete = version
+        self.sur_maj_prete(version)
         # Le message renvoyait a l'icone « pres de l'horloge ». Windows range
         # les icones dans un tiroir replie par defaut : la plupart des gens
         # ne la voient pas, et on leur demandait de cliquer dessus. Ce qui
         # marche a coup sur, c'est de redemarrer.
         self.notifier(
             f"Version {version} téléchargée",
-            "Redémarrez Papote pour l'installer. Sinon, elle s'installera "
-            "toute seule au prochain démarrage.",
+            "Clic droit sur l'icône Papote → « Redémarrer ». Sinon, elle "
+            "s'installera toute seule au prochain démarrage.",
         )
         return version
 

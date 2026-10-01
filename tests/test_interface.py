@@ -99,3 +99,58 @@ def test_l_icone_de_la_zone_de_notification_se_dessine():
     for actif in (True, False):
         image = _icone(actif)
         assert image.size == (64, 64)
+
+
+class IconeEspionne:
+    def __init__(self):
+        self.redessins = 0
+
+    def update_menu(self):
+        self.redessins += 1
+
+
+def test_redemarrer_s_affiche_seul_quand_une_version_attend(barre, monkeypatch, tmp_path):
+    """Un bouton « Redémarrer » en tete du menu, et plus de « Rechercher »."""
+    monkeypatch.setattr(maj, "compilee", lambda: True)
+    monkeypatch.setattr(maj, "en_attente", lambda: None)
+    assert not barre._maj_visible() and barre._recherche_visible()
+
+    monkeypatch.setattr(maj, "en_attente", lambda: tmp_path / "Papote.nouveau.exe")
+    monkeypatch.setattr(maj, "numero_en_attente", lambda: "v9.9.9")
+    assert barre._maj_visible() and not barre._recherche_visible()
+
+
+def test_le_menu_se_redessine_des_que_la_version_est_telechargee(barre, monkeypatch):
+    """Sous Windows, pystray ne relit ses libelles que sur `update_menu()` :
+    sans lui, il fallait recliquer sur « Rechercher » pour redemarrer."""
+    icone = IconeEspionne()
+    barre.icone = icone
+    monkeypatch.setattr(maj, "disponible",
+                        lambda: maj.Version("v9.9.9", "https://exemple/Papote.exe"))
+    monkeypatch.setattr(maj, "installer_maintenant", lambda version: None)
+
+    assert barre.app.chercher_mise_a_jour() is not None
+    assert icone.redessins == 1
+
+
+def test_une_version_telechargee_par_la_fenetre_redessine_le_menu(barre, monkeypatch,
+                                                                   tmp_path):
+    import papote.interface as interface
+
+    icone = IconeEspionne()
+    barre.icone = icone
+    monkeypatch.setattr(maj, "redemarrage_demande", lambda: False)
+    monkeypatch.setattr(maj, "en_attente", lambda: tmp_path / "Papote.nouveau.exe")
+    monkeypatch.setattr(maj, "numero_en_attente", lambda: "v9.9.9")
+
+    tours = iter([None, None, StopIteration])
+
+    def dormir(_secondes):
+        if next(tours) is StopIteration:
+            raise StopIteration
+
+    monkeypatch.setattr(interface.time, "sleep", dormir)
+    with pytest.raises(StopIteration):
+        barre._surveiller_config()
+    # Vu une fois, redessine une fois : pas a chaque tour.
+    assert icone.redessins == 1
