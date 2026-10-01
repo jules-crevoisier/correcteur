@@ -146,6 +146,7 @@ DOUBLURE = """
     demarrer: async () => donnees.demarrer,
     corriger: async () => donnees.corriger,
     remplacer: async (texte) => ({ texte, remplaces: 0, inconnus: [] }),
+    retablir: async (texte) => ({ texte, retablie: false }),
     dictionnaire: async () => donnees.dictionnaire,
     applications: async () => donnees.applications,
     fautes: async () => donnees.fautes,
