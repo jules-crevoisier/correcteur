@@ -82,8 +82,8 @@ def mesures(correcteur):
 
 
 @pytest.mark.parametrize("moitie,rappel_minimal,abimees_maximum", [
-    ("dev", 0.05, 0.065),
-    ("ecart", 0.07, 0.045),
+    ("dev", 0.07, 0.065),
+    ("ecart", 0.10, 0.045),
 ])
 def test_le_banc_ne_recule_pas(mesures, moitie, rappel_minimal, abimees_maximum):
     m = mesures[moitie]
