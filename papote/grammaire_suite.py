@@ -24,6 +24,7 @@ faire que corriger a tort.
 from __future__ import annotations
 
 from .grammaire import (
+    PRONOMS_COMPLEMENTS,
     AUXILIAIRES, CONJUGUES, DETERMINANTS, MOTS_INVARIABLES, PRONOMS_SUJETS,
     TRAITS_ETRE, _accord_sujet_nominal_etre, _est_adjectif, _est_pluriel,
     _sujet_avant_le_pronom,
@@ -87,6 +88,9 @@ def _elision_manquante(ctx, i: int):
     suivant = ctx.mot(i + 1)
     if not suivant or ctx.separateur(i) != " ":
         return None
+    # « Dois-je enregistrer » : le pronom inverse ne s'elide pas.
+    if i > 0 and ctx.separateur(i - 1).endswith("-"):
+        return None
 
     if mot == "si":
         # « s'il » : la seule elision de « si ».
@@ -108,6 +112,11 @@ def _elision_manquante(ctx, i: int):
         return None
     if mot == "je" and suivant in ("et", "ou", "où", "est"):
         return None
+    # « me off », « me environ » : un pronom complement annonce un verbe.
+    if mot in ("me", "te", "se", "ne") and suivant not in ("y", "en") \
+            and not ctx.morphologie.verbe(suivant) \
+            and not ctx.morphologie.est(suivant, "inf"):
+        return None
     return (appliquer_casse(ctx.brut(i), elision) + ctx.brut(i + 1), 2)
 
 
@@ -126,8 +135,18 @@ def _apostrophe_en_espace(ctx, i: int):
     elision = LETTRES_ELIDEES.get(mot)
     if elision is None or ctx.separateur(i) != " ":
         return None
+    # « militant-e-s », « la fonction L a » : une lettre accrochee a un mot,
+    # ou une variable mathematique, pas une elision.
+    if not ctx.brut(i).islower() or (i > 0 and not ctx.separateur(i - 1).endswith(" ")):
+        return None
     suivant = ctx.mot(i + 1)
     if not _voyelle_initiale(suivant) or not ctx.connait(suivant):
+        return None
+    # Devant « n », « m », « t », « s », « j », il faut un verbe (ou « y »,
+    # « en ») : « n entier naturel » est une variable suivie d'un adjectif.
+    if mot in ("n", "m", "t", "s", "j") and suivant not in ("y", "en") \
+            and not ctx.morphologie.verbe(suivant) \
+            and not ctx.morphologie.est(suivant, "inf"):
         return None
     if suivant in ("et", "ou", "où", "oui"):
         return None
@@ -386,7 +405,16 @@ def _accord_adjectif_attribut(ctx, i: int):
     mot = ctx.mot(i)
     if ctx.elision(i) or not mot or mot in MOTS_INVARIABLES:
         return None
+    # « nous sommes le plus vulnérable », « ils étaient, semble-t-il » : ni
+    # un article ni un verbe ne s'accordent comme un adjectif.
+    if mot in DETERMINANTS or mot in PRONOMS_COMPLEMENTS \
+            or ctx.morphologie.verbe(mot):
+        return None
     if not (_est_adjectif(ctx, mot) or ctx.est_participe(mot)):
+        return None
+    # « elles sont source de débats » : un nom attribut, qui garde son
+    # nombre.
+    if ctx.apercu(i + 1) in ("de", "d'") or ctx.apercu(i + 1).startswith("d'"):
         return None
 
     decalage = 1 if ctx.mot(i - 1) in INTENSIFS else 0

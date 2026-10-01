@@ -335,7 +335,7 @@ class Frappe:
         dernier_mot = self._debut_du_mot_en_cours()
 
         corrige, corrections = self.correcteur.corriger(
-            corps, mise_en_forme=False, profond=True, fin_ouverte=True)
+            corps, mise_en_forme=False, profond=True, fin_ouverte="pause")
         if corrige == corps or not corrections:
             return None
 

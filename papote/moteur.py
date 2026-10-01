@@ -97,11 +97,34 @@ def _normaliser_mot(mot: str) -> str:
     return sans_accents(mot.strip(".,;:!?…\"'«»()[]{}-–—*_~")).lower()
 
 
+# Au-dela, un mot a deux frappes d'ecart est trop rare pour qu'on parie.
+RANG_MAXIMAL_EDITION_DOUBLE = 5_000
+
+# Des suites de lettres qui ne sont presque jamais francaises. Un mot inconnu
+# qui en porte une est un mot etranger — « walking », « known », « shot » —
+# et la distance d'edition lui trouverait toujours un sosie francais.
+_ETRANGER = re.compile(r"w|k|th|sh|ck|gh|oa|ee|oo(?!u)|ing$|ay$|ey$|y[^aeiouy]")
+
+
+def _air_etranger(mot: str) -> bool:
+    # « délay » porte un accent francais : c'est un mot francais mal tape.
+    if any(c in "éèêàâùûôîïëç" for c in mot.lower()):
+        return False
+    return bool(_ETRANGER.search(mot.lower()))
+
+
 def _perd_des_accents(mot: str, candidat: str) -> bool:
     """Le candidat a-t-il moins de lettres accentuees que le mot ecrit ?"""
     def accentuees(texte: str) -> int:
         return sum(1 for c in texte if c.isalpha() and not c.isascii())
     return accentuees(candidat) < accentuees(mot)
+
+
+def _nom_propre(texte: str, jeton) -> bool:
+    """Le jeton porte-t-il une majuscule que seul un nom propre explique ?"""
+    if not jeton.texte[:1].isupper():
+        return False
+    return not _DEBUT_DE_PHRASE.search(texte[:jeton.debut])
 
 
 def _zones_protegees(texte: str) -> list[tuple[int, int]]:
@@ -181,7 +204,7 @@ class Correcteur:
             return not noyau or self.lexique.connait(noyau)
         return False
 
-    def _apostrophe_manquante(self, mot: str) -> str | None:
+    def _apostrophe_manquante(self, mot: str, prudent: bool = False) -> str | None:
         """« jai » -> « j'ai », « cest » -> « c'est », « daccord » -> « d'accord ».
 
         L'apostrophe est la touche la plus souvent sautee en tapant vite. Le
@@ -210,6 +233,15 @@ class Correcteur:
             if self.lexique.connait(reste) and (
                     reste == "y" or self.lexique.rang(reste) <= RANG_COURANT):
                 return mot[: len(tete)] + "'" + reste
+            # Un mot capitalise est souvent un nom propre : « Shuman »,
+            # « Matra », « Leblanc » ne cachent aucune apostrophe. On n'y
+            # coupe que devant un mot courant intact, comme ci-dessus.
+            if prudent:
+                continue
+            # « entraine » est « entraîne » : le mot entier a deja une
+            # graphie accentuee, il n'y a pas d'apostrophe a inventer.
+            if self.lexique.formes(mot.lower()):
+                continue
             # « cetait » -> « c'était » : le morceau de droite a le droit
             # d'avoir perdu ses accents.
             accentue = self.lexique.suggestion(reste, classe_max=CLASSE_ACCENT)
@@ -253,6 +285,11 @@ class Correcteur:
 
         elision, noyau = grammaire.separer_clitique(mot)
 
+        # « y'en a », « p'tit », « p'être » : des elisions du parle que le
+        # decoupage ne connait pas. On ne devine rien derriere.
+        if not elision and ("'" in mot or "’" in mot):
+            return None
+
         # Un mot capitalise au milieu d'une phrase est un nom propre : on veut
         # bien lui rendre ses accents, pas le remplacer par un autre mot.
         prudent = mot[:1].isupper()
@@ -269,11 +306,17 @@ class Correcteur:
             return elision + accents
 
         if not elision:
-            apostrophe = self._apostrophe_manquante(mot)
+            apostrophe = self._apostrophe_manquante(mot, prudent=prudent)
             if apostrophe is not None:
                 return apostrophe
 
         if prudent:
+            return None
+
+        # « walking », « known », « food » : un mot d'une autre langue n'est
+        # pas une faute de frappe en francais. On lui laisse ses accents a
+        # rendre, rien d'autre.
+        if _air_etranger(noyau):
             return None
 
         # L'espace sautee vient avant la faute de frappe. « ilfaut » doit
@@ -316,7 +359,25 @@ class Correcteur:
             noyau,
             classe_max=CLASSE_EDITION_DOUBLE if profond else CLASSE_EDITION,
         )
-        return elision + frappe if frappe is not None else None
+        if frappe is None:
+            return None
+        if profond and frappe != self.lexique.suggestion(
+                noyau, classe_max=CLASSE_EDITION):
+            # Deux frappes d'ecart, c'est deja beaucoup inventer : « golfienne »
+            # devenait « éolienne », « puisoir » « puiser ». On l'exige sur un
+            # mot assez long, qui garde sa premiere lettre, vers un mot
+            # franchement courant.
+            if (len(noyau) < 6
+                    or sans_accents(frappe[:1].lower()) != sans_accents(noyau[:1].lower())
+                    or self.lexique.rang(frappe) > RANG_MAXIMAL_EDITION_DOUBLE):
+                return None
+        # « s'entretue » n'est pas « s'entrevue » : derriere un pronom
+        # reflechi elide, il faut un verbe.
+        if elision in ("s'", "m'", "t'", "n'") and frappe not in ("y", "en") \
+                and not self.morphologie.verbe(frappe) \
+                and not self.morphologie.est(frappe, "inf"):
+            return None
+        return elision + frappe
 
     def _accorder_au_pluriel(self, mot: str) -> str | None:
         """La correction de `mot`, mise au pluriel, quand un déterminant
@@ -433,7 +494,14 @@ class Correcteur:
         """
         candidat = self.lexique.suggestion(minuscule,
                                            classe_max=CLASSE_EDITION)
-        return candidat is not None and len(candidat) > len(minuscule)
+        if candidat is not None:
+            return len(candidat) > len(minuscule)
+        # Deux candidats qui se valent — « enfans » : « enfants » ou
+        # « enfant » — n'en disent pas moins qu'il manque une lettre, et
+        # surement pas qu'il manque une espace (« en fans »).
+        return any(c.classe == CLASSE_EDITION and len(c.mot) > len(minuscule)
+                   and c.rang <= RANG_COURANT
+                   for c in self.lexique.candidats(minuscule, CLASSE_EDITION))
 
     def propositions(self, mot: str, maximum: int = 4) -> list[str]:
         """Les remplacements plausibles d'un mot inconnu, faute de certitude.
@@ -448,7 +516,7 @@ class Correcteur:
     # -- une passe ----------------------------------------------------------
 
     def _passe(self, texte: str, profond: bool = True,
-               fin_ouverte: bool = False) -> tuple[str, list[Correction]]:
+               fin_ouverte: bool | str = False) -> tuple[str, list[Correction]]:
         jetons = grammaire.decouper(texte)
         zones = _zones_protegees(texte)
         propositions: list[Correction] = []
@@ -497,6 +565,11 @@ class Correcteur:
             debut = jetons[suggestion.index].debut
             fin = jetons[indices[-1]].fin
             if not utilisable(indices, debut, fin, suggestion.regle):
+                continue
+            if any(_nom_propre(texte, jetons[k]) for k in indices):
+                # « Elle a Marie », « Mary Quant », « le grand Tours » : un
+                # mot capitalise au milieu d'une phrase est un nom propre, et
+                # les regles de grammaire raisonnent sur des noms communs.
                 continue
             propositions.append(
                 Correction(debut, fin, texte[debut:fin], suggestion.texte,
@@ -618,7 +691,7 @@ class Correcteur:
     def corriger(self, texte: str, passes: int = 3,
                  mise_en_forme: bool = True,
                  profond: bool = True,
-                 fin_ouverte: bool = False) -> tuple[str, list[Correction]]:
+                 fin_ouverte: bool | str = False) -> tuple[str, list[Correction]]:
         """Corrige `texte` et renvoie (texte_corrige, corrections_appliquees).
 
         Trois passes par defaut : corriger « ils on manger » en « ils ont
