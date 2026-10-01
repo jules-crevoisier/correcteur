@@ -516,6 +516,32 @@ dégradations que la précédente ne voyait pas — `il n'y à plus rien`,
 `nous sommons allés`, `ces quelques minutent`. Ce sont elles qui ont dicté les
 garde-fous.
 
+#### Un banc que nous n'avons pas écrit
+
+Nos corpus partagent les angles morts de ceux qui ont écrit les règles. Le
+banc `outils/banc_languagetool.py` prend les exemples des règles françaises de
+[LanguageTool](https://languagetool.org) — plus de quatre mille fautes
+corrigées par d'autres, six mille phrases justes — téléchargés à la première
+utilisation (LGPL, non copiés dans le dépôt), et les coupe en deux moitiés :
+l'une se lit et sert à corriger, l'autre ne donne que son score.
+
+```
+python outils/banc_languagetool.py --categories
+PAPOTE_BANC=1 python -m pytest tests/test_banc_languagetool.py
+```
+
+Ce banc juge le français écrit soutenu, avec des exemples faits pour piéger :
+ses chiffres sont bas par construction, et une partie des « phrases justes »
+qu'il dit abîmées contiennent en réalité d'autres fautes que Papote corrige à
+raison. Il sert à voir ce qui casse et ce qui manque, pas à se comparer.
+
+| | au départ | aujourd'hui |
+|---|---|---|
+| phrases justes touchées (moitié lue) | 14,6 % | 7,7 % |
+| phrases justes touchées (moitié à l'écart) | 16,1 % | 12,3 % |
+| fautes corrigées (moitié lue) | 7 % | 9 % |
+| fautes corrigées (moitié à l'écart) | 11 % | 12 % |
+
 ## En ligne de commande
 
 ```
