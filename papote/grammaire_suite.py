@@ -1079,3 +1079,170 @@ def _ce_sont_en_tete(ctx, i: int):
             ctx.mot(i + 2) in DETERMINANTS | DETERMINANTS_PLURIELS:
         return appliquer_casse(ctx.brut(i), "ce")
     return None
+
+
+# ===========================================================================
+# Le modele statistique, en dernier recours. Voir « statistique.py ».
+# ===========================================================================
+
+from . import statistique as _stat  # noqa: E402
+
+# L'ecart de score exige pour corriger, et le minimum de contextes vus qui
+# soutiennent le candidat. Regles sur la part du corpus mise de cote, pour
+# qu'un mot juste ne soit touche que tres rarement.
+MARGE_STATISTIQUE = 5.0
+PREUVES_STATISTIQUE = 3
+
+# Ces ensembles-la se trompent plus souvent que les autres sur le corpus mis
+# de cote : on leur demande davantage.
+MARGES_PARTICULIERES = {
+    "mes": 7.0, "mais": 7.0, "met": 7.0, "mets": 7.0,
+    "ces": 6.5, "ses": 6.5, "c'est": 6.5, "s'est": 6.5, "sais": 6.5, "sait": 6.5,
+    "on": 6.0, "ont": 6.0,
+    "et": 6.0, "est": 6.0,
+}
+
+_modele = None
+_modele_charge = False
+
+
+def modele_statistique():
+    """Le modele, charge au premier besoin. None s'il n'est pas livre."""
+    global _modele, _modele_charge
+    if not _modele_charge:
+        _modele_charge = True
+        try:
+            from .chemins import dossier_donnees
+            _modele = _stat.Modele.charger(dossier_donnees() / "modele_fr.bin.gz")
+        except Exception:                          # noqa: BLE001
+            _modele = None
+    return _modele
+
+
+def _suite_du_contexte(ctx):
+    """La suite de mots et de ponctuation de la phrase, calculee une fois."""
+    suite = getattr(ctx, "_suite_statistique", None)
+    if suite is None:
+        textes = [j.texte for j in ctx.jetons]
+        separateurs = [ctx.texte[ctx.jetons[k].fin:ctx.jetons[k + 1].debut]
+                       for k in range(len(ctx.jetons) - 1)]
+        if ctx.fin_ouverte:
+            separateurs.append("")
+        else:
+            separateurs.append(ctx.texte[ctx.jetons[-1].fin:] if ctx.jetons else "")
+        suite = _stat.sequence(textes, separateurs)
+        ctx._suite_statistique = suite
+    return suite
+
+
+@regle("MODELE_STATISTIQUE", "l'usage tranche : c'est ce mot-là qu'on écrit ici")
+def _modele_statistique(ctx, i: int):
+    """« il a manger » -> « il a mangé », « on va a la plage » -> « à la plage »."""
+    modele = modele_statistique()
+    if modele is None:
+        return None
+    mot = ctx.mot(i)
+    normal = _stat.normaliser(mot)
+    if normal in _stat.ENSEMBLE_DE:
+        candidats, classe = _stat.ENSEMBLE_DE[normal], None
+    else:
+        classe = _stat.classe_verbale(ctx.morphologie, normal)
+        if classe is None:
+            return None
+        candidats = _stat.CLASSES_VERBALES
+        normal = classe[0]
+    # Le modele lit deux mots de chaque cote. Pendant la frappe, ceux de
+    # droite ne sont peut-etre pas encore ecrits : les demander par `mot`
+    # le signale, et la proposition est alors ecartee.
+    ctx.mot(i + 1)
+    ctx.mot(i + 2)
+    suite, place = _suite_du_contexte(ctx)
+    marge = MARGES_PARTICULIERES.get(normal, MARGE_STATISTIQUE)
+    choix = modele.trancher(suite, place[i], normal, candidats,
+                            marge, PREUVES_STATISTIQUE)
+    if choix is None or _veto_statistique(ctx, i, normal, choix):
+        return None
+    if classe is not None:
+        forme = _stat.forme_de_classe(ctx.morphologie, classe[1], choix, mot)
+        if forme is None or forme == mot:
+            return None
+        return appliquer_casse(ctx.brut(i), forme)
+    return appliquer_casse(ctx.brut(i), choix)
+
+
+def _sujet_possible(ctx, k: int) -> bool:
+    """Le mot en position k peut-il etre le sujet du verbe qui suit ?"""
+    mot = ctx.noyau(k)
+    if not mot:
+        return False
+    if mot in PRONOMS_SUJETS or mot in ("ça", "cela", "qui", "on", "tout",
+                                        "personne", "rien", "chacun"):
+        return True
+    if ctx.brut(k)[:1].isupper():
+        return True
+    return ctx.morphologie.nom(mot) and not ctx.morphologie.verbe(mot)
+
+
+def _veto_statistique(ctx, i: int, ecrit: str, choix: str) -> bool:
+    """Ce que deux mots de contexte ne voient pas, dit par la grammaire.
+
+    Le modele ne lit que deux mots de chaque cote. « Paul a la clé » et « on
+    va a la plage » lui paraissent pareils ; c'est le mot d'avant — un sujet,
+    ou un verbe — qui les distingue. Chaque veto ici vient d'une erreur vue
+    sur le banc LanguageTool.
+    """
+    suivant = ctx.mot(i + 1)
+    precedent_sep = ctx.separateur(i - 1) if i > 0 else ""
+    if ecrit == "a" and choix == "à":
+        # « Paul a la clé », « chaque photo a son histoire » : un sujet devant.
+        if _sujet_possible(ctx, i - 1):
+            return True
+        # « puis a jailli », « n'a rien » : ce qui suit est celui d'avoir.
+        if ctx.est_participe(suivant) or suivant in ("rien", "pas", "plus",
+                                                      "jamais", "été", "eu"):
+            return True
+        # « sa voix enregistrée a la sensation » : la fin du groupe sujet.
+        precedent = ctx.mot(i - 1)
+        if ctx.est_participe(precedent) and not ctx.morphologie.verbe(precedent):
+            return True
+        # « si a existe », « a≥b », « a) » : une lettre, pas une preposition.
+        if len(suivant) <= 1 or ctx.separateur(i) != " ":
+            return True
+    if ecrit == "ou" and choix == "où":
+        # « il a existé ou il existe encore » : deux verbes coordonnes.
+        if suivant in PRONOMS_SUJETS and (
+                ctx.est_participe(ctx.mot(i - 1))
+                or ctx.morphologie.verbe(ctx.mot(i - 1))
+                or ctx.morphologie.est(ctx.mot(i - 1), "inf")):
+            return True
+    if ecrit == "se" and choix == "ce":
+        # « qui se ressemble se gène » : « se » devant un verbe est a sa place.
+        if ctx.morphologie.verbe(suivant) or ctx.morphologie.est(suivant, "inf"):
+            return True
+    if ecrit == "sont" and choix == "son":
+        # « le repentir sont frère et sœur », « sont exceptés » : un sujet
+        # devant, ou un participe derriere.
+        if _sujet_possible(ctx, i - 1) or ctx.est_participe(suivant) \
+                or ctx.debut_de_segment(i):
+            return True
+    if ecrit == "et" and choix == "est":
+        # « connectés et lancée », « mémorable et amusant » : une
+        # coordination d'adjectifs ou de participes.
+        precedent = ctx.mot(i - 1)
+        if ctx.est_participe(precedent) or _est_adjectif(ctx, precedent):
+            return True
+    if ecrit == "la" and choix == "là":
+        # « supportez-la », « mange la » : le pronom apres un verbe.
+        precedent = ctx.mot(i - 1)
+        if (ctx.morphologie.verbe(precedent) or "i2p" in ctx.morphologie.traits(precedent)
+                or "i2s" in ctx.morphologie.traits(precedent)) \
+                and precedent not in ("est", "sont", "suis", "es", "était", "sera"):
+            return True
+    if ecrit in ("mets", "met") and choix == "mais":
+        # « mets la bouilloire » : un imperatif devant son complement.
+        if suivant in DETERMINANTS or suivant in DETERMINANTS_PLURIELS:
+            return True
+    if "-" in precedent_sep or "/" in precedent_sep:
+        # « grimpeur/se », « peut-être » : un morceau de mot compose.
+        return True
+    return False

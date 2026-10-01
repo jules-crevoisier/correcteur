@@ -559,16 +559,30 @@ class Correcteur:
                 traites.add(i)
 
         # -- grammaire : elle voit le contexte, elle passe en premier.
-        for suggestion in grammaire.analyser(
+        suggestions = grammaire.analyser(
             texte, jetons, self.lexique, self.regles_ignorees, self.registre,
             self.morphologie, fin_ouverte,
-        ):
+        )
+        # Un mot inconnu a cote du modele statistique fausse sa lecture tout
+        # autant qu'une regle : on le compte comme une correction voisine.
+        inconnus = [i for i, j in enumerate(jetons)
+                    if not self._connu(j.texte) and not self._protege(j.texte)]
+        for suggestion in suggestions:
             indices = range(suggestion.index, suggestion.index + suggestion.portee)
             if traites.intersection(indices):
                 continue
             debut = jetons[suggestion.index].debut
             fin = jetons[indices[-1]].fin
             if not utilisable(indices, debut, fin, suggestion.regle):
+                continue
+            if suggestion.regle == "MODELE_STATISTIQUE" and (any(
+                    autre.regle != "MODELE_STATISTIQUE"
+                    and abs(autre.index - suggestion.index) <= 2
+                    for autre in suggestions)
+                    or any(abs(k - suggestion.index) <= 2 for k in inconnus)):
+                # Le modele lit deux mots de chaque cote. Si l'un d'eux est
+                # lui-meme en train d'etre corrige, il lit une phrase fausse :
+                # il attendra la passe suivante, ou le voisinage sera propre.
                 continue
             if any(_nom_propre(texte, jetons[k]) for k in indices):
                 # « Elle a Marie », « Mary Quant », « le grand Tours » : un

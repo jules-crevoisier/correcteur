@@ -207,7 +207,7 @@ FAUTES = [
     # -- conjugaison (deuxieme serie, ecrite apres coup pour eprouver)
     ("nous somme en retard", "nous sommes en retard", "conjugaison"),
     ("vous ete prêts", "vous êtes prêts", "conjugaison"),
-    ("il faut que tu vien", "il faut que tu viens", "conjugaison"),
+    ("il faut que tu vien", "il faut que tu viennes", "conjugaison"),
     ("il mangeais tous les jours", "il mangeait tous les jours", "conjugaison"),
     ("nous avons manger dehors", "nous avons mangé dehors", "conjugaison"),
     ("elle a beaucoup travailler", "elle a beaucoup travaillé", "conjugaison"),
