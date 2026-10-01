@@ -39,6 +39,23 @@ class InterfaceBarre:
         self._empreinte = self._empreinte_config()
         # L'application delegue ses messages a la vraie notification systeme.
         app.notifier = self.notifier
+        app.sur_maj_prete = lambda _version: self._rafraichir_menu()
+        self._maj_vue = None
+
+    def _rafraichir_menu(self) -> None:
+        """Redessine le menu.
+
+        Sous Windows, pystray ne relit les libelles et la visibilite des
+        entrees que lorsqu'on le lui demande. Sans cela, le menu proposait
+        encore « Rechercher une mise à jour » apres le telechargement, et il
+        fallait cliquer une seconde fois sur cette entree pour redemarrer.
+        """
+        if self.icone is None:
+            return
+        try:
+            self.icone.update_menu()
+        except Exception:
+            pass
 
     def notifier(self, titre: str, message: str) -> None:
         if not self.app.config.get("notifications", True):
@@ -57,11 +74,11 @@ class InterfaceBarre:
         self.app.ouvrir_fenetre()
 
     def _chercher_maj(self, _icone=None, _element=None) -> None:
-        threading.Thread(
-            target=self.app.chercher_mise_a_jour,
-            kwargs={"prevenir_si_a_jour": True},
-            daemon=True,
-        ).start()
+        def chercher():
+            self.app.chercher_mise_a_jour(prevenir_si_a_jour=True)
+            self._rafraichir_menu()
+
+        threading.Thread(target=chercher, daemon=True).start()
 
     def _redemarrer(self, icone, _element) -> None:
         """Relance l'application : la version telechargee prend alors la place."""
@@ -98,9 +115,17 @@ class InterfaceBarre:
             return "Redémarrer pour installer la mise à jour"
         return f"Rechercher une mise à jour (version {__version__})"
 
+    def _maj_visible(self, _element=None) -> bool:
+        """« Redémarrer » s'affiche, en tete du menu, des qu'une version attend."""
+        return maj.compilee() and self._maj_en_attente() is not None
+
+    def _recherche_visible(self, _element=None) -> bool:
+        return maj.compilee() and self._maj_en_attente() is None
+
     def _basculer_correction_auto(self, icone, _element) -> None:
         actif = self.app.basculer_correction_auto()
         icone.title = self._titre()
+        self._rafraichir_menu()
         self.notifier(
             "Papote",
             "Le texte se corrige pendant que vous écrivez." if actif
@@ -121,6 +146,7 @@ class InterfaceBarre:
             return
         self.app.exclure_application(application)
         icone.title = self._titre()
+        self._rafraichir_menu()
 
     def _libelle_exclusion(self) -> str:
         application = self.app.application_courante
@@ -132,6 +158,7 @@ class InterfaceBarre:
         actif = self.app.basculer()
         icone.icon = _icone(actif)
         icone.title = self._titre()
+        self._rafraichir_menu()
         self.notifier(
             "Papote", "Correction activée" if actif else "Correction en pause"
         )
@@ -183,6 +210,13 @@ class InterfaceBarre:
                 self._redemarrer(self.icone, None)
                 return
 
+            # La fenetre (un autre processus) a pu telecharger une version :
+            # le menu doit afficher « Redémarrer » sans attendre un clic.
+            vue = self._maj_en_attente()
+            if vue != self._maj_vue:
+                self._maj_vue = vue
+                self._rafraichir_menu()
+
             empreinte = self._empreinte_config()
             if empreinte is None or empreinte == self._empreinte:
                 continue
@@ -200,6 +234,12 @@ class InterfaceBarre:
         import pystray
 
         menu = pystray.Menu(
+            # Une version telechargee attend : le bouton est la, en premier.
+            pystray.MenuItem(
+                lambda _: self._libelle_maj(),
+                self._redemarrer,
+                visible=self._maj_visible,
+            ),
             pystray.MenuItem("Ouvrir la fenêtre", self._ouvrir_fenetre,
                              default=True),
             pystray.MenuItem(
@@ -214,12 +254,8 @@ class InterfaceBarre:
             pystray.Menu.SEPARATOR,
             pystray.MenuItem(
                 lambda _: self._libelle_maj(),
-                lambda icone, element: (
-                    self._redemarrer(icone, element)
-                    if self._maj_en_attente() is not None
-                    else self._chercher_maj(icone, element)
-                ),
-                visible=maj.compilee(),
+                self._chercher_maj,
+                visible=self._recherche_visible,
             ),
             pystray.MenuItem(
                 lambda _: "Mettre en pause" if self.app.actif else "Reprendre",
