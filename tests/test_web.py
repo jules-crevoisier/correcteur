@@ -242,11 +242,6 @@ def test_l_annulation_se_vide(script):
 
 # -- ce qu'on ne peut pas defaire -------------------------------------------
 
-def test_les_boutons_destructeurs_demandent_confirmation(script):
-    """Effacer l'historique, le journal ou la transcription ne se reprend pas."""
-    for bouton in ("#effacer-historique", "#vider-journal", "#dictee-oublier"):
-        assert f'armer("{bouton}"' in script, bouton
-
 
 def test_le_bouton_arme_se_voit(style):
     assert ".bouton.arme" in style
@@ -328,69 +323,7 @@ def test_toute_methode_de_la_passerelle_appelee_existe(script):
     assert not manquantes, f"introuvables : {sorted(manquantes)}"
 
 
-def test_toute_methode_de_la_passerelle_sert_a_quelque_chose(script):
-    """Et l'inverse : une methode que plus personne n'appelle.
-
-    C'est le sens que le test d'au-dessus ne couvrait pas, et il manquait :
-    « oublier_faute » et « tours_dictee » etaient restees sur le pont apres
-    la disparition de l'ancienne fenetre tkinter. La premiere visait meme le
-    mauvais compteur — « annulations_mot », alors que la page « Vos fautes »
-    lit « corrections », dont les cles sont des paires « sa → ça ». La
-    rebrancher telle quelle n'aurait jamais rien retire.
-
-    Une methode appelee depuis la passerelle elle-meme compte : « etat_maj »
-    ne sert qu'a garnir la reponse de « demarrer », et c'est tres bien.
-    """
-    from papote.chemins import dossier_web
-    from papote.passerelle import Passerelle
-
-    source = (Path(dossier_web()).parent / "passerelle.py").read_text(
-        encoding="utf-8")
-    internes = set(re.findall(r"self\.(\w+)\(", source))
-    atteintes = _methodes_appelees(script) | internes
-
-    publiques = {nom for nom in vars(Passerelle)
-                 if not nom.startswith("_")
-                 and callable(getattr(Passerelle, nom, None))}
-    mortes = publiques - atteintes
-    assert not mortes, f"sur le pont, mais plus personne n'appelle : {sorted(mortes)}"
-
-
-
-# -- le message de la page « Dicter » ----------------------------------------
-
-def test_le_message_n_accuse_plus_le_mode_d_installation(script):
-    """« La dictée demande la version installée depuis Papote.msi » etait faux.
-
-    Aucune version n'embarquait ces bibliotheques, MSI ou non — et celui qui
-    avait bien installe le MSI se voyait dire que c'etait sa faute.
-    """
-    # Les commentaires sont retires : celui qui explique le correctif cite
-    # justement la phrase qu'on ne veut plus voir s'afficher.
-    sans_commentaires = re.sub(r"/\*.*?\*/", "", script, flags=re.S)
-    sans_commentaires = re.sub(r"^\s*//.*$", "", sans_commentaires,
-                               flags=re.M)
-    assert "Papote.msi" not in sans_commentaires
-
-
-# -- l'attente du moteur vocal ----------------------------------------------
-
-def test_le_demarrage_de_la_dictee_montre_qu_il_travaille(page, script):
-    """Le moteur charge quarante mégaoctets avant que le micro ne s'ouvre.
-
-    Plusieurs secondes pendant lesquelles rien ne bougeait : un bouton qui
-    ne répond pas passe pour un bouton cassé, et l'on reclique.
-    """
-    assert 'id="dictee-demarrage"' in page
-    assert "demarrageEnCours" in script
-
-
-def test_le_temoin_retombe_meme_si_le_demarrage_echoue(script):
-    """Sans « finally », un micro absent laissait les boutons éteints."""
-    debut = script.index("const lancer = async")
-    corps = script[debut:debut + 700]
-    assert "finally" in corps
-    assert corps.count("demarrageEnCours") >= 2
+# -- l'attente ---------------------------------------------------------------
 
 
 def test_le_rouet_s_arrete_pour_qui_le_demande(style):
@@ -424,25 +357,6 @@ def test_la_notification_n_envoie_plus_chercher_l_icone(script):
     assert "Cliquez l'icône Papote" not in sans_commentaires
 
 
-# -- le choix du modele de dictee -------------------------------------------
-
-def test_le_modele_se_choisit_avant_le_telechargement(page, script):
-    """Revenir dessus après coup coûte un deuxième gigaoctet et demi."""
-    assert 'id="modele-dictee"' in page
-    assert "MODELES_DE_LANGUE" in script
-    assert "montrerChoixDuModele" in script
-
-
-def test_le_choix_reutilise_le_controle_segmente(script):
-    """Il en existait déjà un : en écrire un second les ferait diverger."""
-    debut = script.index("function montrerChoixDuModele")
-    corps = script[debut:debut + 400]
-    assert "segments(" in corps
-
-
-def test_le_bouton_annonce_ce_qu_il_va_chercher(script):
-    """Un gigaoctet et demi ne se télécharge pas par surprise."""
-    assert '"Installer (" + poids(reste)' in script
 
 
 @pytest.mark.parametrize("octets,attendu", [
@@ -457,8 +371,35 @@ def test_les_poids_se_lisent_en_francais(script, octets, attendu):
     assert 'replace(".", ",")' in script
 
 
-def test_le_modele_par_defaut_est_le_precis(script):
-    """Un outil qui se trompe ne sert à rien ; l'espace disque se récupère."""
-    debut = script.index("const MODELES_DE_LANGUE")
-    assert script[debut:debut + 120].index('"precis"') < \
-        script[debut:debut + 400].index('"rapide"')
+def test_les_boutons_destructeurs_demandent_confirmation(script):
+    """Effacer l'historique ou le journal ne se reprend pas."""
+    for bouton in ("#effacer-historique", "#vider-journal"):
+        assert f'armer("{bouton}"' in script, bouton
+
+
+def test_toute_methode_de_la_passerelle_sert_a_quelque_chose(script):
+    """Et l'inverse : une methode que plus personne n'appelle.
+
+    C'est le sens que le test d'au-dessus ne couvrait pas, et il manquait :
+    « oublier_faute » et « tours_dictee » etaient restees sur le pont apres
+    la disparition de l'ancienne fenetre tkinter. La premiere visait meme le
+    mauvais compteur — « annulations_mot », alors que la page « Vos fautes »
+    lit « corrections », dont les cles sont des paires « sa → ça ». La
+    rebrancher telle quelle n'aurait jamais rien retire.
+
+    Une methode appelee depuis la passerelle elle-meme compte : « etat_maj »
+    ne sert qu'a garnir la reponse de « demarrer », et c'est tres bien.
+    """
+    from papote.chemins import dossier_web
+    from papote.passerelle import Passerelle
+
+    source = (Path(dossier_web()).parent / "passerelle.py").read_text(
+        encoding="utf-8")
+    internes = set(re.findall(r"self\.(\w+)\(", source))
+    atteintes = _methodes_appelees(script) | internes
+
+    publiques = {nom for nom in vars(Passerelle)
+                 if not nom.startswith("_")
+                 and callable(getattr(Passerelle, nom, None))}
+    mortes = publiques - atteintes
+    assert not mortes, f"sur le pont, mais plus personne n'appelle : {sorted(mortes)}"

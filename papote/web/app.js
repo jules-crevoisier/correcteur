@@ -29,9 +29,6 @@ const ICONES = {
   barres: "M5 20V11 M12 20V4 M19 20v-6",
   fenetre: "M3.5 6.5A2 2 0 0 1 5.5 4.5h13a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2h-13"
          + "a2 2 0 0 1-2-2v-11Z M3.5 9h17",
-  micro: "M12 3.5a2.6 2.6 0 0 1 2.6 2.6v5.4a2.6 2.6 0 1 1-5.2 0V6.1"
-       + "A2.6 2.6 0 0 1 12 3.5Z M5.8 10.6a6.2 6.2 0 0 0 12.4 0 M12 16.8V20"
-       + " M9 20h6",
   reglages: "M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z "
           + "M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1"
           + "a1.6 1.6 0 0 0-2.7 1.1 2 2 0 1 1-4 0 1.6 1.6 0 0 0-2.7-1.1"
@@ -182,8 +179,7 @@ function segments(zone, choix, reglage, apres) {
         autre.setAttribute("aria-pressed", String(autre === bouton));
       });
       repondre(await appeler("regler", reglage, option.cle));
-      // Certains réglages changent ce que la page affiche autour d'eux :
-      // le modèle de dictée change la taille annoncée du téléchargement.
+      // Certains réglages changent ce que la page affiche autour d'eux.
       if (apres) apres(option.cle);
     });
     zone.appendChild(bouton);
@@ -224,7 +220,6 @@ const RAFRAICHIR = {
   dictionnaire: chargerDictionnaire,
   fautes: chargerFautes,
   applications: chargerApplications,
-  dicter: chargerDictee,
   reglages: () => { chargerJournal(); chargerConfidentialite(); },
 };
 
@@ -872,7 +867,6 @@ async function demarrer() {
   construireReglages();
   brancherReglagesFins();
   brancher();
-  brancherDictee();
   afficher("corriger");
   $("#champ").focus();
 
@@ -885,203 +879,5 @@ async function demarrer() {
   }
 }
 
-
-/* -------------------------------------------------------------------------
-   Dicter
-
-   Deux modes, une seule page. Tant que les modeles ne sont pas la, la page
-   ne montre que ce qu'il faut faire pour qu'ils y soient — un bouton qui
-   echouerait vaut moins qu'une phrase qui explique.
-   ------------------------------------------------------------------------- */
-
-let minuterieDictee = null;
-
-async function chargerDictee() {
-  const etatDictee = await appeler("etat_dictee");
-  if (!etatDictee || etatDictee.erreur) return;
-  montrerDictee(etatDictee);
-}
-
-function montrerDictee(d) {
-  const manque = Object.entries(d.disponible || {})
-    .filter(([, present]) => !present)
-    .map(([nom]) => nom);
-
-  $("#dictee-indisponible").hidden = manque.length === 0;
-  if (manque.length) {
-    // Ce message accusait le mode d'installation — « la dictée demande la
-    // version installée depuis Papote.msi » — alors qu'aucune version
-    // n'embarquait ces bibliothèques. Il ne reste vrai que pour
-    // « sounddevice », qui lui est bien embarqué : s'il manque, c'est qu'on
-    // tourne depuis les sources sans l'avoir installé.
-    $("#dictee-pourquoi").textContent =
-      "Cette installation n'a pas " + manque.join(" ni ")
-      + ". Lancé depuis les sources : « pip install -r requirements.txt ».";
-  }
-
-  montrerChoixDuModele(d.modele_langue);
-
-  const modeles = d.modeles || [];
-  const aInstaller = modeles.filter((m) => !m.installe);
-  $("#dictee-installation").hidden = manque.length > 0 || aInstaller.length === 0;
-  const liste = vider($("#dictee-modeles"));
-  modeles.forEach((m) => {
-    const ligne = creer("li", m.installe ? "fait" : null);
-    ligne.textContent = (m.installe ? "✓ " : "· ") + m.role + " — " + poids(m.taille);
-    liste.appendChild(ligne);
-  });
-
-  // Le bouton annonce ce qu'il va chercher : un gigaoctet et demi ne se
-  // télécharge pas par surprise.
-  const reste = aInstaller.reduce((somme, m) => somme + m.taille, 0);
-  $("#installer-modeles").textContent =
-    reste ? "Installer (" + poids(reste) + ")" : "Installer";
-
-  $("#dictee-commandes").hidden = manque.length > 0;
-  $("#dicter-demarrer").hidden = d.en_cours;
-  $("#reunion-demarrer").hidden = d.en_cours;
-  $("#dicter-arreter").hidden = !d.en_cours;
-  $("#dictee-boucle-ligne").hidden = d.en_cours;
-  $("#dictee-etat").textContent = d.en_cours
-    ? (d.reunion ? "Réunion en cours…" : "Dictée en cours…")
-    : (d.erreur || "");
-
-  const tours = d.tours || [];
-  $("#dictee-resultat").hidden = tours.length === 0;
-  const zone = vider($("#dictee-tours"));
-  tours.forEach((tour) => {
-    const bloc = creer("div", "tour");
-    const nom = creer("button", "locuteur", tour.locuteur);
-    nom.title = "Cliquez pour renommer cette voix";
-    nom.addEventListener("click", () => renommerLocuteur(tour.locuteur));
-    bloc.appendChild(nom);
-    bloc.appendChild(creer("p", null, tour.texte));
-    zone.appendChild(bloc);
-  });
-}
-
-async function renommerLocuteur(ancien) {
-  const nouveau = window.prompt("Qui est « " + ancien + " » ?", ancien);
-  if (!nouveau || nouveau === ancien) return;
-  await appeler("renommer_locuteur", ancien, nouveau);
-  chargerDictee();
-}
-
-/* L'attente du démarrage : les deux boutons se taisent, et l'un d'eux dit
-   ce qu'on attend. Le modèle ne se charge qu'une fois par séance, mais cette
-   fois-là se voit. */
-function demarrageEnCours(actif) {
-  [$("#dicter-demarrer"), $("#reunion-demarrer")].forEach((bouton) => {
-    bouton.disabled = actif;
-  });
-  $("#dictee-demarrage").hidden = !actif;
-  if (actif) $("#dictee-etat").textContent = "";
-}
-
-
-function suivreLaDictee(actif) {
-  clearInterval(minuterieDictee);
-  minuterieDictee = actif ? setInterval(chargerDictee, 1500) : null;
-}
-
-/* Le choix du modèle de langue.
-
-   Le petit est conçu pour les téléphones : sur de la parole réelle il rend
-   une bouillie de mots français plausibles. C'était le seul proposé, et
-   c'est exactement ce qu'on a eu. Le grand pèse trente-cinq fois plus et
-   entend ce qu'on lui dit. */
-const MODELES_DE_LANGUE = [
-  {cle: "precis", nom: "Précis",
-   quoi: "1,4 Go, et il entend ce que vous dites. C'est celui qu'il faut " +
-         "pour une réunion ou une note qu'on relira."},
-  {cle: "rapide", nom: "Rapide",
-   quoi: "41 Mo, se charge en une seconde — mais il se trompe souvent. " +
-         "À réserver aux machines à court d'espace."},
-];
-MODELES_DE_LANGUE.forEach((m) => { m.explication = m.quoi; });
-
-function montrerChoixDuModele(courant) {
-  const choisi = courant || "precis";
-  etat.reglages.modele_dictee = choisi;
-  segments($("#modele-dictee"), MODELES_DE_LANGUE, "modele_dictee",
-           () => chargerDictee());
-  const dit = MODELES_DE_LANGUE.find((m) => m.cle === choisi);
-  $("#modele-dictee-quoi").textContent = dit ? dit.quoi : "";
-}
-
-
-function brancherDictee() {
-  $("#installer-modeles").addEventListener("click", async (evenement) => {
-    const bouton = evenement.currentTarget;
-    bouton.disabled = true;
-    $("#dictee-avancement").textContent = "Téléchargement…";
-    const reponse = await appeler("installer_modeles", true);
-    bouton.disabled = false;
-    $("#dictee-avancement").textContent = "";
-    dire(reponse && reponse.ok ? (reponse.message || "Installé.")
-                               : (reponse && reponse.erreur) || "Échec.");
-    chargerDictee();
-  });
-
-  /* Le moteur charge quarante mégaoctets de modèle en mémoire avant que le
-     micro ne s'ouvre : plusieurs secondes, pendant lesquelles rien ne
-     bougeait. Un bouton qui ne répond pas passe pour un bouton cassé, et
-     l'on reclique — ce qui n'arrange rien. */
-  const lancer = async (reunion) => {
-    const boucle = reunion && $("#dictee-boucle").checked;
-    demarrageEnCours(true);
-    let reponse;
-    try {
-      reponse = await appeler("commencer_dictee", reunion, boucle);
-    } finally {
-      demarrageEnCours(false);
-    }
-    if (reponse && reponse.avertissement) dire(reponse.avertissement);
-    else if (!reponse || !reponse.ok) dire((reponse && reponse.erreur) || "Échec.");
-    suivreLaDictee(Boolean(reponse && reponse.ok));
-    chargerDictee();
-  };
-  $("#dicter-demarrer").addEventListener("click", () => lancer(false));
-  $("#reunion-demarrer").addEventListener("click", () => lancer(true));
-
-  $("#dicter-arreter").addEventListener("click", async () => {
-    await appeler("arreter_dictee");
-    suivreLaDictee(false);
-    chargerDictee();
-  });
-
-  $("#dictee-compte-rendu").addEventListener("click", async () => {
-    const reponse = await appeler("compte_rendu", $("#dictee-titre").value, "");
-    if (!reponse || !reponse.ok) {
-      dire((reponse && reponse.erreur) || "Échec.");
-      return;
-    }
-    /* Le compte rendu part dans la page « Corriger » : c'est là qu'on relit
-       et qu'on copie, et il n'y a pas de raison d'avoir deux éditeurs. */
-    $("#champ").value = reponse.texte;
-    afficher("corriger");
-    dire("Compte rendu prêt — relisez-le avant de l'envoyer.");
-  });
-
-  $("#dictee-copier").addEventListener("click", async () => {
-    const reponse = await appeler("compte_rendu", $("#dictee-titre").value, "");
-    if (!reponse || !reponse.ok) {
-      dire((reponse && reponse.erreur) || "Échec.");
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(reponse.texte);
-      dire("Compte rendu copié.");
-    } catch (e) {
-      dire("La copie a échoué.");
-    }
-  });
-
-  armer("#dictee-oublier", async () => {
-    await appeler("oublier_dictee");
-    suivreLaDictee(false);
-    chargerDictee();
-  });
-}
 
 demarrer();
