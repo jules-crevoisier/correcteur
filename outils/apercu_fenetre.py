@@ -116,8 +116,21 @@ DOUBLURE = """
   const api = {
     demarrer: async () => donnees.demarrer,
     corriger: async () => donnees.corriger,
-    remplacer: async (texte) => ({ texte, remplaces: 0, inconnus: [] }),
-    retablir: async (texte) => ({ texte, retablie: false }),
+    // Les deux reecritures du texte sont rejouees ici, en gros : sans
+    // elles, refuser une correction dans l'apercu ne faisait rien, et l'on
+    // ne pouvait pas regarder une ligne refusee.
+    remplacer: async (texte, mot, par) => {
+      const nouveau = texte.split(mot).join(par);
+      return { texte: nouveau, remplaces: nouveau === texte ? 0 : 1,
+               inconnus: donnees.corriger.inconnus.filter(
+                 (i) => i.mot !== mot && nouveau.includes(i.mot)) };
+    },
+    retablir: async (texte, avant, apres) => {
+      const rang = texte.indexOf(apres);
+      if (rang < 0) return { texte, retablie: false };
+      return { texte: texte.slice(0, rang) + avant + texte.slice(rang + apres.length),
+               retablie: true };
+    },
     dictionnaire: async () => donnees.dictionnaire,
     applications: async () => donnees.applications,
     fautes: async () => donnees.fautes,
@@ -191,10 +204,8 @@ def photographier(pages: list[str], clair: bool, largeur: int,
             if cle == "corriger":
                 # Montrer la page au travail plutot qu'a vide.
                 page.evaluate(
-                    "(d) => { document.querySelector('#champ').value = d.corriger.texte;"
-                    "         compter();"
-                    "         montrerCorrections(d.corriger.corrections);"
-                    "         montrerInconnus(d.corriger.inconnus); }",
+                    "(d) => { ecrire(d.corriger.texte);"
+                    "         montrerResultat(d.corriger); }",
                     donnees)
             page.wait_for_timeout(420)      # laisser les animations finir
             nom = f"{cle}{'-clair' if clair else ''}-{largeur}.png"

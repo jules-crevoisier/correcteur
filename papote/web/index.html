@@ -9,12 +9,15 @@
   par se separer.
 
   Ce qui reste ici, ce sont les formes : la colonne, l'en-tete, la zone de
-  travail, et les gabarits que le JavaScript recopie.
+  travail, et les gabarits que le JavaScript recopie. Les icones des boutons
+  sont posees par le JavaScript (attribut « data-icone ») : elles viennent du
+  meme jeu que celles de la colonne, dessinees a la meme grille.
 -->
 <html lang="fr">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
 <title>Papote</title>
 <link rel="stylesheet" href="style.css">
 </head>
@@ -43,70 +46,129 @@
         </button>
         <button class="bouton discret etroit" id="maj-plus-tard">Plus tard</button>
       </div>
+      <!-- La promesse, dite la ou on la voit sans la chercher. Elle se
+           verifie dans les reglages, fichier par fichier. -->
+      <p class="sceau" data-icone="bouclier">Tout reste sur cet ordinateur</p>
     </div>
   </aside>
 
   <!-- ================= la zone de travail ================= -->
-  <main>
+  <main id="principal">
     <header class="entete">
-      <h1 id="titre-page"></h1>
-      <p id="soustitre-page"></p>
+      <div class="borne">
+        <h1 id="titre-page"></h1>
+        <p id="soustitre-page"></p>
+      </div>
     </header>
 
     <div class="defile" id="defile">
+     <div class="borne">
 
       <!-- ---------- Corriger ---------- -->
       <section class="page" data-page="corriger">
-        <div class="editeur">
-          <textarea id="champ" spellcheck="false"
-                    placeholder="Collez ou écrivez votre texte…"></textarea>
+
+        <!-- Deux vues du meme texte, a la meme place. Le champ sert a ecrire ;
+             le rendu montre le texte corrige, chaque changement souligne, et
+             s'efface des qu'on clique pour reprendre la plume. Le champ reste
+             la seule source : copier, annuler, refuser une correction, tout
+             part de lui. -->
+        <div class="editeur" id="editeur" data-mode="edition">
+          <div class="editeur-corps">
+            <textarea id="champ" class="zone-texte" spellcheck="false"
+                      aria-label="Texte à corriger"
+                      placeholder="Collez ou écrivez votre texte…"></textarea>
+            <div id="rendu" class="zone-texte rendu" hidden tabindex="0"
+                 role="document" aria-label="Texte corrigé — cliquez pour le modifier"></div>
+          </div>
           <div class="editeur-barre">
-            <button class="bouton principal" id="corriger">
-              Corriger
-              <kbd>Ctrl ↵</kbd>
-            </button>
-            <button class="bouton" id="copier">Copier</button>
+            <button class="bouton discret" id="modifier" data-icone="crayon"
+                    title="Modifier le texte" hidden><span class="libelle">Modifier</span></button>
+            <span class="compteur" id="compteur" aria-live="polite"></span>
+            <span class="pousse"></span>
             <!-- Corriger reecrit le texte par-dessus l'original. Ctrl+Z ne
                  defait pas ce que le programme a ecrit : sans ce bouton, le
                  texte d'avant n'existait plus nulle part. -->
-            <button class="bouton discret" id="annuler" hidden>
-              Annuler
-              <kbd>Ctrl Z</kbd>
+            <button class="bouton discret" id="annuler" data-icone="annuler"
+                    title="Revenir au texte d'avant (Ctrl Z)" hidden>
+              <span class="libelle">Annuler</span>
             </button>
-            <button class="bouton discret" id="vider">Effacer</button>
-            <span class="pousse"></span>
-            <span class="compteur" id="compteur"></span>
+            <button class="bouton discret" id="vider" data-icone="gomme"
+                    title="Effacer le texte">
+              <span class="libelle">Effacer</span>
+            </button>
+            <button class="bouton" id="copier" data-icone="copier">Copier</button>
+            <button class="bouton principal" id="corriger"
+                    title="Corriger le texte (Ctrl ↵)"></button>
           </div>
         </div>
 
-        <div id="corrections" class="corrections" hidden></div>
-        <div id="inconnus" class="inconnus" hidden></div>
+        <!-- Avant la premiere correction : trois choses a savoir, pas plus. -->
+        <ul class="accueil" id="accueil">
+          <li data-icone="clavier"><span><kbd>Ctrl</kbd> <kbd>↵</kbd> corrige
+            sans lâcher le clavier</span></li>
+          <li data-icone="curseur"><span>Cliquez un mot souligné pour savoir
+            pourquoi, ou le garder</span></li>
+          <li data-icone="annuler"><span>Corrigé trop vite ? <kbd>Ctrl</kbd>
+            <kbd>Z</kbd> rend le texte d'avant</span></li>
+        </ul>
+
+        <div class="relecture" id="relecture" hidden>
+          <div class="relecture-tete">
+            <h2>Relecture</h2>
+            <span class="pastille succes" id="pastille-corrections" hidden></span>
+            <span class="pastille alerte" id="pastille-inconnus" hidden></span>
+          </div>
+
+          <div class="propre" id="propre" hidden>
+            <span class="propre-icone" data-icone="coche"></span>
+            <div>
+              <strong>Rien à corriger.</strong>
+              <span>Votre texte est prêt à partir.</span>
+            </div>
+          </div>
+
+          <p class="perimee-note" data-icone="info">Le texte a changé depuis :
+            corrigez de nouveau pour mettre la relecture à jour.</p>
+
+          <div id="corrections" class="groupe-liste corrections" hidden></div>
+          <div id="inconnus" class="groupe-liste inconnus" hidden></div>
+        </div>
       </section>
 
       <!-- ---------- Mon dictionnaire ---------- -->
       <section class="page" data-page="dictionnaire">
         <div class="colonnes">
           <div class="carte">
-            <h2>Mots à ne jamais corriger</h2>
+            <div class="carte-tete">
+              <span class="tuile" data-icone="bouclier"></span>
+              <h2>Mots à ne jamais corriger</h2>
+              <span class="nombre" id="nombre-mots"></span>
+            </div>
             <p class="aide">Pseudos, jargon, noms de jeux : ce que Papote
               prendrait pour une faute.</p>
             <form class="saisie" id="forme-mot">
-              <input id="mot" placeholder="un mot" autocomplete="off">
-              <button class="bouton" type="submit">Ajouter</button>
+              <input id="mot" placeholder="Un mot" autocomplete="off"
+                     aria-label="Mot à protéger">
+              <button class="bouton" type="submit" data-icone="plus">Ajouter</button>
             </form>
             <ul class="jetons" id="mots"></ul>
           </div>
 
           <div class="carte">
-            <h2>Remplacements</h2>
+            <div class="carte-tete">
+              <span class="tuile" data-icone="fleche"></span>
+              <h2>Remplacements</h2>
+              <span class="nombre" id="nombre-remplacements"></span>
+            </div>
             <p class="aide">Ce que vous tapez, et ce que ça doit devenir.
               Ils passent avant tout le reste.</p>
             <form class="saisie" id="forme-remplacement">
-              <input id="remplacement-de" placeholder="ptetre" autocomplete="off">
-              <span class="fleche">→</span>
+              <input id="remplacement-de" placeholder="ptetre" autocomplete="off"
+                     aria-label="Ce que vous tapez">
+              <span class="fleche" aria-hidden="true">→</span>
               <input id="remplacement-vers" placeholder="peut-être"
-                     autocomplete="off">
-              <button class="bouton" type="submit">Ajouter</button>
+                     autocomplete="off" aria-label="Ce que ça doit devenir">
+              <button class="bouton" type="submit" data-icone="plus">Ajouter</button>
             </form>
             <ul class="lignes" id="remplacements"></ul>
           </div>
@@ -115,17 +177,23 @@
 
       <!-- ---------- Vos fautes ---------- -->
       <section class="page" data-page="fautes">
-        <div class="carte">
-          <div class="total" id="total-corrections"></div>
-          <p class="aide">Tout est compté chez vous, dans un fichier que vous
-            pouvez vider. Rien n'est envoyé nulle part.</p>
+        <div class="carte carte-chiffre">
+          <div>
+            <div class="total" id="total-corrections"></div>
+          </div>
+          <p class="aide" data-icone="bouclier">Tout est compté chez vous, dans
+            un fichier que vous pouvez vider. Rien n'est envoyé nulle part.</p>
         </div>
         <div class="carte">
-          <h2>Ce que vous corrigez le plus</h2>
-          <ul class="barres" id="frequentes"></ul>
-          <button class="bouton discret" id="effacer-historique">
-            Effacer l'historique
-          </button>
+          <div class="carte-tete">
+            <h2>Ce que vous corrigez le plus</h2>
+          </div>
+          <ol class="barres" id="frequentes"></ol>
+          <div class="carte-pied">
+            <button class="bouton discret danger" id="effacer-historique">
+              Effacer l'historique
+            </button>
+          </div>
         </div>
       </section>
 
@@ -133,31 +201,40 @@
       <section class="page" data-page="applications">
         <div class="colonnes">
           <div class="carte">
-            <h2>Où se taire</h2>
+            <div class="carte-tete">
+              <span class="tuile" data-icone="silence"></span>
+              <h2>Où se taire</h2>
+              <span class="nombre" id="nombre-exclues"></span>
+            </div>
             <p class="aide">Papote ne corrigera rien dans ces applications.
               Les terminaux et les éditeurs de code y sont déjà.</p>
             <form class="saisie" id="forme-exclusion">
-              <input id="exclusion" placeholder="jeu.exe" autocomplete="off">
+              <input id="exclusion" placeholder="jeu.exe" autocomplete="off"
+                     aria-label="Application à exclure">
               <button class="bouton" type="submit">Exclure</button>
             </form>
             <!-- L'application au premier plan, proposee d'un clic. Elle
                  servait de valeur par defaut a un champ vide : valider sans
                  rien ecrire excluait une application qu'on n'avait pas
                  nommee — ou « jeu.exe », le simple exemple du champ. -->
-            <p class="aide" id="courante-exclusion" hidden></p>
+            <p class="aide courante" id="courante-exclusion" hidden></p>
             <ul class="jetons" id="exclues"></ul>
           </div>
 
           <div class="carte">
-            <h2>Où hausser le ton</h2>
+            <div class="carte-tete">
+              <span class="tuile" data-icone="mallette"></span>
+              <h2>Où hausser le ton</h2>
+              <span class="nombre" id="nombre-registres"></span>
+            </div>
             <p class="aide">Le registre soutenu remet les « ne » de négation
               et déplie les abréviations.</p>
             <form class="saisie" id="forme-registre">
               <input id="registre-application" placeholder="outlook.exe"
-                     autocomplete="off">
+                     autocomplete="off" aria-label="Application en registre soutenu">
               <button class="bouton" type="submit">Soutenu ici</button>
             </form>
-            <p class="aide" id="courante-registre" hidden></p>
+            <p class="aide courante" id="courante-registre" hidden></p>
             <ul class="lignes" id="registres-application"></ul>
           </div>
         </div>
@@ -165,49 +242,65 @@
 
       <!-- ---------- Réglages ---------- -->
       <section class="page" data-page="reglages">
-        <div class="carte">
-          <h2>Comment Papote se comporte</h2>
-          <div id="interrupteurs"></div>
+        <div class="groupe">
+          <h2 class="groupe-titre">Comment Papote se comporte</h2>
+          <div class="carte rangs" id="interrupteurs"></div>
         </div>
 
-        <div class="carte">
-          <h2>Le ton par défaut</h2>
-          <div class="segments" id="registre"></div>
-        </div>
-
-        <div class="carte" id="carte-bulle">
-          <h2>Où poser la bulle de propositions</h2>
-          <p class="aide">Elle reste toujours au même endroit : on apprend à
-            regarder un coin, on n'apprend pas à chercher.</p>
-          <div class="segments" id="position-bulle"></div>
-        </div>
-
-        <div class="carte">
-          <h2>Raccourcis</h2>
-          <p class="aide">Cliquez, puis appuyez sur la combinaison voulue.</p>
-          <div id="raccourcis"></div>
-        </div>
-
-        <div class="carte">
-          <h2>Règles supplémentaires</h2>
-          <p class="aide">Éteintes par défaut : correctes, mais toutes les
-            applications ne les rendent pas bien.</p>
-          <div id="regles"></div>
-        </div>
-
-        <div class="carte" id="carte-demarrage" hidden>
-          <h2>Au démarrage de Windows</h2>
-          <div id="demarrage"></div>
-        </div>
-
-        <div class="carte">
-          <h2>Mises à jour</h2>
-          <div class="ligne-action">
-            <div>
-              <div class="ligne-titre" id="maj-etat"></div>
-              <div class="aide" id="maj-detail"></div>
+        <div class="groupe">
+          <h2 class="groupe-titre">Le ton et la bulle</h2>
+          <div class="carte rangs">
+            <div class="ligne-action">
+              <div>
+                <div class="ligne-titre">Le ton par défaut</div>
+                <div class="aide" id="registre-quoi"></div>
+              </div>
+              <div class="segments" id="registre"></div>
             </div>
-            <button class="bouton" id="verifier-maj">Vérifier maintenant</button>
+            <div class="ligne-action" id="carte-bulle">
+              <div>
+                <div class="ligne-titre">Où poser la bulle de propositions</div>
+                <div class="aide">Elle reste toujours au même endroit : on
+                  apprend à regarder un coin, on n'apprend pas à chercher.</div>
+              </div>
+              <div class="ecran-choix">
+                <div class="segments ecran" id="position-bulle"
+                     aria-label="Coin de l'écran"></div>
+                <span class="ecran-nom" id="position-bulle-nom"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="groupe">
+          <h2 class="groupe-titre">Raccourcis</h2>
+          <p class="groupe-aide">Cliquez, puis appuyez sur la combinaison
+            voulue. Échap pour renoncer.</p>
+          <div class="carte rangs" id="raccourcis"></div>
+        </div>
+
+        <div class="groupe">
+          <h2 class="groupe-titre">Règles supplémentaires</h2>
+          <p class="groupe-aide">Éteintes par défaut : correctes, mais toutes
+            les applications ne les rendent pas bien.</p>
+          <div class="carte rangs" id="regles"></div>
+        </div>
+
+        <div class="groupe" id="carte-demarrage" hidden>
+          <h2 class="groupe-titre">Au démarrage de Windows</h2>
+          <div class="carte rangs" id="demarrage"></div>
+        </div>
+
+        <div class="groupe">
+          <h2 class="groupe-titre">Mises à jour</h2>
+          <div class="carte rangs">
+            <div class="ligne-action">
+              <div>
+                <div class="ligne-titre" id="maj-etat"></div>
+                <div class="aide" id="maj-detail"></div>
+              </div>
+              <button class="bouton" id="verifier-maj">Vérifier maintenant</button>
+            </div>
           </div>
         </div>
 
@@ -215,46 +308,50 @@
              en a besoin en a vraiment besoin : Tab sert deja partout dans
              les formulaires, et une application lente a repondre au Ctrl+C
              fait echouer le raccourci sans rien dire. -->
-        <div class="carte">
-          <h2>Réglages fins</h2>
-          <p class="aide">À ne toucher que si quelque chose ne va pas.</p>
-
-          <div class="ligne-action">
-            <div>
-              <div class="ligne-titre">Touche qui accepte la proposition</div>
-              <div class="aide">Elle n'est détournée que pendant que la bulle
-                est affichée. Ailleurs, elle garde son rôle.</div>
+        <div class="groupe">
+          <h2 class="groupe-titre">Réglages fins</h2>
+          <p class="groupe-aide">À ne toucher que si quelque chose ne va pas.</p>
+          <div class="carte rangs">
+            <div class="ligne-action">
+              <div>
+                <label class="ligne-titre" for="touche-prediction">Touche qui
+                  accepte la proposition</label>
+                <div class="aide">Elle n'est détournée que pendant que la bulle
+                  est affichée. Ailleurs, elle garde son rôle.</div>
+              </div>
+              <select class="champ" id="touche-prediction">
+                <option value="tab">Tab</option>
+                <option value="right">Flèche droite</option>
+                <option value="end">Fin</option>
+                <option value="ctrl+space">Ctrl + Espace</option>
+              </select>
             </div>
-            <select class="champ" id="touche-prediction">
-              <option value="tab">Tab</option>
-              <option value="right">Flèche droite</option>
-              <option value="end">Fin</option>
-              <option value="ctrl+space">Ctrl + Espace</option>
-            </select>
-          </div>
 
-          <div class="ligne-action">
-            <div>
-              <div class="ligne-titre">Oublier la phrase après</div>
-              <div class="aide">Passé ce silence, le curseur a pu bouger :
-                Papote repart de zéro plutôt que de corriger à l'aveugle.</div>
+            <div class="ligne-action">
+              <div>
+                <label class="ligne-titre" for="delai-oubli">Oublier la phrase
+                  après</label>
+                <div class="aide">Passé ce silence, le curseur a pu bouger :
+                  Papote repart de zéro plutôt que de corriger à l'aveugle.</div>
+              </div>
+              <span class="champ-nombre">
+                <input class="champ" id="delai-oubli" type="number"
+                       min="1" max="30" step="0.5"><span>s</span>
+              </span>
             </div>
-            <span class="champ-nombre">
-              <input class="champ" id="delai-oubli" type="number"
-                     min="1" max="30" step="0.5"> s
-            </span>
-          </div>
 
-          <div class="ligne-action">
-            <div>
-              <div class="ligne-titre">Attendre le presse-papiers</div>
-              <div class="aide">À augmenter si le raccourci de correction ne
-                trouve rien dans une application lente à répondre.</div>
+            <div class="ligne-action">
+              <div>
+                <label class="ligne-titre" for="delai-copie">Attendre le
+                  presse-papiers</label>
+                <div class="aide">À augmenter si le raccourci de correction ne
+                  trouve rien dans une application lente à répondre.</div>
+              </div>
+              <span class="champ-nombre">
+                <input class="champ" id="delai-copie" type="number"
+                       min="0.1" max="3" step="0.05"><span>s</span>
+              </span>
             </div>
-            <span class="champ-nombre">
-              <input class="champ" id="delai-copie" type="number"
-                     min="0.1" max="3" step="0.05"> s
-            </span>
           </div>
         </div>
 
@@ -262,35 +359,45 @@
              quitte la machine, et rien n'en reste. Une promesse qu'on ne
              peut pas verifier ne vaut pas grand-chose : cet encadre nomme
              les fichiers, les mesure, et ouvre le dossier. -->
-        <div class="carte">
-          <h2>Ce que Papote garde de vous</h2>
-          <p class="aide">Rien de ce que vous tapez ne quitte cette machine :
-            aucun compte, aucun serveur, aucun fichier envoyé. Voici
+        <div class="groupe">
+          <h2 class="groupe-titre">Ce que Papote garde de vous</h2>
+          <p class="groupe-aide">Rien de ce que vous tapez ne quitte cette
+            machine : aucun compte, aucun serveur, aucun fichier envoyé. Voici
             exactement ce qui est écrit sur votre disque.</p>
-          <ul class="lignes" id="fichiers-gardes"></ul>
-          <div class="rangee">
-            <code class="chemin" id="dossier-config"></code>
-          </div>
-          <div class="rangee">
-            <button class="bouton" id="ouvrir-dossier">Ouvrir le dossier</button>
+          <div class="carte">
+            <ul class="lignes fichiers" id="fichiers-gardes"></ul>
+            <div class="carte-pied">
+              <code class="chemin" id="dossier-config"></code>
+              <button class="bouton" id="ouvrir-dossier"
+                      data-icone="dossier">Ouvrir le dossier</button>
+            </div>
           </div>
         </div>
 
-        <div class="carte">
-          <h2>Quand quelque chose ne va pas</h2>
-          <p class="aide">Papote note ici ce qui s'est mal passé. Le fichier
-            reste sur votre machine.</p>
-          <pre class="journal" id="journal"></pre>
-          <div class="rangee">
-            <button class="bouton" id="copier-journal">Copier le journal</button>
-            <button class="bouton discret" id="vider-journal">Vider</button>
+        <div class="groupe">
+          <h2 class="groupe-titre">Quand quelque chose ne va pas</h2>
+          <p class="groupe-aide">Papote note ici ce qui s'est mal passé. Le
+            fichier reste sur votre machine.</p>
+          <div class="carte">
+            <pre class="journal" id="journal"></pre>
+            <div class="carte-pied">
+              <button class="bouton" id="copier-journal"
+                      data-icone="copier">Copier le journal</button>
+              <button class="bouton discret danger" id="vider-journal">Vider</button>
+            </div>
           </div>
         </div>
       </section>
 
+     </div>
     </div>
   </main>
 </div>
+
+<!-- La bulle qui s'ouvre sur un mot souligne : pourquoi il a change, et de
+     quoi revenir dessus. Une seule pour toute la page, deplacee a la
+     demande. -->
+<div class="infobulle" id="infobulle" role="dialog" hidden></div>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 

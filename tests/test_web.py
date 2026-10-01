@@ -403,3 +403,28 @@ def test_toute_methode_de_la_passerelle_sert_a_quelque_chose(script):
                  and callable(getattr(Passerelle, nom, None))}
     mortes = publiques - atteintes
     assert not mortes, f"sur le pont, mais plus personne n'appelle : {sorted(mortes)}"
+
+
+# -- le rendu de la relecture -------------------------------------------------
+
+def test_le_rendu_et_le_champ_partagent_leur_mise_en_page(page, style):
+    """Passer du champ au rendu ne doit deplacer aucun mot.
+
+    Les deux portent la meme classe, qui fixe police, marge et hauteur : un
+    reglage pose sur l'un seulement ferait sauter le texte au premier clic.
+    """
+    assert re.search(r'<textarea id="champ" class="zone-texte"', page)
+    assert re.search(r'id="rendu" class="zone-texte rendu"', page)
+    assert ".zone-texte {" in style
+
+
+def test_le_rendu_cherche_les_mots_comme_python(script):
+    """Souligner un mot que `retablir` ne trouverait pas promettrait un
+    bouton qui ne fait rien : les deux cherchent des mots entiers."""
+    assert "(?<![\\\\p{L}\\\\p{N}_])" in script
+
+
+def test_la_bulle_d_un_mot_se_ferme_au_clavier(script):
+    """Une bulle ouverte au clavier doit pouvoir se refermer au clavier."""
+    assert 'evenement.key === "Escape" && repereOuvert' in script
+    assert "fermerInfobulle(true)" in script
